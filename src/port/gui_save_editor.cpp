@@ -544,6 +544,27 @@ void DrawBoxes()
         }
     }
     EndTiles();
+}
+
+    Section(boxes.names[sBox]);
+    const BoxesData &box = Boxes(sBox);
+    BeginTiles("##slots", 6);
+    for (int s = 0; s < SAVE_ED_BOX_SLOTS; s++) {
+        const SaveEdSlot &slot = box.slots[s];
+        if (slot.species == 0) {
+            Tile("-", nullptr, false, false);
+            continue;
+        }
+        std::string level = slot.isEgg ? std::string() : Format("Lv. %d%s", slot.level, slot.shiny ? " *" : "");
+        Want(100 + s);
+        if (Tile(slot.isEgg ? "Egg" : Gear_SpeciesName(slot.species), level.c_str())) {
+            OpenMon({ sBox, s }, 100 + s);
+        }
+    }
+    EndTiles();
+    Note("* Shiny");
+}
+
 
 void DrawSwap()
 {
@@ -671,26 +692,6 @@ void DrawSwapParty()
             }
         }
     }
-}
-
-    Section(boxes.names[sBox]);
-    const BoxesData &box = Boxes(sBox);
-    BeginTiles("##slots", 6);
-    for (int s = 0; s < SAVE_ED_BOX_SLOTS; s++) {
-        const SaveEdSlot &slot = box.slots[s];
-        if (slot.species == 0) {
-            Tile("-", nullptr, false, false);
-            continue;
-        }
-        std::string level = slot.isEgg ? std::string() : Format("Lv. %d%s", slot.level, slot.shiny ? " *" : "");
-        Want(100 + s);
-        if (Tile(slot.isEgg ? "Egg" : Gear_SpeciesName(slot.species), level.c_str())) {
-            OpenMon({ sBox, s }, 100 + s);
-        }
-    }
-    EndTiles();
-    Note("* Shiny");
-}
 
 // --- one Pokemon ---------------------------------------------------------------------------
 

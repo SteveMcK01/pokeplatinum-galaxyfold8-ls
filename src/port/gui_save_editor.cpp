@@ -691,7 +691,7 @@ void DrawSwapParty()
             }
         }
     }
-
+}
 // --- one Pokemon ---------------------------------------------------------------------------
 
 int AbilitySlot(const SaveEdMon &mon)

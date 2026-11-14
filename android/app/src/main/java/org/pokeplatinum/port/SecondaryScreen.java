@@ -21,23 +21,28 @@ import android.view.WindowInsetsController;
 import android.view.WindowManager;
 
 /**
- * Puts the DS bottom screen on a second physical display (the AYN Thor's lower panel,
- * or any other dual-screen device / external display).
- *
- * The Presentation hosts a SurfaceView whose Surface is handed to libntr, which renders
- * the bottom screen into it with the game's own GL context (sim_display.cpp). Touches on
- * the SurfaceView become DS touch screen input.
+ * Puts the DS bottom screen and Gear companion on a second physical display when one is
+ * connected, or attaches them to an inline bottom SurfaceView inside PlatinumActivity on
+ * single-display foldable devices (such as the Galaxy Z Fold 8).
  */
 final class SecondaryScreen implements DisplayManager.DisplayListener {
     private static final String TAG = "SecondaryScreen";
 
+    interface InlineHost {
+        void setInlineBottomScreenActive(boolean active);
+    }
+
     private final Activity activity;
     private final DisplayManager displayManager;
+    private final InlineHost inlineHost;
     private ScreenPresentation presentation;
     private boolean wanted;
+    private boolean inlineActive;
+    private boolean surfaceAttached;
 
-    SecondaryScreen(Activity activity) {
+    SecondaryScreen(Activity activity, InlineHost inlineHost) {
         this.activity = activity;
+        this.inlineHost = inlineHost;
         this.displayManager = (DisplayManager) activity.getSystemService(Context.DISPLAY_SERVICE);
         displayManager.registerDisplayListener(this, new Handler(Looper.getMainLooper()));
     }
@@ -50,6 +55,7 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
     void hide() {
         wanted = false;
         dismiss();
+        setInlineActive(false);
     }
 
     void release() {
@@ -57,15 +63,61 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
         displayManager.unregisterDisplayListener(this);
     }
 
-    /** Places the lower screen again: the game's window moved to another display (see PlatinumActivity). */
+    /** Places the lower screen again after display or configuration changes. */
     void refresh() {
         if (wanted) {
             update();
         }
     }
 
+    /** Binds a SurfaceView's lifecycle and touch events to libntr-display. */
+    void bindSurfaceView(SurfaceView surfaceView) {
+        surfaceView.getHolder().addCallback(new SurfaceHolder.Callback() {
+            @Override
+            public void surfaceCreated(SurfaceHolder holder) {
+            }
+
+            @Override
+            public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+                notifySurfaceChanged(holder.getSurface());
+            }
+
+            @Override
+            public void surfaceDestroyed(SurfaceHolder holder) {
+                notifySurfaceDestroyed();
+            }
+        });
+        surfaceView.setOnTouchListener(new SingleStylusTouchListener());
+    }
+
+    private void notifySurfaceChanged(Surface surface) {
+        if (surface != null && surface.isValid()) {
+            surfaceAttached = true;
+            nativeSurfaceChanged(surface);
+        }
+    }
+
+    private void notifySurfaceDestroyed() {
+        if (surfaceAttached) {
+            surfaceAttached = false;
+            nativeSurfaceDestroyed();
+        }
+    }
+
+    private void setInlineActive(boolean active) {
+        if (inlineActive == active) {
+            return;
+        }
+        inlineActive = active;
+        if (!active) {
+            notifySurfaceDestroyed();
+        }
+        if (inlineHost != null) {
+            inlineHost.setInlineBottomScreenActive(active);
+        }
+    }
+
     private int ownDisplayId() {
-        // The window's display first: right after a move to another display the activity's can still be the old one
         Display windowDisplay = activity.getWindow().getDecorView().getDisplay();
         if (windowDisplay != null) {
             return windowDisplay.getDisplayId();
@@ -81,7 +133,6 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
         int ownId = ownDisplayId();
         Display[] candidates = displayManager.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION);
         if (candidates.length == 0) {
-            // Some handhelds don't flag their second panel as a presentation display
             candidates = displayManager.getDisplays();
         }
         for (Display display : candidates) {
@@ -93,7 +144,7 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
                 continue;
             }
             if ((display.getFlags() & Display.FLAG_PRIVATE) != 0) {
-                continue; // someone else's virtual display (screen recorders, casting apps)
+                continue;
             }
             return display;
         }
@@ -103,27 +154,32 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
     private void update() {
         if (!wanted || activity.isFinishing() || activity.isDestroyed()) {
             dismiss();
+            setInlineActive(false);
             return;
         }
 
         Display target = pickDisplay();
-        if (presentation != null && target != null
-                && presentation.getDisplay().getDisplayId() == target.getDisplayId()) {
-            return; // already there
+        if (target == null) {
+            // Single physical display (e.g. Galaxy Z Fold 8): use inline split SurfaceView
+            dismiss();
+            Log.i(TAG, "Using inline bottom SurfaceView on display " + ownDisplayId());
+            setInlineActive(true);
+            return;
+        }
+
+        // External/secondary display detected: yield inline SurfaceView before opening Presentation
+        setInlineActive(false);
+
+        if (presentation != null && presentation.getDisplay().getDisplayId() == target.getDisplayId()) {
+            return;
         }
 
         dismiss();
-        if (target == null) {
-            Log.i(TAG, "No display for the bottom screen (the game is on display " + ownDisplayId() + ")");
-            return; // single screen: the game falls back to its normal layout
-        }
-
         try {
-            presentation = new ScreenPresentation(activity, target);
+            presentation = new ScreenPresentation(activity, target, this);
             presentation.show();
             Log.i(TAG, "Bottom screen on display " + target.getDisplayId() + " (" + target.getName() + ")");
         } catch (WindowManager.InvalidDisplayException | WindowManager.BadTokenException e) {
-            // The display went away while we were choosing it; the listener will retry
             Log.w(TAG, "Could not show the bottom screen", e);
             presentation = null;
         }
@@ -134,10 +190,10 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
             try {
                 presentation.dismiss();
             } catch (RuntimeException ignored) {
-                // already gone with its display
             }
             presentation = null;
         }
+        notifySurfaceDestroyed();
     }
 
     @Override
@@ -160,74 +216,14 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
     static native void nativeSurfaceDestroyed();
     static native void nativeTouch(boolean down, float x, float y);
 
-    private static final class ScreenPresentation extends Presentation {
+    // The DS has one stylus: follow the first finger down until it lifts
+    private static final class SingleStylusTouchListener implements View.OnTouchListener {
         private int touchPointerId = -1;
 
-        ScreenPresentation(Context context, Display display) {
-            super(context, display);
-        }
-
         @Override
-        protected void onCreate(Bundle savedInstanceState) {
-            super.onCreate(savedInstanceState);
-
-            Window window = getWindow();
-            if (window != null) {
-                // Not focusable: touching the lower panel must not pull keyboard/gamepad
-                // focus away from the game activity on the top panel.
-                window.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                        | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-                        | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-            }
-
-            SurfaceView surfaceView = new SurfaceView(getContext());
-            surfaceView.getHolder().addCallback(new SurfaceHolder.Callback() {
-                @Override
-                public void surfaceCreated(SurfaceHolder holder) {
-                }
-
-                @Override
-                public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-                    nativeSurfaceChanged(holder.getSurface());
-                }
-
-                @Override
-                public void surfaceDestroyed(SurfaceHolder holder) {
-                    // Returns once the renderer has let go of the surface
-                    nativeSurfaceDestroyed();
-                }
-            });
-            surfaceView.setOnTouchListener(this::onTouch);
-            setContentView(surfaceView);
-            hideSystemBars();
-        }
-
-        private void hideSystemBars() {
-            Window window = getWindow();
-            if (window == null) {
-                return;
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                WindowInsetsController controller = window.getInsetsController();
-                if (controller != null) {
-                    controller.hide(WindowInsets.Type.systemBars());
-                    controller.setSystemBarsBehavior(
-                            WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
-                }
-            } else {
-                //noinspection deprecation
-                window.getDecorView().setSystemUiVisibility(
-                        View.SYSTEM_UI_FLAG_FULLSCREEN
-                                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
-            }
-        }
-
-        // The DS has one stylus: follow the first finger down until it lifts
-        private boolean onTouch(View view, MotionEvent event) {
+        public boolean onTouch(View view, MotionEvent event) {
             int action = event.getActionMasked();
             if (action == MotionEvent.ACTION_DOWN) {
-                // Deliver moves as they happen instead of batching them per frame
                 view.requestUnbufferedDispatch(event);
             }
 
@@ -262,6 +258,53 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
                     break;
             }
             return true;
+        }
+    }
+
+    private static final class ScreenPresentation extends Presentation {
+        private final SecondaryScreen owner;
+
+        ScreenPresentation(Context context, Display display, SecondaryScreen owner) {
+            super(context, display);
+            this.owner = owner;
+        }
+
+        @Override
+        protected void onCreate(Bundle savedInstanceState) {
+            super.onCreate(savedInstanceState);
+
+            Window window = getWindow();
+            if (window != null) {
+                window.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                        | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            }
+
+            SurfaceView surfaceView = new SurfaceView(getContext());
+            owner.bindSurfaceView(surfaceView);
+            setContentView(surfaceView);
+            hideSystemBars();
+        }
+
+        private void hideSystemBars() {
+            Window window = getWindow();
+            if (window == null) {
+                return;
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                WindowInsetsController controller = window.getInsetsController();
+                if (controller != null) {
+                    controller.hide(WindowInsets.Type.systemBars());
+                    controller.setSystemBarsBehavior(
+                            WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                }
+            } else {
+                //noinspection deprecation
+                window.getDecorView().setSystemUiVisibility(
+                        View.SYSTEM_UI_FLAG_FULLSCREEN
+                                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+            }
         }
     }
 }

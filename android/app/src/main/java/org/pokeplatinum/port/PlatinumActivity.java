@@ -16,8 +16,12 @@ import android.provider.Settings;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Display;
+import android.view.SurfaceView;
+import android.view.View;
+import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
+import android.widget.RelativeLayout;
 
 import org.libsdl.app.SDLActivity;
 
@@ -29,11 +33,10 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 /**
- * SDL activity hosting the game (libmain.so). Adds what the native side can't do alone:
- * the lower-screen Presentation on dual-screen devices, and importing the player's ROM
- * through the system file picker.
+ * SDL activity hosting the game (libmain.so). Adds the lower-screen SurfaceView / Presentation
+ * for dual-screen and single-display foldable devices, plus ROM/save file pickers.
  */
-public class PlatinumActivity extends SDLActivity {
+public class PlatinumActivity extends SDLActivity implements SecondaryScreen.InlineHost {
     private static final String TAG = "PlatinumActivity";
     private static final int REQUEST_ROM = 0x504C; // "PL"
     private static final int REQUEST_OPEN_DOCUMENT = 0x504D;
@@ -47,6 +50,8 @@ public class PlatinumActivity extends SDLActivity {
     private String pendingExportSource;
 
     private SecondaryScreen secondaryScreen;
+    private SurfaceView inlineBottomSurfaceView;
+    private boolean inlineSplitEnabled;
 
     @Override
     protected String[] getLibraries() {
@@ -59,7 +64,80 @@ public class PlatinumActivity extends SDLActivity {
         moveToMainDisplay();
         preferSixtyHertz();
         installBundledFiles();
-        secondaryScreen = new SecondaryScreen(this);
+        secondaryScreen = new SecondaryScreen(this, this);
+        setupInlineBottomSurfaceView();
+    }
+
+    private void setupInlineBottomSurfaceView() {
+        if (mLayout == null || mSurface == null) {
+            Log.w(TAG, "SDLActivity mLayout/mSurface unavailable; inline split disabled");
+            return;
+        }
+        inlineBottomSurfaceView = new SurfaceView(this);
+        // Keep gamepad/L3 focus locked on the primary SDL surface when tapping the Gear UI
+        inlineBottomSurfaceView.setFocusable(false);
+        inlineBottomSurfaceView.setFocusableInTouchMode(false);
+        inlineBottomSurfaceView.setZOrderMediaOverlay(true);
+        inlineBottomSurfaceView.setVisibility(View.GONE);
+
+        secondaryScreen.bindSurfaceView(inlineBottomSurfaceView);
+        mLayout.addView(inlineBottomSurfaceView, new RelativeLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 1));
+
+        mLayout.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+            if ((right - left) != (oldRight - oldLeft) || (bottom - top) != (oldBottom - oldTop)) {
+                updateSplitSurfaceBounds();
+            }
+        });
+    }
+
+    @Override
+    public void setInlineBottomScreenActive(boolean active) {
+        runOnUiThread(() -> {
+            inlineSplitEnabled = active;
+            if (inlineBottomSurfaceView != null) {
+                inlineBottomSurfaceView.setVisibility(active ? View.VISIBLE : View.GONE);
+            }
+            updateSplitSurfaceBounds();
+            if (mSurface != null) {
+                mSurface.requestFocus();
+            }
+        });
+    }
+
+    private void updateSplitSurfaceBounds() {
+        if (mLayout == null || mSurface == null || inlineBottomSurfaceView == null) {
+            return;
+        }
+        int totalWidth = mLayout.getWidth();
+        int totalHeight = mLayout.getHeight();
+        if (totalWidth <= 0 || totalHeight <= 0) {
+            return;
+        }
+
+        if (!inlineSplitEnabled) {
+            applyRelativeBounds(mSurface, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 0);
+            return;
+        }
+
+        int topHeight = totalHeight / 2;
+        int bottomHeight = totalHeight - topHeight;
+        applyRelativeBounds(mSurface, ViewGroup.LayoutParams.MATCH_PARENT, topHeight, 0);
+        applyRelativeBounds(inlineBottomSurfaceView, ViewGroup.LayoutParams.MATCH_PARENT, bottomHeight, topHeight);
+    }
+
+    private static void applyRelativeBounds(View view, int width, int height, int topMargin) {
+        ViewGroup.LayoutParams raw = view.getLayoutParams();
+        RelativeLayout.LayoutParams params = (raw instanceof RelativeLayout.LayoutParams)
+                ? (RelativeLayout.LayoutParams) raw
+                : new RelativeLayout.LayoutParams(width, height);
+        if (params.width != width || params.height != height || params.topMargin != topMargin) {
+            params.width = width;
+            params.height = height;
+            params.topMargin = topMargin;
+            params.leftMargin = 0;
+            view.setLayoutParams(params);
+        }
     }
 
     /**
@@ -114,8 +192,6 @@ public class PlatinumActivity extends SDLActivity {
         super.onResume();
         if (secondaryScreen != null) {
             secondaryScreen.show();
-            // Again once the window has settled: after moveToMainDisplay it can resume while still counted on the
-            // display it was launched on
             getWindow().getDecorView().postDelayed(() -> {
                 if (secondaryScreen != null) {
                     secondaryScreen.refresh();
@@ -127,7 +203,7 @@ public class PlatinumActivity extends SDLActivity {
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
-        // A move to another display (moveToMainDisplay) comes as a configuration change: the lower screen follows
+        updateSplitSurfaceBounds();
         if (secondaryScreen != null) {
             secondaryScreen.refresh();
         }
@@ -193,7 +269,6 @@ public class PlatinumActivity extends SDLActivity {
         runOnUiThread(() -> {
             Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             intent.addCategory(Intent.CATEGORY_OPENABLE);
-            // .nds has no registered MIME type, so offer every file
             intent.setType("*/*");
             try {
                 startActivityForResult(intent, REQUEST_ROM);

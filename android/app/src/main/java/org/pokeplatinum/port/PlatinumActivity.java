@@ -68,16 +68,17 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
         setupInlineBottomSurfaceView();
     }
 
-    private void setupInlineBottomSurfaceView() {
+  private void setupInlineBottomSurfaceView() {
         if (mLayout == null || mSurface == null) {
             Log.w(TAG, "SDLActivity mLayout/mSurface unavailable; inline split disabled");
             return;
         }
+        getWindow().setBackgroundDrawable(null);
+
         inlineBottomSurfaceView = new SurfaceView(this);
         // Keep gamepad/L3 focus locked on the primary SDL surface when tapping the Gear UI
         inlineBottomSurfaceView.setFocusable(false);
         inlineBottomSurfaceView.setFocusableInTouchMode(false);
-        inlineBottomSurfaceView.setZOrderMediaOverlay(true);
         inlineBottomSurfaceView.setVisibility(View.GONE);
 
         secondaryScreen.bindSurfaceView(inlineBottomSurfaceView);
@@ -95,10 +96,10 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
     public void setInlineBottomScreenActive(boolean active) {
         runOnUiThread(() -> {
             inlineSplitEnabled = active;
+            updateSplitSurfaceBounds();
             if (inlineBottomSurfaceView != null) {
                 inlineBottomSurfaceView.setVisibility(active ? View.VISIBLE : View.GONE);
             }
-            updateSplitSurfaceBounds();
             if (mSurface != null) {
                 mSurface.requestFocus();
             }

@@ -54,7 +54,7 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
 
     void hide() {
         wanted = false;
-        dismiss();
+        dismissPresentation();
         setInlineActive(false);
     }
 
@@ -79,7 +79,9 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
 
             @Override
             public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-                notifySurfaceChanged(holder.getSurface());
+                if (width > 1 && height > 1) {
+                    notifySurfaceChanged(holder.getSurface());
+                }
             }
 
             @Override
@@ -153,17 +155,19 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
 
     private void update() {
         if (!wanted || activity.isFinishing() || activity.isDestroyed()) {
-            dismiss();
+            dismissPresentation();
             setInlineActive(false);
             return;
         }
 
         Display target = pickDisplay();
         if (target == null) {
-            // Single physical display (e.g. Galaxy Z Fold 8): use inline split SurfaceView
-            dismiss();
-            Log.i(TAG, "Using inline bottom SurfaceView on display " + ownDisplayId());
-            setInlineActive(true);
+            // Single physical display (e.g. Galaxy Z Fold 8): keep inline split SurfaceView alive
+            dismissPresentation();
+            if (!inlineActive) {
+                Log.i(TAG, "Using inline bottom SurfaceView on display " + ownDisplayId());
+                setInlineActive(true);
+            }
             return;
         }
 
@@ -174,7 +178,7 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
             return;
         }
 
-        dismiss();
+        dismissPresentation();
         try {
             presentation = new ScreenPresentation(activity, target, this);
             presentation.show();
@@ -185,15 +189,15 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
         }
     }
 
-    private void dismiss() {
+    private void dismissPresentation() {
         if (presentation != null) {
             try {
                 presentation.dismiss();
             } catch (RuntimeException ignored) {
             }
             presentation = null;
+            notifySurfaceDestroyed();
         }
-        notifySurfaceDestroyed();
     }
 
     @Override

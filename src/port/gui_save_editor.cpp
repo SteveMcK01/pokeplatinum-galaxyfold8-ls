@@ -544,7 +544,7 @@ void DrawBoxes()
         }
     }
     EndTiles();
-}
+
 
     Section(boxes.names[sBox]);
     const BoxesData &box = Boxes(sBox);
@@ -564,7 +564,6 @@ void DrawBoxes()
     EndTiles();
     Note("* Shiny");
 }
-
 
 void DrawSwap()
 {

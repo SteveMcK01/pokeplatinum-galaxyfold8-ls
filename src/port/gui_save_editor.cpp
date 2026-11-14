@@ -24,7 +24,7 @@ using namespace SIM::UI;
 
 namespace {
 
-enum class View { Home, Party, Boxes, Mon, Give, Bag, Trainer, Events, Species, Move, Item, Nature, TradeBox };
+enum class View { Home, Party, Boxes, Mon, Give, Bag, Trainer, Events, Species, Move, Item, Nature, TradeBox, Swap, SwapParty };
 
 // What a picker's choice is for
 enum class Pick { MonMove, MonItem, MonNature, GiveSpecies, GiveItem, GiveNature, BagAdd };
@@ -48,6 +48,8 @@ std::string sStatus;
 bool sStatusError = false;
 
 SaveEdRef sMon = { SAVE_ED_PARTY, 0 };
+int sSwapPartySlot = 0;
+int sSwapBoxSlot = 0;
 int sBox = 0;
 int sPocket = 0;
 Pick sPick = Pick::MonMove;
@@ -419,6 +421,11 @@ void DrawHome()
             "Trading evolves the ones it should.")) {
         Go(View::TradeBox, 7);
     }
+    Want(8);
+    if (Button("Swap party & PC", "Move or swap Pokemon between your party and your PC boxes")) {
+        sSwapPartySlot = 0;
+        Go(View::Swap, 8);
+    }
 }
 
 // --- Trade box -----------------------------------------------------------------------------
@@ -537,6 +544,134 @@ void DrawBoxes()
         }
     }
     EndTiles();
+
+void DrawSwap()
+{
+    const PartyData &party = Party();
+    if (party.count == 0) {
+        Note("Your party is empty.");
+        return;
+    }
+    if (sSwapPartySlot >= party.count || (sSwapPartySlot < 0 && party.count >= 6)) {
+        sSwapPartySlot = 0;
+    }
+
+    ShowStatus();
+    Section("1. Party slot");
+    BeginTiles("##swap_party", 3);
+    for (int i = 0; i < party.count; i++) {
+        const SaveEdMon &mon = party.mons[i];
+        std::string title = mon.isEgg ? Format("Egg###sp%d", i) : Format("%s###sp%d", mon.name, i);
+        std::string sub = mon.isEgg ? std::string() : Format("Lv. %d", mon.level);
+        Want(i);
+        if (Tile(title.c_str(), sub.c_str(), sSwapPartySlot == i)) {
+            sSwapPartySlot = i;
+            sStatus.clear();
+        }
+    }
+    if (party.count < 6) {
+        Want(6);
+        if (Tile("+ Open slot###sp_open", "Withdraw", sSwapPartySlot == -1)) {
+            sSwapPartySlot = -1;
+            sStatus.clear();
+        }
+    }
+    EndTiles();
+
+    Section("2. PC box & slot");
+    const BoxesData &boxes = Boxes(sBox);
+    BeginTiles("##swap_boxes", 6);
+    for (int b = 0; b < SAVE_ED_BOXES; b++) {
+        std::string count = Format("%d/30", boxes.counts[b]);
+        Want(10 + b);
+        if (Tile(boxes.names[b], count.c_str(), b == sBox)) {
+            sBox = b;
+        }
+    }
+    EndTiles();
+
+    const BoxesData &box = Boxes(sBox);
+    BeginTiles("##swap_slots", 6);
+    for (int s = 0; s < SAVE_ED_BOX_SLOTS; s++) {
+        const SaveEdSlot &slot = box.slots[s];
+        const bool occupied = slot.species != 0;
+        const bool enabled = occupied || sSwapPartySlot >= 0;
+        std::string label = !occupied ? Format("-###ss%d", s)
+                                      : (slot.isEgg ? Format("Egg###ss%d", s)
+                                                    : Format("%s###ss%d", Gear_SpeciesName(slot.species), s));
+        std::string sub = (!occupied || slot.isEgg)
+            ? std::string()
+            : Format("Lv. %d%s", slot.level, slot.shiny ? " *" : "");
+        Want(100 + s);
+        if (Tile(label.c_str(), sub.empty() ? nullptr : sub.c_str(), false, enabled)) {
+            std::string partyName = sSwapPartySlot >= 0
+                ? (party.mons[sSwapPartySlot].isEgg ? "Egg" : party.mons[sSwapPartySlot].name)
+                : "";
+            std::string pcName = occupied ? (slot.isEgg ? "Egg" : Gear_SpeciesName(slot.species)) : "";
+
+            if (const char *error = SaveEd_SwapWithPC(sSwapPartySlot, sBox, s)) {
+                SetStatus(error, true);
+            } else {
+                Changed();
+                if (sSwapPartySlot == -1) {
+                    SetStatus(Format("Withdrew %s into your party.", pcName.c_str()));
+                } else if (!occupied) {
+                    SetStatus(Format("Deposited %s into %s, slot %d.", partyName.c_str(), boxes.names[sBox], s + 1));
+                } else {
+                    SetStatus(Format("Swapped %s with %s.", partyName.c_str(), pcName.c_str()));
+                }
+            }
+        }
+    }
+    EndTiles();
+    Note(sSwapPartySlot == -1 ? "Tap a PC Pokemon to withdraw it into your party."
+                              : "Tap a PC Pokemon to swap, or tap '-' to deposit into that slot.");
+}
+
+void DrawSwapParty()
+{
+    const SaveEdMon *target = MonData({ sBox, sSwapBoxSlot });
+    if (target == nullptr) {
+        Back();
+        return;
+    }
+    const std::string pcName = target->isEgg ? "Egg" : target->name;
+    const PartyData &party = Party();
+
+    ShowStatus();
+    if (party.count < 6) {
+        Want(10);
+        if (Button("Withdraw to party (open slot)", Format("Move %s straight into your party", pcName.c_str()).c_str(), true)) {
+            if (const char *error = SaveEd_SwapWithPC(-1, sBox, sSwapBoxSlot)) {
+                SetStatus(error, true);
+            } else {
+                Changed();
+                SetStatus(Format("Withdrew %s into your party.", pcName.c_str()));
+                Back();
+                return;
+            }
+        }
+    }
+
+    Section(Format("Swap %s with a party Pokemon", pcName.c_str()).c_str());
+    for (int i = 0; i < party.count; i++) {
+        const SaveEdMon &mon = party.mons[i];
+        std::string title = mon.isEgg ? Format("Egg###swp%d", i) : Format("%s   Lv. %d###swp%d", mon.name, mon.level, i);
+        std::string summary = MonSummary(mon);
+        Want(i);
+        if (Card(title.c_str(), summary.c_str())) {
+            const std::string partyName = mon.isEgg ? "Egg" : mon.name;
+            if (const char *error = SaveEd_SwapWithPC(i, sBox, sSwapBoxSlot)) {
+                SetStatus(error, true);
+            } else {
+                Changed();
+                SetStatus(Format("Swapped %s with %s.", pcName.c_str(), partyName.c_str()));
+                Back();
+                return;
+            }
+        }
+    }
+}
 
     Section(boxes.names[sBox]);
     const BoxesData &box = Boxes(sBox);
@@ -715,6 +850,19 @@ void DrawMon()
     }
 
     Section("Care");
+    Want(39);
+    if (sMon.box == SAVE_ED_PARTY) {
+        if (Button("Swap / deposit to PC", "Swap with a PC Pokemon or move into an empty box slot")) {
+            sSwapPartySlot = sMon.slot;
+            Go(View::Swap, 39);
+        }
+    } else {
+        if (Button("Swap / withdraw to party", "Swap with a party member or add to an open party slot")) {
+            sBox = sMon.box;
+            sSwapBoxSlot = sMon.slot;
+            Go(View::SwapParty, 39);
+        }
+    }
     Want(40);
     if (Button("Heal", sMon.box == SAVE_ED_PARTY ? "HP, status and PP" : "PP (Pokemon in the PC are always healed)")) {
         if (SaveEd_Heal(sMon)) {
@@ -1243,6 +1391,10 @@ const char *BackLabel()
 const char *ViewTitle(View view)
 {
     switch (view) {
+    case View::Swap:
+        return "Swap party & PC";
+    case View::SwapParty:
+        return "Swap or withdraw to party";
     case View::Party:
         return "Party";
     case View::Boxes:
@@ -1311,6 +1463,12 @@ void SaveEditor_Draw()
     }
 
     switch (view) {
+    case View::Swap:
+        DrawSwap();
+        break;
+    case View::SwapParty:
+        DrawSwapParty();
+        break;
     case View::Home:
         DrawHome();
         break;

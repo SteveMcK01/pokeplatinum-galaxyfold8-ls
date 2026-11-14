@@ -162,6 +162,9 @@ typedef struct SaveEdTradeEntry {
 int SaveEd_TradeBox(SaveEdTradeEntry *out, int max);
 // Takes the Pokemon out of this save into the trade box. NULL when done, else why not.
 const char *SaveEd_SendToTradeBox(SaveEdRef ref);
+// Pass partySlot = -1 to withdraw into an open party slot, or 0..5 to swap/deposit.
+// Returns NULL on success, or an error message.
+const char *SaveEd_SwapWithPC(int partySlot, int box, int boxSlot);
 // Takes entry index into this save (the party when it has room, else the PC): 1 party,
 // 2 PC (*box, *slot), 0 no room, -1 no such entry. *evolvedInto: the species it became
 // (0 if it didn't evolve).

@@ -856,6 +856,88 @@ const char *SaveEd_SendToTradeBox(SaveEdRef ref)
     return error;
 }
 
+const char *SaveEd_SwapWithPC(int partySlot, int box, int boxSlot)
+{
+    SaveData *saveData = EditableSave();
+    if (saveData == NULL) {
+        return "The save can't be changed right now.";
+    }
+    if (box < 0 || box >= SAVE_ED_BOXES || boxSlot < 0 || boxSlot >= SAVE_ED_BOX_SLOTS) {
+        return "Invalid PC box slot.";
+    }
+
+    Party *party = SaveData_GetParty(saveData);
+    PCBoxes *pcBoxes = SaveData_GetPCBoxes(saveData);
+    const int partyCount = Party_GetCurrentCount(party);
+    if (partySlot < -1 || partySlot >= partyCount) {
+        return "Invalid party slot.";
+    }
+
+    BoxPokemon *pcMon = PCBoxes_GetBoxMonAt(pcBoxes, box, boxSlot);
+    const BOOL pcOccupied = BoxPokemon_GetValue(pcMon, MON_DATA_SPECIES_EXISTS, NULL);
+
+    // Case 1: Withdraw from PC into a new open party slot
+    if (partySlot == -1) {
+        if (!pcOccupied) {
+            return "That PC slot is empty.";
+        }
+        if (partyCount >= MAX_PARTY_SIZE) {
+            return "Your party is already full.";
+        }
+        Pokemon *incoming = Pokemon_New(HEAP_ID_SYSTEM);
+        Pokemon_FromBoxPokemon(pcMon, incoming);
+        u32 maxHp = Pokemon_GetValue(incoming, MON_DATA_MAX_HP, NULL);
+        u32 status = 0;
+        Pokemon_SetValue(incoming, MON_DATA_HP, &maxHp);
+        Pokemon_SetValue(incoming, MON_DATA_STATUS, &status);
+        Party_AddPokemon(party, incoming);
+        Heap_Free(incoming);
+        PCBoxes_InitBoxMonAt(pcBoxes, box, boxSlot);
+        SaveData_SetFullSaveRequired();
+        return NULL;
+    }
+
+    // Ensure the party will still have at least one conscious non-egg Pokemon after the move/swap
+    const BOOL incomingCanBattle = pcOccupied && !BoxPokemon_GetValue(pcMon, MON_DATA_IS_EGG, NULL);
+    if (!incomingCanBattle) {
+        int others = 0;
+        for (int i = 0; i < partyCount; i++) {
+            Pokemon *other = Party_GetPokemonBySlotIndex(party, i);
+            if (i != partySlot && !Pokemon_GetValue(other, MON_DATA_IS_EGG, NULL) && Pokemon_GetValue(other, MON_DATA_HP, NULL) > 0) {
+                others++;
+            }
+        }
+        if (others == 0) {
+            return "That's the last Pokemon in your party that can battle.";
+        }
+    }
+
+    Pokemon *outgoing = Party_GetPokemonBySlotIndex(party, partySlot);
+
+    // Case 2: Deposit party Pokemon into an empty PC slot
+    if (!pcOccupied) {
+        *pcMon = *Pokemon_GetBoxPokemon(outgoing);
+        Party_RemovePokemonBySlotIndex(party, partySlot);
+        SaveData_SetFullSaveRequired();
+        return NULL;
+    }
+
+    // Case 3: Swap party Pokemon and PC Pokemon in place
+    BoxPokemon tempBox = *Pokemon_GetBoxPokemon(outgoing);
+    Pokemon *incoming = Pokemon_New(HEAP_ID_SYSTEM);
+    Pokemon_FromBoxPokemon(pcMon, incoming);
+    u32 maxHp = Pokemon_GetValue(incoming, MON_DATA_MAX_HP, NULL);
+    u32 status = 0;
+    Pokemon_SetValue(incoming, MON_DATA_HP, &maxHp);
+    Pokemon_SetValue(incoming, MON_DATA_STATUS, &status);
+
+    *outgoing = *incoming;
+    *pcMon = tempBox;
+    Heap_Free(incoming);
+    SaveData_SetFullSaveRequired();
+    return NULL;
+}
+
 // After a trade: what the evolution scene does (src/evolution.c), without the scene
 static void EvolveTraded(SaveData *saveData, Pokemon *mon, u16 target, int evoType)
 {

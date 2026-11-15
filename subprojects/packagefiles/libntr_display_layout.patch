@@ -1,15 +1,21 @@
 --- a/libraries/sim/src/sim_settings.cpp
 +++ b/libraries/sim/src/sim_settings.cpp
-@@ -211,6 +211,13 @@
+@@ -119,6 +119,8 @@
+   }
+ }
+ 
++extern "C" __attribute__((weak)) void TouchControls_DrawDisplaySettings(void);
++
+ void DrawDisplay() {
+   SIM_config_type *config = SIM_GetConfigPtr();
+ 
+@@ -211,6 +213,10 @@
      }
    }
  #endif
 +
-+  {
-+    extern "C" __attribute__((weak)) void TouchControls_DrawDisplaySettings(void);
-+    if (TouchControls_DrawDisplaySettings != nullptr) {
-+      TouchControls_DrawDisplaySettings();
-+    }
++  if (TouchControls_DrawDisplaySettings != nullptr) {
++    TouchControls_DrawDisplaySettings();
 +  }
  
    DrawTextures();

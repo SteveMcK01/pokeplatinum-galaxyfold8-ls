@@ -374,7 +374,7 @@ void TouchControls_DrawOverlay(void) {
 void TouchControls_DrawBottomOverlay(float width, float height) {
     SIM_Config_prj_type *cfg = SIM_Config_prj_GetConfig();
     if (!cfg->touchOverlay || SIM::Settings::IsOpen() || SIM_Carts_UIActive() ||
-        width <= 1.0f || height <= 1.0f) {
+        SIM_Companion_IsFullScreen() || width <= 1.0f || height <= 1.0f) {
         std::lock_guard<std::mutex> lock(sInputMutex);
         if (sBottomPadMask != 0 || sBottomXYMask != 0) {
             sBottomPadMask = 0;
@@ -459,7 +459,7 @@ Java_org_pokeplatinum_port_SecondaryScreen_nativeUpdateSecondaryTouches(
     }
 
     SIM_Config_prj_type *cfg = SIM_Config_prj_GetConfig();
-    const bool overlayActive = cfg->touchOverlay && !SIM::Settings::IsOpen() && !SIM_Carts_UIActive();
+    const bool overlayActive = cfg->touchOverlay && !SIM::Settings::IsOpen() && !SIM_Carts_UIActive() && !SIM_Companion_IsFullScreen();
     const BottomLayout L = ComputeBottomLayout(viewWidth, viewHeight, GetOverlayScale(cfg));
 
     jfloat *xs = env->GetFloatArrayElements(xsArr, nullptr);

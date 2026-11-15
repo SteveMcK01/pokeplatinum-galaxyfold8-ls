@@ -160,6 +160,15 @@ static int IniHandler(void* user, const char* section, const char* name,
     if(MATCH("TouchOverlay", "Scale")) {
         config->touchOverlayScale = (float)atof(value);
     }
+    if(MATCH("TouchOverlay", "TopRightOverlay")) {
+        config->topRightOverlay = StringToBool(value);
+    }
+    if(MATCH("TouchOverlay", "TopRightOverlayScale")) {
+        config->topRightOverlayScale = (float)atof(value);
+    }
+    if(MATCH("TouchOverlay", "FullScreenCompanion")) {
+        config->fullScreenCompanion = StringToBool(value);
+    }
 
     return 1;
 }
@@ -241,6 +250,9 @@ void SIM_Config_prj_LoadDefaults(SIM_Config_prj_type * aConfig)
   aConfig->touchOverlay = TRUE;
   aConfig->touchOverlayOpacity = 0.65f;
   aConfig->touchOverlayScale = 1.00f;
+  aConfig->topRightOverlay = TRUE;
+  aConfig->topRightOverlayScale = 0.36f;
+  aConfig->fullScreenCompanion = TRUE;
 }
 
 // Loads the configuration file. If it does not exist, return false
@@ -317,6 +329,9 @@ void SIM_Config_prj_SaveConfigFile(SIM_Config_prj_type * aConfig)
     fprintf(configFile, "Enabled=%s\n", BoolToString(aConfig->touchOverlay));
     fprintf(configFile, "Opacity=%.2f\n", aConfig->touchOverlayOpacity);
     fprintf(configFile, "Scale=%.2f\n", aConfig->touchOverlayScale);
+    fprintf(configFile, "TopRightOverlay=%s\n", BoolToString(aConfig->topRightOverlay));
+    fprintf(configFile, "TopRightOverlayScale=%.2f\n", aConfig->topRightOverlayScale);
+    fprintf(configFile, "FullScreenCompanion=%s\n", BoolToString(aConfig->fullScreenCompanion));
 
     fclose(configFile);
 }

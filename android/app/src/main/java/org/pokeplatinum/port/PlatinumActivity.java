@@ -90,6 +90,7 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
         inlineBottomSurfaceView.setFocusable(false);
         inlineBottomSurfaceView.setFocusableInTouchMode(false);
         inlineBottomSurfaceView.setVisibility(View.GONE);
+        inlineBottomSurfaceView.setZOrderMediaOverlay(true);
 
         secondaryScreen.bindSurfaceView(inlineBottomSurfaceView);
         mLayout.addView(inlineBottomSurfaceView, new RelativeLayout.LayoutParams(
@@ -116,6 +117,22 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
         });
     }
 
+    private float inlineOverlayWidthFraction = 0.36f;
+
+    @SuppressWarnings("unused")
+    public static void setInlineOverlayWidthFraction(float fraction) {
+        PlatinumActivity act = sInstance;
+        if (act != null) {
+            act.runOnUiThread(() -> {
+                float clamped = Math.max(0.22f, Math.min(0.55f, fraction));
+                if (Math.abs(act.inlineOverlayWidthFraction - clamped) > 0.005f) {
+                    act.inlineOverlayWidthFraction = clamped;
+                    act.updateSplitSurfaceBounds();
+                }
+            });
+        }
+    }
+
     @SuppressWarnings("unused")
     public static void setInlineLayoutMode(int mode) {
         PlatinumActivity act = sInstance;
@@ -140,33 +157,55 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
         }
 
         if (!inlineSplitEnabled || inlineLayoutMode == 2) {
-            applyRelativeBounds(mSurface, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 0);
-            applyRelativeBounds(inlineBottomSurfaceView, 1, 1, 0);
+            if (inlineSplitEnabled && inlineBottomSurfaceView.getVisibility() != View.INVISIBLE) {
+                inlineBottomSurfaceView.setVisibility(View.INVISIBLE);
+            }
+            applyRelativeBounds(mSurface, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 0, 0);
+            applyRelativeBounds(inlineBottomSurfaceView, 1, 1, 0, 0);
             return;
         }
 
+        if (inlineBottomSurfaceView.getVisibility() != View.VISIBLE) {
+            inlineBottomSurfaceView.setVisibility(View.VISIBLE);
+        }
+
         if (inlineLayoutMode == 1) {
-            applyRelativeBounds(mSurface, 1, 1, 0);
-            applyRelativeBounds(inlineBottomSurfaceView, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 0);
+            applyRelativeBounds(mSurface, 1, 1, 0, 0);
+            applyRelativeBounds(inlineBottomSurfaceView, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 0, 0);
+            return;
+        }
+
+        if (inlineLayoutMode == 3) {
+            applyRelativeBounds(mSurface, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 0, 0);
+            int overlayWidth = Math.round(totalWidth * inlineOverlayWidthFraction);
+            int overlayHeight = Math.round(overlayWidth * 0.75f);
+            int maxOverlayHeight = (int) (totalHeight * 0.48f);
+            if (overlayHeight > maxOverlayHeight) {
+                overlayHeight = maxOverlayHeight;
+                overlayWidth = Math.round(overlayHeight * (4.0f / 3.0f));
+            }
+            int pad = Math.max(12, Math.min(totalWidth, totalHeight) / 60);
+            int leftMargin = Math.max(0, totalWidth - overlayWidth - pad);
+            applyRelativeBounds(inlineBottomSurfaceView, overlayWidth, overlayHeight, leftMargin, pad);
             return;
         }
 
         int topHeight = totalHeight / 2;
         int bottomHeight = totalHeight - topHeight;
-        applyRelativeBounds(mSurface, ViewGroup.LayoutParams.MATCH_PARENT, topHeight, 0);
-        applyRelativeBounds(inlineBottomSurfaceView, ViewGroup.LayoutParams.MATCH_PARENT, bottomHeight, topHeight);
+        applyRelativeBounds(mSurface, ViewGroup.LayoutParams.MATCH_PARENT, topHeight, 0, 0);
+        applyRelativeBounds(inlineBottomSurfaceView, ViewGroup.LayoutParams.MATCH_PARENT, bottomHeight, 0, topHeight);
     }
 
-    private static void applyRelativeBounds(View view, int width, int height, int topMargin) {
+    private static void applyRelativeBounds(View view, int width, int height, int leftMargin, int topMargin) {
         ViewGroup.LayoutParams raw = view.getLayoutParams();
         RelativeLayout.LayoutParams params = (raw instanceof RelativeLayout.LayoutParams)
                 ? (RelativeLayout.LayoutParams) raw
                 : new RelativeLayout.LayoutParams(width, height);
-        if (params.width != width || params.height != height || params.topMargin != topMargin) {
+        if (params.width != width || params.height != height || params.leftMargin != leftMargin || params.topMargin != topMargin) {
             params.width = width;
             params.height = height;
+            params.leftMargin = leftMargin;
             params.topMargin = topMargin;
-            params.leftMargin = 0;
             view.setLayoutParams(params);
         }
     }

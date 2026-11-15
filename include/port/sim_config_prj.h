@@ -62,6 +62,9 @@ typedef struct {
     BOOL touchOverlay;
     float touchOverlayOpacity;
     float touchOverlayScale; // GBA_SLOT_*: the GBA game in the DS's GBA slot
+    BOOL topRightOverlay;
+    float topRightOverlayScale;
+    BOOL fullScreenCompanion;
 } SIM_Config_prj_type;
 
 void SIM_Config_prj_LoadDefaults(SIM_Config_prj_type * aConfig);

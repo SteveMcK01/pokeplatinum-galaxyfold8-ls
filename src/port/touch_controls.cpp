@@ -56,6 +56,7 @@ struct BottomLayout {
 
 static std::mutex sInputMutex;
 static u16 sTopPadMask = 0;
+static u16 sTopXYMask = 0;
 static u16 sBottomPadMask = 0;
 static u16 sBottomXYMask = 0;
 static u16 sAppliedPadMask = 0;
@@ -65,6 +66,7 @@ static bool sPrevSwitchPressed = false;
 static bool sPrevCompanionSwitchPressed = false;
 static bool sPrevFFPressed = false;
 static int sLastAndroidLayoutMode = -1;
+static float sLastAndroidOverlayScale = -1.0f;
 
 static std::vector<TouchPt> sSecondaryTouches;
 static float sSecondaryViewW = 0.0f;
@@ -110,10 +112,44 @@ static void SyncAndroidLayoutMode(int mode) {
 #endif
 }
 
+static void SyncAndroidOverlayScale(float widthFraction) {
+#ifdef __ANDROID__
+    if (std::fabs(sLastAndroidOverlayScale - widthFraction) < 0.005f) {
+        return;
+    }
+    JNIEnv *env = static_cast<JNIEnv *>(SDL_AndroidGetJNIEnv());
+    if (!env) {
+        return;
+    }
+    jclass cls = env->FindClass("org/pokeplatinum/port/PlatinumActivity");
+    if (!cls) {
+        env->ExceptionClear();
+        return;
+    }
+    jmethodID mid = env->GetStaticMethodID(cls, "setInlineOverlayWidthFraction", "(F)V");
+    if (mid) {
+        env->CallStaticVoidMethod(cls, mid, static_cast<jfloat>(widthFraction));
+        sLastAndroidOverlayScale = widthFraction;
+    }
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+    }
+    env->DeleteLocalRef(cls);
+#else
+    (void)widthFraction;
+#endif
+}
+
 static float GetOverlayScale(const SIM_Config_prj_type *cfg) {
     return (cfg->touchOverlayScale > 0.4f && cfg->touchOverlayScale < 2.2f)
                ? cfg->touchOverlayScale
                : 1.0f;
+}
+
+static float GetTopRightWidthFraction(const SIM_Config_prj_type *cfg) {
+    return (cfg->topRightOverlayScale >= 0.22f && cfg->topRightOverlayScale <= 0.55f)
+               ? cfg->topRightOverlayScale
+               : 0.36f;
 }
 
 static float GetOverlayAlpha(const SIM_Config_prj_type *cfg) {
@@ -122,19 +158,17 @@ static float GetOverlayAlpha(const SIM_Config_prj_type *cfg) {
                : 0.65f;
 }
 
-static BottomLayout ComputeBottomLayout(float width, float height, float scale) {
+static BottomLayout ComputeBottomLayout(float width, float height, float scale, float centerYRatio = 0.52f) {
     BottomLayout L = {};
     const float minDim = width < height ? width : height;
     const float unit = minDim * 0.145f * scale;
     const float marginX = width * 0.032f;
-    const float midY = height * 0.52f;
+    const float midY = height * centerYRatio;
 
-    // Large D-Pad on the left side of the bottom screen
     L.dpadR = unit * 1.48f;
     L.dpadCx = marginX + L.dpadR * 1.12f;
     L.dpadCy = midY;
 
-    // Large A/B/X/Y diamond on the right side of the bottom screen
     L.faceBtnR = unit * 0.62f;
     L.diamondSpread = unit * 1.22f;
     L.faceCx = width - marginX - L.diamondSpread - L.faceBtnR;
@@ -163,7 +197,6 @@ static bool PointInRect(float px, float py, float x0, float y0, float x1, float 
 }
 
 static void EvalBottomPoint(float fx, float fy, const BottomLayout &L, bool pressed[VBTN_COUNT]) {
-    // D-Pad 8-way hit zone
     const float dx = fx - L.dpadCx;
     const float dy = fy - L.dpadCy;
     const float distSq = dx * dx + dy * dy;
@@ -177,7 +210,6 @@ static void EvalBottomPoint(float fx, float fy, const BottomLayout &L, bool pres
         if (angle > -0.98f && angle < 0.98f) pressed[VBTN_RIGHT] = true;
     }
 
-    // Face buttons
     const float hitR = L.faceBtnR * 1.22f;
     if (PointInCircle(fx, fy, L.aCx, L.aCy, hitR)) pressed[VBTN_A] = true;
     if (PointInCircle(fx, fy, L.bCx, L.bCy, hitR)) pressed[VBTN_B] = true;
@@ -188,7 +220,6 @@ static void EvalBottomPoint(float fx, float fy, const BottomLayout &L, bool pres
 static bool IsPointOnBottomControls(float fx, float fy, const BottomLayout &L) {
     bool tmp[VBTN_COUNT] = {};
     EvalBottomPoint(fx, fy, L, tmp);
-    // Also claim the center hub of the D-Pad so thumb resting doesn't tap the DS screen
     if (PointInCircle(fx, fy, L.dpadCx, L.dpadCy, L.dpadR * 1.25f)) {
         return true;
     }
@@ -198,7 +229,7 @@ static bool IsPointOnBottomControls(float fx, float fy, const BottomLayout &L) {
 
 static void FlushCombinedHardwareMasksLocked() {
     const u16 combinedPad = sTopPadMask | sBottomPadMask;
-    const u16 combinedXY = sBottomXYMask;
+    const u16 combinedXY = sTopXYMask | sBottomXYMask;
 
     const u16 releasedPad = sAppliedPadMask & ~combinedPad;
     const u16 releasedXY = sAppliedXYMask & ~combinedXY;
@@ -290,7 +321,6 @@ static void DrawDpad(ImDrawList *dl, float cx, float cy, float outerR,
 
 extern "C" {
 
-// Top screen overlay: single bottom row with [L] [SWITCH] [SELECT] on left and [START] [FF] [R] on right
 BOOL TouchControls_IsEnabled(void) {
     SIM_Config_prj_type *cfg = SIM_Config_prj_GetConfig();
     return (cfg->touchOverlay && !SIM::Settings::IsOpen() && !SIM_Carts_UIActive()) ? TRUE : FALSE;
@@ -298,14 +328,19 @@ BOOL TouchControls_IsEnabled(void) {
 
 void TouchControls_DrawOverlay(void) {
     SIM_Config_prj_type *cfg = SIM_Config_prj_GetConfig();
-    const bool primaryFull = SIM::Settings::IsOpen() || SIM_Carts_UIActive();
-    const bool companionFull = !primaryFull && (SIM_Companion_IsFullScreen() != FALSE);
-    SyncAndroidLayoutMode(primaryFull ? 2 : (companionFull ? 1 : 0));
+    const bool allowFullExpand = (cfg->fullScreenCompanion != FALSE);
+    const bool primaryFull = allowFullExpand && (SIM::Settings::IsOpen() || SIM_Carts_UIActive());
+    const bool companionFull = allowFullExpand && !primaryFull && (SIM_Companion_IsFullScreen() != FALSE);
+    const bool topRightMode = !primaryFull && !companionFull && (cfg->topRightOverlay != FALSE);
+
+    SyncAndroidOverlayScale(GetTopRightWidthFraction(cfg));
+    SyncAndroidLayoutMode(primaryFull ? 2 : (companionFull ? 1 : (topRightMode ? 3 : 0)));
 
     if (!cfg->touchOverlay || primaryFull || companionFull) {
         std::lock_guard<std::mutex> lock(sInputMutex);
-        if (sTopPadMask != 0) {
+        if (sTopPadMask != 0 || sTopXYMask != 0) {
             sTopPadMask = 0;
+            sTopXYMask = 0;
             FlushCombinedHardwareMasksLocked();
         }
         sPrevSwitchPressed = false;
@@ -323,29 +358,50 @@ void TouchControls_DrawOverlay(void) {
 
     const float marginX = disp.x * 0.016f;
     const float gap = disp.x * 0.008f;
-    const float pillH = std::max(28.0f, std::min(disp.y * 0.072f * scale, disp.y * 0.14f));
+    const float pillH = std::max(28.0f, std::min(disp.y * (topRightMode ? 0.048f : 0.072f) * scale, disp.y * 0.14f));
     const float rowY1 = disp.y - disp.y * 0.018f;
     const float rowY0 = rowY1 - pillH;
 
-    // Cap width so left and right 3-button groups never collide in the middle
-    const float maxGroupW = disp.x * 0.43f;
-    const float baseW = std::min(disp.x * 0.056f * scale, (maxGroupW - 2.0f * gap) / 3.55f);
+    float lX0, lX1, swX0, swX1, selX0, selX1;
+    float staX0, staX1, ffX0, ffX1, rX0, rX1;
 
-    // Bottom-left row: [ L ] [ SWITCH ] [ SELECT ]
-    const float lX0 = marginX;
-    const float lX1 = lX0 + baseW;
-    const float swX0 = lX1 + gap;
-    const float swX1 = swX0 + baseW * 1.28f;
-    const float selX0 = swX1 + gap;
-    const float selX1 = selX0 + baseW * 1.25f;
+    if (topRightMode) {
+        const float maxCenterSpan = disp.x * 0.44f;
+        const float baseW = std::min(disp.x * 0.046f * scale, (maxCenterSpan - 5.0f * gap) / 6.73f);
+        const float totalBarW = baseW * 6.73f + gap * 5.0f;
+        const float startX = (disp.x - totalBarW) * 0.5f;
+        lX0 = startX;
+        lX1 = lX0 + baseW;
+        swX0 = lX1 + gap;
+        swX1 = swX0 + baseW * 1.28f;
+        selX0 = swX1 + gap;
+        selX1 = selX0 + baseW * 1.25f;
+        staX0 = selX1 + gap;
+        staX1 = staX0 + baseW * 1.20f;
+        ffX0 = staX1 + gap;
+        ffX1 = ffX0 + baseW;
+        rX0 = ffX1 + gap;
+        rX1 = rX0 + baseW;
+    } else {
+        const float maxGroupW = disp.x * 0.43f;
+        const float baseW = std::min(disp.x * 0.056f * scale, (maxGroupW - 2.0f * gap) / 3.55f);
 
-    // Bottom-right row: [ START ] [ FF ] [ R ]
-    const float rX1 = disp.x - marginX;
-    const float rX0 = rX1 - baseW;
-    const float ffX1 = rX0 - gap;
-    const float ffX0 = ffX1 - baseW;
-    const float staX1 = ffX0 - gap;
-    const float staX0 = staX1 - baseW * 1.20f;
+        lX0 = marginX;
+        lX1 = lX0 + baseW;
+        swX0 = lX1 + gap;
+        swX1 = swX0 + baseW * 1.28f;
+        selX0 = swX1 + gap;
+        selX1 = selX0 + baseW * 1.25f;
+
+        rX1 = disp.x - marginX;
+        rX0 = rX1 - baseW;
+        ffX1 = rX0 - gap;
+        ffX0 = ffX1 - baseW;
+        staX1 = ffX0 - gap;
+        staX0 = staX1 - baseW * 1.20f;
+    }
+
+    const BottomLayout L = ComputeBottomLayout(disp.x, disp.y, scale * 0.88f, 0.72f);
 
     bool pressed[VBTN_COUNT] = {};
 
@@ -370,6 +426,10 @@ void TouchControls_DrawOverlay(void) {
             if (PointInRect(fx, fy, staX0, rowY0, staX1, rowY1)) pressed[VBTN_START] = true;
             if (PointInRect(fx, fy, ffX0, rowY0, ffX1, rowY1)) pressed[VBTN_FF] = true;
             if (PointInRect(fx, fy, rX0, rowY0, rX1, rowY1)) pressed[VBTN_R] = true;
+
+            if (topRightMode) {
+                EvalBottomPoint(fx, fy, L, pressed);
+            }
         }
     }
 
@@ -390,39 +450,62 @@ void TouchControls_DrawOverlay(void) {
     sPrevFFPressed = pressed[VBTN_FF];
 
     u16 topPad = 0;
+    u16 topXY = 0;
     if (pressed[VBTN_SELECT]) topPad |= (1u << 2);
     if (pressed[VBTN_START])  topPad |= (1u << 3);
     if (pressed[VBTN_R])      topPad |= (1u << 8);
     if (pressed[VBTN_L])      topPad |= (1u << 9);
+    if (topRightMode) {
+        if (pressed[VBTN_A])     topPad |= (1u << 0);
+        if (pressed[VBTN_B])     topPad |= (1u << 1);
+        if (pressed[VBTN_RIGHT]) topPad |= (1u << 4);
+        if (pressed[VBTN_LEFT])  topPad |= (1u << 5);
+        if (pressed[VBTN_UP])    topPad |= (1u << 6);
+        if (pressed[VBTN_DOWN])  topPad |= (1u << 7);
+        if (pressed[VBTN_X])     topXY  |= (1u << 10);
+        if (pressed[VBTN_Y])     topXY  |= (1u << 11);
+    }
 
     {
         std::lock_guard<std::mutex> lock(sInputMutex);
         sTopPadMask = topPad;
+        sTopXYMask = topXY;
         FlushCombinedHardwareMasksLocked();
     }
 
     ImDrawList *dl = ImGui::GetForegroundDrawList();
-    ImFont *font = SIM::UI::BoldFont();
+    ImFont *boldFont = SIM::UI::BoldFont();
 
     const bool switchActive = pressed[VBTN_SWITCH] || (SIM_Companion_IsFullScreen() != FALSE);
     const bool ffActive = pressed[VBTN_FF] || (SIM_IsFastForwarding() != FALSE);
 
-    DrawPillButton(dl, font, lX0, rowY0, lX1, rowY1, "L", pressed[VBTN_L], alpha);
-    DrawPillButton(dl, font, swX0, rowY0, swX1, rowY1, "SWITCH", switchActive, alpha, IM_COL32(70, 195, 235, 255));
-    DrawPillButton(dl, font, selX0, rowY0, selX1, rowY1, "SELECT", pressed[VBTN_SELECT], alpha);
+    DrawPillButton(dl, boldFont, lX0, rowY0, lX1, rowY1, "L", pressed[VBTN_L], alpha);
+    DrawPillButton(dl, boldFont, swX0, rowY0, swX1, rowY1, "SWITCH", switchActive, alpha, IM_COL32(70, 195, 235, 255));
+    DrawPillButton(dl, boldFont, selX0, rowY0, selX1, rowY1, "SELECT", pressed[VBTN_SELECT], alpha);
 
-    DrawPillButton(dl, font, staX0, rowY0, staX1, rowY1, "START", pressed[VBTN_START], alpha);
-    DrawPillButton(dl, font, ffX0, rowY0, ffX1, rowY1, "FF", ffActive, alpha, IM_COL32(245, 155, 50, 255));
-    DrawPillButton(dl, font, rX0, rowY0, rX1, rowY1, "R", pressed[VBTN_R], alpha);
+    DrawPillButton(dl, boldFont, staX0, rowY0, staX1, rowY1, "START", pressed[VBTN_START], alpha);
+    DrawPillButton(dl, boldFont, ffX0, rowY0, ffX1, rowY1, "FF", ffActive, alpha, IM_COL32(245, 155, 50, 255));
+    DrawPillButton(dl, boldFont, rX0, rowY0, rX1, rowY1, "R", pressed[VBTN_R], alpha);
+
+    if (topRightMode) {
+        ImFont *font = ImGui::GetFont();
+        DrawDpad(dl, L.dpadCx, L.dpadCy, L.dpadR,
+                 pressed[VBTN_UP], pressed[VBTN_DOWN], pressed[VBTN_LEFT], pressed[VBTN_RIGHT], alpha);
+        DrawCircleButton(dl, font, L.aCx, L.aCy, L.faceBtnR, "A", pressed[VBTN_A], alpha, IM_COL32(235, 75, 85, 255));
+        DrawCircleButton(dl, font, L.bCx, L.bCy, L.faceBtnR, "B", pressed[VBTN_B], alpha, IM_COL32(235, 185, 55, 255));
+        DrawCircleButton(dl, font, L.xCx, L.xCy, L.faceBtnR, "X", pressed[VBTN_X], alpha, IM_COL32(75, 145, 240, 255));
+        DrawCircleButton(dl, font, L.yCx, L.yCy, L.faceBtnR, "Y", pressed[VBTN_Y], alpha, IM_COL32(70, 200, 120, 255));
+    }
 }
 
-// Bottom screen overlay: large D-Pad on left and A/B/X/Y diamond on right
 void TouchControls_DrawBottomOverlay(float width, float height) {
     SIM_Config_prj_type *cfg = SIM_Config_prj_GetConfig();
-    const bool primaryFull = SIM::Settings::IsOpen() || SIM_Carts_UIActive();
-    const bool companionFull = !primaryFull && (SIM_Companion_IsFullScreen() != FALSE);
+    const bool allowFullExpand = (cfg->fullScreenCompanion != FALSE);
+    const bool primaryFull = allowFullExpand && (SIM::Settings::IsOpen() || SIM_Carts_UIActive());
+    const bool companionFull = allowFullExpand && !primaryFull && (SIM_Companion_IsFullScreen() != FALSE);
+    const bool topRightMode = !primaryFull && !companionFull && (cfg->topRightOverlay != FALSE);
 
-    if (primaryFull || width <= 1.0f || height <= 1.0f || (!companionFull && !cfg->touchOverlay)) {
+    if (primaryFull || topRightMode || width <= 1.0f || height <= 1.0f || (!companionFull && !cfg->touchOverlay)) {
         std::lock_guard<std::mutex> lock(sInputMutex);
         if (sBottomPadMask != 0 || sBottomXYMask != 0) {
             sBottomPadMask = 0;
@@ -507,6 +590,34 @@ void TouchControls_DrawBottomOverlay(float width, float height) {
     DrawCircleButton(dl, font, L.yCx, L.yCy, L.faceBtnR, "Y", pressed[VBTN_Y], alpha, IM_COL32(70, 200, 120, 255));
 }
 
+void TouchControls_DrawDisplaySettings(void) {
+    SIM_Config_prj_type *cfg = SIM_Config_prj_GetConfig();
+    ImGui::Spacing();
+    ImGui::TextUnformatted("Screen layout");
+    ImGui::Separator();
+
+    bool topRight = cfg->topRightOverlay != FALSE;
+    if (ImGui::Checkbox("Top-right interactive lower screen overlay", &topRight)) {
+        cfg->topRightOverlay = topRight ? TRUE : FALSE;
+        SIM_Config_prj_SaveConfigFile(cfg);
+    }
+    ImGui::TextWrapped("Show the lower DS screen as an interactive 4:3 overlay in the top-right corner while the top screen fills the display.");
+
+    float widthFrac = GetTopRightWidthFraction(cfg);
+    if (ImGui::SliderFloat("Top-right overlay width", &widthFrac, 0.24f, 0.52f, "%.2f")) {
+        cfg->topRightOverlayScale = widthFrac;
+        SIM_Config_prj_SaveConfigFile(cfg);
+    }
+
+    ImGui::Spacing();
+    bool fullExpand = cfg->fullScreenCompanion != FALSE;
+    if (ImGui::Checkbox("Full-screen Gear companion & Settings", &fullExpand)) {
+        cfg->fullScreenCompanion = fullExpand ? TRUE : FALSE;
+        SIM_Config_prj_SaveConfigFile(cfg);
+    }
+    ImGui::TextWrapped("Expand the Gear companion and Settings menu to fill the whole screen with a bottom [ SWITCH ] pill.");
+}
+
 void TouchControls_DrawSettings(void) {
     SIM_Config_prj_type *cfg = SIM_Config_prj_GetConfig();
     bool enabled = cfg->touchOverlay != FALSE;
@@ -514,7 +625,7 @@ void TouchControls_DrawSettings(void) {
         cfg->touchOverlay = enabled ? TRUE : FALSE;
         SIM_Config_prj_SaveConfigFile(cfg);
     }
-    ImGui::TextWrapped("Split multi-touch controller: D-Pad & A/B/X/Y on the lower screen, L/R, Start/Select, Switch & FF along the upper screen's bottom edge.");
+    ImGui::TextWrapped("Multi-touch controller: D-Pad & A/B/X/Y plus L/R, Start/Select, Switch & FF.");
 
     ImGui::Spacing();
     if (ImGui::SliderFloat("Button opacity", &cfg->touchOverlayOpacity, 0.15f, 1.0f, "%.2f")) {
@@ -540,9 +651,11 @@ Java_org_pokeplatinum_port_SecondaryScreen_nativeUpdateSecondaryTouches(
     }
 
     SIM_Config_prj_type *cfg = SIM_Config_prj_GetConfig();
-    const bool primaryFull = SIM::Settings::IsOpen() || SIM_Carts_UIActive();
-    const bool companionFull = !primaryFull && (SIM_Companion_IsFullScreen() != FALSE);
-    const bool bottomControlsActive = cfg->touchOverlay && !primaryFull && !companionFull;
+    const bool allowFullExpand = (cfg->fullScreenCompanion != FALSE);
+    const bool primaryFull = allowFullExpand && (SIM::Settings::IsOpen() || SIM_Carts_UIActive());
+    const bool companionFull = allowFullExpand && !primaryFull && (SIM_Companion_IsFullScreen() != FALSE);
+    const bool topRightMode = !primaryFull && !companionFull && (cfg->topRightOverlay != FALSE);
+    const bool bottomControlsActive = cfg->touchOverlay && !primaryFull && !companionFull && !topRightMode;
     const float scale = GetOverlayScale(cfg);
     const BottomLayout L = ComputeBottomLayout(viewWidth, viewHeight, scale);
     const PillRect sw = ComputeCompanionSwitchRect(viewWidth, viewHeight, scale);

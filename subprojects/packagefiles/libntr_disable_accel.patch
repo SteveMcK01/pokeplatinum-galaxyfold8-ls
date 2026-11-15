@@ -1,0 +1,12 @@
+diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
+index e34a072..ee7e415 100644
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -830,6 +830,7 @@ void *SIM_RenderInit(void *arg) {
+     fflush(stdout);
+   }
+ 
++  SDL_SetHintWithPriority(SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0", SDL_HINT_OVERRIDE);
+   SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER |
+            SDL_INIT_JOYSTICK);
+   SIM_Audio_Init(44100);

@@ -60,6 +60,10 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        try {
+            android.system.Os.setenv("SDL_ACCELEROMETER_AS_JOYSTICK", "0", true);
+        } catch (Exception ignored) {
+        }
         super.onCreate(savedInstanceState);
         moveToMainDisplay();
         preferSixtyHertz();

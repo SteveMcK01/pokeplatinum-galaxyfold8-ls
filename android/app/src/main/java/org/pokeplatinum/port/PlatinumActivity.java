@@ -62,8 +62,10 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
     protected void onCreate(Bundle savedInstanceState) {
         try {
             android.system.Os.setenv("SDL_ACCELEROMETER_AS_JOYSTICK", "0", true);
+            android.system.Os.setenv("SDL_ORIENTATIONS", "LandscapeLeft LandscapeRight Portrait PortraitUpsideDown", true);
         } catch (Exception ignored) {
         }
+        setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER);
         super.onCreate(savedInstanceState);
         moveToMainDisplay();
         preferSixtyHertz();
@@ -212,6 +214,11 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
         if (secondaryScreen != null) {
             secondaryScreen.refresh();
         }
+    }
+
+    @Override
+    public void setRequestedOrientation(int requestedOrientation) {
+        super.setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER);
     }
 
     @Override

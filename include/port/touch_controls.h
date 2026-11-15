@@ -7,6 +7,7 @@ extern "C" {
 
 void TouchControls_DrawSettings(void);
 void TouchControls_DrawOverlay(void);
+void TouchControls_DrawBottomOverlay(float width, float height);
 
 #ifdef __cplusplus
 }

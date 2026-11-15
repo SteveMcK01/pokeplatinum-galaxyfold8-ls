@@ -219,10 +219,13 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
     static native void nativeSurfaceChanged(Surface surface);
     static native void nativeSurfaceDestroyed();
     static native void nativeTouch(boolean down, float x, float y);
+    static native boolean nativeUpdateSecondaryTouches(int count, float[] xs, float[] ys, float width, float height);
 
-    // The DS has one stylus: follow the first finger down until it lifts
+    // Forward multi-touch pointers to the virtual controller overlay while keeping single-stylus DS touch
     private static final class SingleStylusTouchListener implements View.OnTouchListener {
         private int touchPointerId = -1;
+        private final float[] pointerXs = new float[10];
+        private final float[] pointerYs = new float[10];
 
         @Override
         public boolean onTouch(View view, MotionEvent event) {
@@ -231,13 +234,31 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
                 view.requestUnbufferedDispatch(event);
             }
 
-            int index = event.getActionIndex();
+            int actionIndex = event.getActionIndex();
+            int pointerCount = event.getPointerCount();
+            int activeCount = 0;
+
+            for (int i = 0; i < pointerCount && activeCount < pointerXs.length; i++) {
+                if ((action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP) && i == actionIndex) {
+                    continue;
+                }
+                if (action == MotionEvent.ACTION_CANCEL) {
+                    break;
+                }
+                pointerXs[activeCount] = event.getX(i);
+                pointerYs[activeCount] = event.getY(i);
+                activeCount++;
+            }
+
+            boolean hitOverlay = nativeUpdateSecondaryTouches(
+                    activeCount, pointerXs, pointerYs, view.getWidth(), view.getHeight());
+
             switch (action) {
                 case MotionEvent.ACTION_DOWN:
                 case MotionEvent.ACTION_POINTER_DOWN:
-                    if (touchPointerId == -1) {
-                        touchPointerId = event.getPointerId(index);
-                        nativeTouch(true, event.getX(index), event.getY(index));
+                    if (touchPointerId == -1 && !hitOverlay) {
+                        touchPointerId = event.getPointerId(actionIndex);
+                        nativeTouch(true, event.getX(actionIndex), event.getY(actionIndex));
                     }
                     break;
                 case MotionEvent.ACTION_MOVE: {
@@ -249,8 +270,8 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
                 }
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_POINTER_UP:
-                    if (event.getPointerId(index) == touchPointerId) {
-                        nativeTouch(false, event.getX(index), event.getY(index));
+                    if (event.getPointerId(actionIndex) == touchPointerId) {
+                        nativeTouch(false, event.getX(actionIndex), event.getY(actionIndex));
                         touchPointerId = -1;
                     }
                     break;

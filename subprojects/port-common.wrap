@@ -5,6 +5,7 @@ url = https://github.com/SilasMayes/port-common.git
 revision = 8c28eaf6155af94afa3823a5f8c8f1ba791bee36
 depth = 1
 directory = port-common
+diff_files = port_common_touch_overlay.patch
 
 [provide]
 dependency_names = port_common

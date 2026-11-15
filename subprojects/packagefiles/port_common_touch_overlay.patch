@@ -1,0 +1,20 @@
+--- a/src/gear_ui.cpp
++++ b/src/gear_ui.cpp
+@@ -26,6 +26,11 @@
+ #include "simulator/imgui/imgui.hpp"
+ #include "simulator/sim_companion.h"
+ 
++extern "C" __attribute__((weak)) void TouchControls_DrawBottomOverlay(float width, float height) {
++  (void)width;
++  (void)height;
++}
++
+ // Fonts (generated from assets/fonts/*.ttf into generated/)
+ extern "C" {
+ extern const unsigned char AtkinsonHyperlegible_Regular_ttf[];
+@@ -4243,4 +4248,5 @@
+   ImGui::EndChild();
+ 
+   ImGui::End();
++  TouchControls_DrawBottomOverlay(frame->outputWidth, frame->outputHeight);
+ }

@@ -49,9 +49,12 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
     /** File waiting to be written to the document the player is choosing (export). */
     private String pendingExportSource;
 
+    private static volatile PlatinumActivity sInstance;
+
     private SecondaryScreen secondaryScreen;
     private SurfaceView inlineBottomSurfaceView;
     private boolean inlineSplitEnabled;
+    private int inlineLayoutMode = 0; // 0 = 50/50 split, 1 = full-screen companion, 2 = full-screen primary (settings)
 
     @Override
     protected String[] getLibraries() {
@@ -66,6 +69,7 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
         } catch (Exception ignored) {
         }
         setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER);
+        sInstance = this;
         super.onCreate(savedInstanceState);
         moveToMainDisplay();
         preferSixtyHertz();
@@ -112,6 +116,19 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
         });
     }
 
+    @SuppressWarnings("unused")
+    public static void setInlineLayoutMode(int mode) {
+        PlatinumActivity act = sInstance;
+        if (act != null) {
+            act.runOnUiThread(() -> {
+                if (act.inlineLayoutMode != mode) {
+                    act.inlineLayoutMode = mode;
+                    act.updateSplitSurfaceBounds();
+                }
+            });
+        }
+    }
+
     private void updateSplitSurfaceBounds() {
         if (mLayout == null || mSurface == null || inlineBottomSurfaceView == null) {
             return;
@@ -122,8 +139,15 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
             return;
         }
 
-        if (!inlineSplitEnabled) {
+        if (!inlineSplitEnabled || inlineLayoutMode == 2) {
             applyRelativeBounds(mSurface, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 0);
+            applyRelativeBounds(inlineBottomSurfaceView, 1, 1, 0);
+            return;
+        }
+
+        if (inlineLayoutMode == 1) {
+            applyRelativeBounds(mSurface, 1, 1, 0);
+            applyRelativeBounds(inlineBottomSurfaceView, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 0);
             return;
         }
 
@@ -231,6 +255,9 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
 
     @Override
     protected void onDestroy() {
+        if (sInstance == this) {
+            sInstance = null;
+        }
         if (secondaryScreen != null) {
             secondaryScreen.release();
             secondaryScreen = null;

@@ -62,11 +62,53 @@ static u16 sAppliedPadMask = 0;
 static u16 sAppliedXYMask = 0;
 
 static bool sPrevSwitchPressed = false;
+static bool sPrevCompanionSwitchPressed = false;
 static bool sPrevFFPressed = false;
+static int sLastAndroidLayoutMode = -1;
 
 static std::vector<TouchPt> sSecondaryTouches;
 static float sSecondaryViewW = 0.0f;
 static float sSecondaryViewH = 0.0f;
+
+struct PillRect {
+    float x0, y0, x1, y1;
+};
+
+static PillRect ComputeCompanionSwitchRect(float width, float height, float scale) {
+    const float pillH = std::max(34.0f, std::min(height * 0.052f * scale, height * 0.09f));
+    const float pillW = std::max(108.0f, std::min(width * 0.16f * scale, width * 0.34f));
+    const float cx = width * 0.5f;
+    const float y1 = height - height * 0.015f;
+    return {cx - pillW * 0.5f, y1 - pillH, cx + pillW * 0.5f, y1};
+}
+
+static void SyncAndroidLayoutMode(int mode) {
+#ifdef __ANDROID__
+    if (sLastAndroidLayoutMode == mode) {
+        return;
+    }
+    JNIEnv *env = static_cast<JNIEnv *>(SDL_AndroidGetJNIEnv());
+    if (!env) {
+        return;
+    }
+    jclass cls = env->FindClass("org/pokeplatinum/port/PlatinumActivity");
+    if (!cls) {
+        env->ExceptionClear();
+        return;
+    }
+    jmethodID mid = env->GetStaticMethodID(cls, "setInlineLayoutMode", "(I)V");
+    if (mid) {
+        env->CallStaticVoidMethod(cls, mid, static_cast<jint>(mode));
+        sLastAndroidLayoutMode = mode;
+    }
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+    }
+    env->DeleteLocalRef(cls);
+#else
+    (void)mode;
+#endif
+}
 
 static float GetOverlayScale(const SIM_Config_prj_type *cfg) {
     return (cfg->touchOverlayScale > 0.4f && cfg->touchOverlayScale < 2.2f)
@@ -256,7 +298,11 @@ BOOL TouchControls_IsEnabled(void) {
 
 void TouchControls_DrawOverlay(void) {
     SIM_Config_prj_type *cfg = SIM_Config_prj_GetConfig();
-    if (!cfg->touchOverlay || SIM::Settings::IsOpen() || SIM_Carts_UIActive()) {
+    const bool primaryFull = SIM::Settings::IsOpen() || SIM_Carts_UIActive();
+    const bool companionFull = !primaryFull && (SIM_Companion_IsFullScreen() != FALSE);
+    SyncAndroidLayoutMode(primaryFull ? 2 : (companionFull ? 1 : 0));
+
+    if (!cfg->touchOverlay || primaryFull || companionFull) {
         std::lock_guard<std::mutex> lock(sInputMutex);
         if (sTopPadMask != 0) {
             sTopPadMask = 0;
@@ -373,19 +419,54 @@ void TouchControls_DrawOverlay(void) {
 // Bottom screen overlay: large D-Pad on left and A/B/X/Y diamond on right
 void TouchControls_DrawBottomOverlay(float width, float height) {
     SIM_Config_prj_type *cfg = SIM_Config_prj_GetConfig();
-    if (!cfg->touchOverlay || SIM::Settings::IsOpen() || SIM_Carts_UIActive() ||
-        SIM_Companion_IsFullScreen() || width <= 1.0f || height <= 1.0f) {
+    const bool primaryFull = SIM::Settings::IsOpen() || SIM_Carts_UIActive();
+    const bool companionFull = !primaryFull && (SIM_Companion_IsFullScreen() != FALSE);
+
+    if (primaryFull || width <= 1.0f || height <= 1.0f || (!companionFull && !cfg->touchOverlay)) {
         std::lock_guard<std::mutex> lock(sInputMutex);
         if (sBottomPadMask != 0 || sBottomXYMask != 0) {
             sBottomPadMask = 0;
             sBottomXYMask = 0;
             FlushCombinedHardwareMasksLocked();
         }
+        sPrevCompanionSwitchPressed = false;
         return;
     }
 
     const float scale = GetOverlayScale(cfg);
-    const float alpha = GetOverlayAlpha(cfg);
+    const float alpha = cfg->touchOverlay ? GetOverlayAlpha(cfg) : 0.75f;
+
+    if (companionFull) {
+        bool switchPressed = false;
+        const PillRect sw = ComputeCompanionSwitchRect(width, height, scale);
+        {
+            std::lock_guard<std::mutex> lock(sInputMutex);
+            if (sBottomPadMask != 0 || sBottomXYMask != 0) {
+                sBottomPadMask = 0;
+                sBottomXYMask = 0;
+                FlushCombinedHardwareMasksLocked();
+            }
+            const float sx = (sSecondaryViewW > 1.0f) ? (width / sSecondaryViewW) : 1.0f;
+            const float sy = (sSecondaryViewH > 1.0f) ? (height / sSecondaryViewH) : 1.0f;
+            for (const TouchPt &pt : sSecondaryTouches) {
+                if (PointInRect(pt.x * sx, pt.y * sy, sw.x0, sw.y0, sw.x1, sw.y1)) {
+                    switchPressed = true;
+                }
+            }
+        }
+
+        if (switchPressed && !sPrevCompanionSwitchPressed) {
+            SIM_Companion_ToggleFullScreen();
+        }
+        sPrevCompanionSwitchPressed = switchPressed;
+
+        ImDrawList *dl = ImGui::GetForegroundDrawList();
+        ImFont *font = SIM::UI::BoldFont();
+        DrawPillButton(dl, font, sw.x0, sw.y0, sw.x1, sw.y1, "SWITCH", true, alpha, IM_COL32(70, 195, 235, 255));
+        return;
+    }
+    sPrevCompanionSwitchPressed = false;
+
     const BottomLayout L = ComputeBottomLayout(width, height, scale);
 
     bool pressed[VBTN_COUNT] = {};
@@ -459,8 +540,12 @@ Java_org_pokeplatinum_port_SecondaryScreen_nativeUpdateSecondaryTouches(
     }
 
     SIM_Config_prj_type *cfg = SIM_Config_prj_GetConfig();
-    const bool overlayActive = cfg->touchOverlay && !SIM::Settings::IsOpen() && !SIM_Carts_UIActive() && !SIM_Companion_IsFullScreen();
-    const BottomLayout L = ComputeBottomLayout(viewWidth, viewHeight, GetOverlayScale(cfg));
+    const bool primaryFull = SIM::Settings::IsOpen() || SIM_Carts_UIActive();
+    const bool companionFull = !primaryFull && (SIM_Companion_IsFullScreen() != FALSE);
+    const bool bottomControlsActive = cfg->touchOverlay && !primaryFull && !companionFull;
+    const float scale = GetOverlayScale(cfg);
+    const BottomLayout L = ComputeBottomLayout(viewWidth, viewHeight, scale);
+    const PillRect sw = ComputeCompanionSwitchRect(viewWidth, viewHeight, scale);
 
     jfloat *xs = env->GetFloatArrayElements(xsArr, nullptr);
     jfloat *ys = env->GetFloatArrayElements(ysArr, nullptr);
@@ -468,7 +553,11 @@ Java_org_pokeplatinum_port_SecondaryScreen_nativeUpdateSecondaryTouches(
     bool anyHit = false;
     for (int i = 0; i < count; ++i) {
         sSecondaryTouches.push_back({xs[i], ys[i]});
-        if (overlayActive && IsPointOnBottomControls(xs[i], ys[i], L)) {
+        if (companionFull) {
+            if (PointInRect(xs[i], ys[i], sw.x0, sw.y0, sw.x1, sw.y1)) {
+                anyHit = true;
+            }
+        } else if (bottomControlsActive && IsPointOnBottomControls(xs[i], ys[i], L)) {
             anyHit = true;
         }
     }

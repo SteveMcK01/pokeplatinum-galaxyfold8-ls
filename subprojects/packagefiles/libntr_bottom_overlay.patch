@@ -1,0 +1,41 @@
+diff --git a/libraries/sim/src/sim_companion.cpp b/libraries/sim/src/sim_companion.cpp
+index cfe9fd9..b89e9d0 100644
+--- a/libraries/sim/src/sim_companion.cpp
++++ b/libraries/sim/src/sim_companion.cpp
+@@ -12,6 +12,15 @@
+ #include "imgui_impl_opengl3.h"
+ #include "simulator/imgui/imgui.hpp"
+ 
++extern "C" __attribute__((weak)) BOOL TouchControls_IsEnabled(void) {
++  return FALSE;
++}
++
++extern "C" __attribute__((weak)) void TouchControls_DrawBottomOverlay(float width, float height) {
++  (void)width;
++  (void)height;
++}
++
+ namespace {
+ 
+ ImGuiContext *sContext = nullptr;
+@@ -149,7 +158,7 @@ extern "C" void SIM_Companion_QueueTouch(int type, int x, int y) {
+ 
+ extern "C" void SIM_Companion_Render(const SIM_CompanionLayout *layout) {
+   sDsViewSet = false;
+-  if (!layout->companionVisible) {
++  if (!layout->companionVisible && !TouchControls_IsEnabled()) {
+     sPendingTouches.clear();
+     return;
+   }
+@@ -203,7 +212,10 @@ extern "C" void SIM_Companion_Render(const SIM_CompanionLayout *layout) {
+ 
+   ImGui_ImplOpenGL3_NewFrame();
+   ImGui::NewFrame();
+-  SIM_Prj_CompanionDraw(&layout->frame);
++  if (layout->companionVisible) {
++    SIM_Prj_CompanionDraw(&layout->frame);
++  }
++  TouchControls_DrawBottomOverlay(layout->frame.outputWidth, layout->frame.outputHeight);
+   ImGui::Render();
+ 
+   glViewport(0, 0, (GLsizei)layout->frame.outputWidth, (GLsizei)layout->frame.outputHeight);

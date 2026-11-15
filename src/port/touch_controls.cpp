@@ -249,6 +249,11 @@ static void DrawDpad(ImDrawList *dl, float cx, float cy, float outerR,
 extern "C" {
 
 // Top screen overlay: single bottom row with [L] [SWITCH] [SELECT] on left and [START] [FF] [R] on right
+BOOL TouchControls_IsEnabled(void) {
+    SIM_Config_prj_type *cfg = SIM_Config_prj_GetConfig();
+    return (cfg->touchOverlay && !SIM::Settings::IsOpen() && !SIM_Carts_UIActive()) ? TRUE : FALSE;
+}
+
 void TouchControls_DrawOverlay(void) {
     SIM_Config_prj_type *cfg = SIM_Config_prj_GetConfig();
     if (!cfg->touchOverlay || SIM::Settings::IsOpen() || SIM_Carts_UIActive()) {

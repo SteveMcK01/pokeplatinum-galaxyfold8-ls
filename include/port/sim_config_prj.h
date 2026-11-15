@@ -42,7 +42,9 @@ typedef struct {
     BOOL infinitePP;    // the player's moves don't use PP
     BOOL alwaysEscape;  // running from wild Pokemon always works
     BOOL fastEggs;      // eggs hatch after a few steps
-    BOOL anyTM;         // any Pokemon can learn any TM or HM
+    BOOL anyTM;
+    BOOL catchEmAll;
+    BOOL tradeEvos;         // any Pokemon can learn any TM or HM
 
     // Saves section
     int saveSlot; // Save slot in use, 1-based (slot 1 is the original save.bin)

@@ -121,6 +121,12 @@ static int IniHandler(void* user, const char* section, const char* name,
     if(MATCH("Cheats", "AnyTM")) {
         config->anyTM = StringToBool(value);
     }
+    if(MATCH("Cheats", "CatchEmAll")) {
+        config->catchEmAll = StringToBool(value);
+    }
+    if(MATCH("Cheats", "TradeEvos")) {
+        config->tradeEvos = StringToBool(value);
+    }
 
     // Saves section
     if(MATCH("Saves", "Slot")) {
@@ -234,6 +240,8 @@ void SIM_Config_prj_LoadDefaults(SIM_Config_prj_type * aConfig)
   aConfig->alwaysEscape = FALSE;
   aConfig->fastEggs = FALSE;
   aConfig->anyTM = FALSE;
+    aConfig->catchEmAll = FALSE;
+    aConfig->tradeEvos = FALSE;
 
   // Saves section
   aConfig->saveSlot = 1;
@@ -311,6 +319,8 @@ void SIM_Config_prj_SaveConfigFile(SIM_Config_prj_type * aConfig)
     fprintf(configFile, "AlwaysEscape=%s\n", BoolToString(aConfig->alwaysEscape));
     fprintf(configFile, "FastEggs=%s\n", BoolToString(aConfig->fastEggs));
     fprintf(configFile, "AnyTM=%s\n", BoolToString(aConfig->anyTM));
+    fprintf(configFile, "CatchEmAll=%s\n", BoolToString(aConfig->catchEmAll));
+    fprintf(configFile, "TradeEvos=%s\n", BoolToString(aConfig->tradeEvos));
     fprintf(configFile, "\n");
 
     fprintf(configFile, "[Saves]\n");

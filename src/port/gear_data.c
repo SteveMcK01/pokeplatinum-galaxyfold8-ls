@@ -35,6 +35,7 @@
 #include "battle_sub_menus/battle_party.h"
 #include "field/field_system.h"
 #include "overlay006/wild_encounters.h"
+#include "port/catch_em_all.h"
 #include "port/debug_field.h"
 #include "port/gba_slot.h"
 #include "port/gear_map.h"
@@ -718,15 +719,10 @@ void Gear_GetArea(GearArea *out)
     }
 
     if (data->grassEncounters.encounterRate != 0) {
+        EncounterSlot grassSlots[MAX_GRASS_ENCOUNTERS];
         for (int i = 0; i < MAX_GRASS_ENCOUNTERS; i++) {
             const GrassEncounter *enc = &data->grassEncounters.encounters[i];
             int species = enc->species;
-            if (dualSlot != NULL && (i == 8 || i == 9)) {
-                AddEncounter(out, GEAR_ENC_GBA, dualSlot[i - 8], enc->level, enc->level, sGrassRates[i]);
-                continue;
-            }
-
-            // Slots 3 and 4 follow the time of day, like WildEncounters_ReplaceTimedEncounters
             if (i == 2 || i == 3) {
                 if (out->timeOfDay == TIMEOFDAY_DAY || out->timeOfDay == TIMEOFDAY_TWILIGHT) {
                     species = data->dayEncounters[i - 2];
@@ -734,7 +730,19 @@ void Gear_GetArea(GearArea *out)
                     species = data->nightEncounters[i - 2];
                 }
             }
-            AddEncounter(out, GEAR_ENC_GRASS, species, enc->level, enc->level, sGrassRates[i]);
+            grassSlots[i].species = species;
+            grassSlots[i].minLevel = enc->level;
+            grassSlots[i].maxLevel = enc->level;
+        }
+        CatchEmAll_ApplyGrassSlots(out->mapHeaderID, grassSlots);
+
+        for (int i = 0; i < MAX_GRASS_ENCOUNTERS; i++) {
+            const GrassEncounter *enc = &data->grassEncounters.encounters[i];
+            if (dualSlot != NULL && (i == 8 || i == 9)) {
+                AddEncounter(out, GEAR_ENC_GBA, dualSlot[i - 8], enc->level, enc->level, sGrassRates[i]);
+                continue;
+            }
+            AddEncounter(out, GEAR_ENC_GRASS, grassSlots[i].species, grassSlots[i].minLevel, grassSlots[i].maxLevel, sGrassRates[i]);
         }
 
         // Poke Radar and swarms replace pairs of 10% / 20% slots; their levels follow
@@ -752,7 +760,18 @@ void Gear_GetArea(GearArea *out)
     AddWater(out, GEAR_ENC_SURF, &data->surfEncounters, sWaterRates);
     AddWater(out, GEAR_ENC_OLD_ROD, &data->oldRodEncounters, sWaterRates);
     AddWater(out, GEAR_ENC_GOOD_ROD, &data->goodRodEncounters, sRodRates);
-    AddWater(out, GEAR_ENC_SUPER_ROD, &data->superRodEncounters, sRodRates);
+    if (data->superRodEncounters.encounterRate != 0) {
+        EncounterSlot superSlots[MAX_WATER_ENCOUNTERS];
+        for (int i = 0; i < MAX_WATER_ENCOUNTERS; i++) {
+            superSlots[i].species = data->superRodEncounters.encounters[i].species;
+            superSlots[i].minLevel = data->superRodEncounters.encounters[i].minLevel;
+            superSlots[i].maxLevel = data->superRodEncounters.encounters[i].maxLevel;
+        }
+        CatchEmAll_ApplySuperRodSlots(out->mapHeaderID, superSlots);
+        for (int i = 0; i < MAX_WATER_ENCOUNTERS; i++) {
+            AddEncounter(out, GEAR_ENC_SUPER_ROD, superSlots[i].species, superSlots[i].minLevel, superSlots[i].maxLevel, sRodRates[i]);
+        }
+    }
 
     // Radar/swarm species already in the normal table add nothing new
     for (int i = 0; i < out->count; i++) {

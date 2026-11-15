@@ -13,6 +13,7 @@
 #include "generated/map_headers.h"
 
 #include "overlay006/wild_encounters.h"
+#include "port/catch_em_all.h"
 #include "port/gear_data.h"
 #include "port/save_version.h"
 #include "struct_defs/species.h"
@@ -111,12 +112,16 @@ static int ComparePlaceRecords(const void *a, const void *b)
         - (pa->place.rates[GEAR_TIME_DAY] + pa->place.rates[GEAR_TIME_NIGHT]);
 }
 
+static BOOL sIndexCatchEmAll = FALSE;
+
 static void BuildIndex(void)
 {
-    if (sIndexBuilt) {
+    const BOOL catchEmAll = CatchEmAll_IsEnabled();
+    if (sIndexBuilt && sIndexCatchEmAll == catchEmAll) {
         return;
     }
     sIndexBuilt = TRUE;
+    sIndexCatchEmAll = catchEmAll;
     sPlaceCount = 0;
 
     static WildEncounters data;
@@ -144,20 +149,27 @@ static void BuildIndex(void)
         MapHeaderData_LoadWildEncounters(&data, header);
 
         if (data.grassEncounters.encounterRate != 0) {
+            EncounterSlot grassSlots[MAX_GRASS_ENCOUNTERS];
+            for (int i = 0; i < MAX_GRASS_ENCOUNTERS; i++) {
+                grassSlots[i].species = data.grassEncounters.encounters[i].species;
+                grassSlots[i].minLevel = data.grassEncounters.encounters[i].level;
+                grassSlots[i].maxLevel = data.grassEncounters.encounters[i].level;
+            }
+            CatchEmAll_ApplyGrassSlots(header, grassSlots);
+
             for (int i = 0; i < MAX_GRASS_ENCOUNTERS; i++) {
                 const GrassEncounter *enc = &data.grassEncounters.encounters[i];
                 const u8 rate = sGrassRates[i];
                 if (i == 2 || i == 3) {
-                    // Morning: the slot's own Pokemon; day and evening, night: replaced
                     const u8 morning[GEAR_TIME_COUNT] = { rate, 0, 0 };
                     const u8 day[GEAR_TIME_COUNT] = { 0, rate, 0 };
                     const u8 night[GEAR_TIME_COUNT] = { 0, 0, rate };
-                    AddPlace((u16)enc->species, label, GEAR_ENC_GRASS, 0, enc->level, enc->level, morning);
+                    AddPlace((u16)grassSlots[i].species, label, GEAR_ENC_GRASS, 0, enc->level, enc->level, morning);
                     AddPlace((u16)data.dayEncounters[i - 2], label, GEAR_ENC_GRASS, 0, enc->level, enc->level, day);
                     AddPlace((u16)data.nightEncounters[i - 2], label, GEAR_ENC_GRASS, 0, enc->level, enc->level, night);
                 } else {
                     const u8 all[GEAR_TIME_COUNT] = { rate, rate, rate };
-                    AddPlace((u16)enc->species, label, GEAR_ENC_GRASS, 0, enc->level, enc->level, all);
+                    AddPlace((u16)grassSlots[i].species, label, GEAR_ENC_GRASS, 0, enc->level, enc->level, all);
                 }
             }
             const u8 none[GEAR_TIME_COUNT] = { 0, 0, 0 };
@@ -182,7 +194,19 @@ static void BuildIndex(void)
         AddWaterPlaces(label, GEAR_ENC_SURF, &data.surfEncounters, sWaterRates);
         AddWaterPlaces(label, GEAR_ENC_OLD_ROD, &data.oldRodEncounters, sWaterRates);
         AddWaterPlaces(label, GEAR_ENC_GOOD_ROD, &data.goodRodEncounters, sRodRates);
-        AddWaterPlaces(label, GEAR_ENC_SUPER_ROD, &data.superRodEncounters, sRodRates);
+        if (data.superRodEncounters.encounterRate != 0) {
+            EncounterSlot superSlots[MAX_WATER_ENCOUNTERS];
+            for (int i = 0; i < MAX_WATER_ENCOUNTERS; i++) {
+                superSlots[i].species = data.superRodEncounters.encounters[i].species;
+                superSlots[i].minLevel = data.superRodEncounters.encounters[i].minLevel;
+                superSlots[i].maxLevel = data.superRodEncounters.encounters[i].maxLevel;
+            }
+            CatchEmAll_ApplySuperRodSlots(header, superSlots);
+            for (int i = 0; i < MAX_WATER_ENCOUNTERS; i++) {
+                const u8 rates[GEAR_TIME_COUNT] = { sRodRates[i], sRodRates[i], sRodRates[i] };
+                AddPlace((u16)superSlots[i].species, label, GEAR_ENC_SUPER_ROD, 0, superSlots[i].minLevel, superSlots[i].maxLevel, rates);
+            }
+        }
     }
     qsort(sPlaces, sPlaceCount, sizeof(PlaceRecord), ComparePlaceRecords);
 

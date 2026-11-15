@@ -1,3 +1,4 @@
+#include "port/sim_config_prj.h"
 #include "pokemon.h"
 
 #include <nitro.h>
@@ -3780,6 +3781,23 @@ u16 Pokemon_GetEvolutionTargetSpecies(Party *party, Pokemon *mon, u8 evoClass, u
 
             if (targetSpecies) {
                 break;
+            }
+        }
+
+        if (targetSpecies == SPECIES_NONE && SIM_Config_prj_GetConfig() != NULL && SIM_Config_prj_GetConfig()->tradeEvos) {
+            for (i = 0; i < MAX_EVOLUTIONS; i++) {
+                if (speciesEvolutions[i].method == EVO_TRADE && monLevel >= 36) {
+                    targetSpecies = speciesEvolutions[i].targetSpecies;
+                    *evoTypeResult = EVO_TRADE;
+                    break;
+                }
+                if (speciesEvolutions[i].method == EVO_TRADE_WITH_HELD_ITEM
+                    && monHeldItem != ITEM_NONE
+                    && speciesEvolutions[i].param == monHeldItem) {
+                    targetSpecies = speciesEvolutions[i].targetSpecies;
+                    *evoTypeResult = EVO_TRADE_WITH_HELD_ITEM;
+                    break;
+                }
             }
         }
     } break;

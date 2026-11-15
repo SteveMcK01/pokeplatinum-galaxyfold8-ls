@@ -775,6 +775,12 @@ void DrawCheats()
     ConfigChoice("Shiny odds", "Wild Pokemon (legendaries too) and hatched eggs. Normal is the game's own 1 in 8192.",
         &config->shinyOdds, kShinyValues, kShinyLabels, 5);
     ConfigToggle("Any Pokemon learns any TM or HM", "Every Pokemon can be taught every TM and HM.", &config->anyTM);
+    ConfigToggle("Gotta Catch 'Em All!",
+        "Adds missing Diamond/Pearl & unobtainable Sinnoh Dex Pokemon (Murkrow, Misdreavus, Glameow, Stunky, Trapinch, Clamperl, fossils, etc.) to wild encounters and the Gear tracker.",
+        &config->catchEmAll);
+    ConfigToggle("Trade evolutions without trading",
+        "Evolves trade-only Pokemon on level-up: Lv. 36+ for Kadabra, Haunter, Machoke, and Graveler; any level-up while holding the required item (Metal Coat, Protector, Electirizer, Magmarizer, Up-Grade, Dubious Disc, Reaper Cloth, Dragon Scale, King's Rock, Deep Sea Tooth/Scale) for item trades.",
+        &config->tradeEvos);
 }
 
 // --- GBA slot --------------------------------------------------------------------------------

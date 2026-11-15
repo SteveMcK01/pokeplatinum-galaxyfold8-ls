@@ -56,7 +56,12 @@ typedef struct {
     BOOL gearBattleControls; // in battles the Gear takes the whole lower screen and has the battle menu
 
     // GBA slot section (port/gba_slot.h)
-    int gbaSlotGame; // GBA_SLOT_*: the GBA game in the DS's GBA slot
+    int gbaSlotGame;
+
+    // On-screen multi-touch controller overlay (port/touch_controls.h)
+    BOOL touchOverlay;
+    float touchOverlayOpacity;
+    float touchOverlayScale; // GBA_SLOT_*: the GBA game in the DS's GBA slot
 } SIM_Config_prj_type;
 
 void SIM_Config_prj_LoadDefaults(SIM_Config_prj_type * aConfig);

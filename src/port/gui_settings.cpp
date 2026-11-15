@@ -1,3 +1,4 @@
+#include "port/touch_controls.h"
 // The game's pages of libntr's settings screen (simulator/sim_settings.hpp): games, saves,
 // gameplay, the Gear, cheats and debugging. Touch- and pad-friendly (simulator/sim_ui.hpp).
 #include <nitro.h>
@@ -934,6 +935,7 @@ void SIM_Prj_SettingsPages()
     SIM::Settings::AddPage("Gameplay", "Instant text, HM-free moves, Repel prompt, Exp. Share, level cap, clock, Nuzlocke, 60 FPS", DrawGameplay, 30);
     SIM::Settings::AddPage("GBA slot", "Pal Park and dual-slot Pokemon from a GBA save", DrawGBASlot, 40);
     SIM::Settings::AddPage("Gear", "The lower-screen companion", DrawGear, 70);
+    SIM::Settings::AddPage("Touch controls", "On-screen multi-touch buttons, opacity and scale", TouchControls_DrawSettings, 75);
     SIM::Settings::AddPage("Cheats", "Shiny odds, EXP, catching, PP, walls, encounters", DrawCheats, 80);
     SIM::Settings::AddPage("Advanced", nullptr, DrawDebug, 90);
 }

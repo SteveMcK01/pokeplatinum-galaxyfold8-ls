@@ -1,3 +1,4 @@
+#include "port/touch_controls.h"
 // The on-screen save notice ("Autosaved"). The saves page of the settings is in gui_settings.cpp.
 #include <nitro.h>
 #include <simulator/imgui/imgui.hpp>
@@ -20,6 +21,7 @@ namespace SIM::GUI {
 // Drawn every frame, GUI open or not
 void PrjOverlay()
 {
+    TouchControls_DrawOverlay();
     float alpha = 0.0f;
     const char *notice = Autosave_GetNotice(&alpha);
     if (notice == nullptr) {

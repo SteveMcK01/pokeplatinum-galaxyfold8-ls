@@ -151,6 +151,15 @@ static int IniHandler(void* user, const char* section, const char* name,
     if(MATCH("GBA", "Game")) {
         config->gbaSlotGame = atoi(value);
     }
+    if(MATCH("TouchOverlay", "Enabled")) {
+        config->touchOverlay = StringToBool(value);
+    }
+    if(MATCH("TouchOverlay", "Opacity")) {
+        config->touchOverlayOpacity = (float)atof(value);
+    }
+    if(MATCH("TouchOverlay", "Scale")) {
+        config->touchOverlayScale = (float)atof(value);
+    }
 
     return 1;
 }
@@ -227,6 +236,11 @@ void SIM_Config_prj_LoadDefaults(SIM_Config_prj_type * aConfig)
 
   // GBA slot section
   aConfig->gbaSlotGame = 0;
+
+  // Touch overlay section
+  aConfig->touchOverlay = TRUE;
+  aConfig->touchOverlayOpacity = 0.65f;
+  aConfig->touchOverlayScale = 1.00f;
 }
 
 // Loads the configuration file. If it does not exist, return false
@@ -298,6 +312,11 @@ void SIM_Config_prj_SaveConfigFile(SIM_Config_prj_type * aConfig)
 
     fprintf(configFile, "[GBA]\n");
     fprintf(configFile, "Game=%d\n", aConfig->gbaSlotGame);
+
+    fprintf(configFile, "[TouchOverlay]\n");
+    fprintf(configFile, "Enabled=%s\n", BoolToString(aConfig->touchOverlay));
+    fprintf(configFile, "Opacity=%.2f\n", aConfig->touchOverlayOpacity);
+    fprintf(configFile, "Scale=%.2f\n", aConfig->touchOverlayScale);
 
     fclose(configFile);
 }

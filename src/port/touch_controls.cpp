@@ -36,6 +36,7 @@ enum VirtualBtn {
     VBTN_LEFT,
     VBTN_RIGHT,
     VBTN_SWITCH,
+    VBTN_PIP,
     VBTN_FF,
     VBTN_COUNT
 };
@@ -63,6 +64,7 @@ static u16 sAppliedPadMask = 0;
 static u16 sAppliedXYMask = 0;
 
 static bool sPrevSwitchPressed = false;
+static bool sPrevPipPressed = false;
 static bool sPrevCompanionSwitchPressed = false;
 static bool sPrevFFPressed = false;
 static int sLastAndroidLayoutMode = -1;
@@ -146,7 +148,7 @@ static float GetOverlayScale(const SIM_Config_prj_type *cfg) {
                : 1.0f;
 }
 
-static float GetTopRightWidthFraction(const SIM_Config_prj_type *cfg) {
+static float GetTopLeftWidthFraction(const SIM_Config_prj_type *cfg) {
     return (cfg->topRightOverlayScale >= 0.22f && cfg->topRightOverlayScale <= 0.55f)
                ? cfg->topRightOverlayScale
                : 0.36f;
@@ -277,9 +279,56 @@ static void DrawPillButton(ImDrawList *dl, ImFont *font, float x0, float y0, flo
     dl->AddRect(ImVec2(x0, y0), ImVec2(x1, y1), borderCol, rounding, 0, active ? 2.4f : 1.6f);
 
     if (font) {
-        const float fontSize = (y1 - y0) * 0.45f;
+        const float fontSize = (y1 - y0) * 0.44f;
         ImVec2 ts = font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, label);
         dl->AddText(font, fontSize, ImVec2((x0 + x1 - ts.x) * 0.5f, (y0 + y1 - ts.y) * 0.5f), textCol, label);
+    }
+}
+
+static void DrawTogglePillButton(ImDrawList *dl, ImFont *font, float x0, float y0, float x1, float y1,
+                                 const char *label, bool toggledOn, float alpha, ImU32 activeAccent) {
+    const float h = y1 - y0;
+    const float rounding = h * 0.5f;
+    const float effAlpha = toggledOn ? std::max(alpha, 0.88f) : alpha;
+
+    if (toggledOn) {
+        const ImU32 glowCol = IM_COL32(
+            (activeAccent >> 0) & 0xFF,
+            (activeAccent >> 8) & 0xFF,
+            (activeAccent >> 16) & 0xFF,
+            (int)(110.0f * effAlpha));
+        dl->AddRect(ImVec2(x0 - 2.5f, y0 - 2.5f), ImVec2(x1 + 2.5f, y1 + 2.5f), glowCol, rounding + 2.5f, 0, 3.0f);
+    }
+
+    const ImU32 bgCol = toggledOn
+        ? IM_COL32((activeAccent >> 0) & 0xFF, (activeAccent >> 8) & 0xFF, (activeAccent >> 16) & 0xFF, (int)(235.0f * effAlpha))
+        : IM_COL32(24, 28, 36, (int)(170.0f * effAlpha));
+    const ImU32 borderCol = toggledOn
+        ? IM_COL32(255, 255, 255, (int)(250.0f * effAlpha))
+        : IM_COL32(220, 228, 240, (int)(155.0f * effAlpha));
+    const ImU32 textCol = toggledOn
+        ? IM_COL32(20, 22, 28, (int)(255.0f * effAlpha))
+        : IM_COL32(235, 240, 248, (int)(225.0f * effAlpha));
+
+    dl->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), bgCol, rounding);
+    dl->AddRect(ImVec2(x0, y0), ImVec2(x1, y1), borderCol, rounding, 0, toggledOn ? 2.5f : 1.6f);
+
+    const float dotR = std::max(3.0f, h * 0.13f);
+    const float dotCx = x0 + rounding * 0.72f + dotR * 0.5f;
+    const float dotCy = (y0 + y1) * 0.5f;
+    if (toggledOn) {
+        dl->AddCircleFilled(ImVec2(dotCx, dotCy), dotR, IM_COL32(20, 22, 28, (int)(245.0f * effAlpha)), 16);
+    } else {
+        dl->AddCircle(ImVec2(dotCx, dotCy), dotR, IM_COL32(200, 210, 225, (int)(160.0f * effAlpha)), 16, 1.5f);
+    }
+
+    if (font) {
+        const float fontSize = h * 0.43f;
+        ImVec2 ts = font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, label);
+        const float textAreaLeft = dotCx + dotR + 4.0f;
+        const float textAreaRight = x1 - rounding * 0.45f;
+        const float tx = textAreaLeft + std::max(0.0f, (textAreaRight - textAreaLeft - ts.x) * 0.5f);
+        dl->AddText(font, fontSize, ImVec2(tx, (y0 + y1 - ts.y) * 0.5f), textCol, label);
     }
 }
 
@@ -331,10 +380,11 @@ void TouchControls_DrawOverlay(void) {
     const bool allowFullExpand = (cfg->fullScreenCompanion != FALSE);
     const bool primaryFull = allowFullExpand && (SIM::Settings::IsOpen() || SIM_Carts_UIActive());
     const bool companionFull = allowFullExpand && !primaryFull && (SIM_Companion_IsFullScreen() != FALSE);
-    const bool topRightMode = !primaryFull && !companionFull && (cfg->topRightOverlay != FALSE);
+    const bool pipOverlayMode = !primaryFull && !companionFull && (cfg->topRightOverlay != FALSE);
+    const bool pipMinimized = pipOverlayMode && (cfg->topRightOverlayMinimized != FALSE);
 
-    SyncAndroidOverlayScale(GetTopRightWidthFraction(cfg));
-    SyncAndroidLayoutMode(primaryFull ? 2 : (companionFull ? 1 : (topRightMode ? 3 : 0)));
+    SyncAndroidOverlayScale(GetTopLeftWidthFraction(cfg));
+    SyncAndroidLayoutMode(primaryFull ? 2 : (companionFull ? 1 : (pipOverlayMode ? (pipMinimized ? 4 : 3) : 0)));
 
     if (!cfg->touchOverlay || primaryFull || companionFull) {
         std::lock_guard<std::mutex> lock(sInputMutex);
@@ -344,6 +394,7 @@ void TouchControls_DrawOverlay(void) {
             FlushCombinedHardwareMasksLocked();
         }
         sPrevSwitchPressed = false;
+        sPrevPipPressed = false;
         sPrevFFPressed = false;
         return;
     }
@@ -357,22 +408,25 @@ void TouchControls_DrawOverlay(void) {
     const float alpha = GetOverlayAlpha(cfg);
 
     const float marginX = disp.x * 0.016f;
-    const float gap = disp.x * 0.008f;
-    const float pillH = std::max(28.0f, std::min(disp.y * (topRightMode ? 0.048f : 0.072f) * scale, disp.y * 0.14f));
+    const float gap = disp.x * 0.006f;
+    const float pillH = std::max(28.0f, std::min(disp.y * (pipOverlayMode ? 0.048f : 0.072f) * scale, disp.y * 0.14f));
     const float rowY1 = disp.y - disp.y * 0.018f;
     const float rowY0 = rowY1 - pillH;
 
-    float lX0, lX1, swX0, swX1, selX0, selX1;
+    float lX0, lX1, pipX0 = 0.0f, pipX1 = 0.0f, swX0, swX1, selX0, selX1;
     float staX0, staX1, ffX0, ffX1, rX0, rX1;
 
-    if (topRightMode) {
-        const float maxCenterSpan = disp.x * 0.44f;
-        const float baseW = std::min(disp.x * 0.046f * scale, (maxCenterSpan - 5.0f * gap) / 6.73f);
-        const float totalBarW = baseW * 6.73f + gap * 5.0f;
+    if (pipOverlayMode) {
+        const float maxCenterSpan = disp.x * 0.52f;
+        const float totalMult = 7.98f; // L(1.0) + HIDE(1.25) + SWITCH(1.28) + SELECT(1.25) + START(1.20) + FF(1.0) + R(1.0)
+        const float baseW = std::min(disp.x * 0.044f * scale, (maxCenterSpan - 6.0f * gap) / totalMult);
+        const float totalBarW = baseW * totalMult + gap * 6.0f;
         const float startX = (disp.x - totalBarW) * 0.5f;
         lX0 = startX;
         lX1 = lX0 + baseW;
-        swX0 = lX1 + gap;
+        pipX0 = lX1 + gap;
+        pipX1 = pipX0 + baseW * 1.25f;
+        swX0 = pipX1 + gap;
         swX1 = swX0 + baseW * 1.28f;
         selX0 = swX1 + gap;
         selX1 = selX0 + baseW * 1.25f;
@@ -401,7 +455,7 @@ void TouchControls_DrawOverlay(void) {
         staX0 = staX1 - baseW * 1.20f;
     }
 
-    const BottomLayout L = ComputeBottomLayout(disp.x, disp.y, scale * 0.88f, 0.72f);
+    const BottomLayout L = ComputeBottomLayout(disp.x, disp.y, scale * 0.88f, 0.69f);
 
     bool pressed[VBTN_COUNT] = {};
 
@@ -421,17 +475,24 @@ void TouchControls_DrawOverlay(void) {
             const float fy = finger->y * disp.y;
 
             if (PointInRect(fx, fy, lX0, rowY0, lX1, rowY1)) pressed[VBTN_L] = true;
+            if (pipOverlayMode && PointInRect(fx, fy, pipX0, rowY0, pipX1, rowY1)) pressed[VBTN_PIP] = true;
             if (PointInRect(fx, fy, swX0, rowY0, swX1, rowY1)) pressed[VBTN_SWITCH] = true;
             if (PointInRect(fx, fy, selX0, rowY0, selX1, rowY1)) pressed[VBTN_SELECT] = true;
             if (PointInRect(fx, fy, staX0, rowY0, staX1, rowY1)) pressed[VBTN_START] = true;
             if (PointInRect(fx, fy, ffX0, rowY0, ffX1, rowY1)) pressed[VBTN_FF] = true;
             if (PointInRect(fx, fy, rX0, rowY0, rX1, rowY1)) pressed[VBTN_R] = true;
 
-            if (topRightMode) {
+            if (pipOverlayMode) {
                 EvalBottomPoint(fx, fy, L, pressed);
             }
         }
     }
+
+    if (pipOverlayMode && pressed[VBTN_PIP] && !sPrevPipPressed) {
+        cfg->topRightOverlayMinimized = (cfg->topRightOverlayMinimized != FALSE) ? FALSE : TRUE;
+        SIM_Config_prj_SaveConfigFile(cfg);
+    }
+    sPrevPipPressed = pipOverlayMode && pressed[VBTN_PIP];
 
     if (pressed[VBTN_SWITCH] && !sPrevSwitchPressed) {
         if (!cfg->gearEnabled) {
@@ -455,7 +516,7 @@ void TouchControls_DrawOverlay(void) {
     if (pressed[VBTN_START])  topPad |= (1u << 3);
     if (pressed[VBTN_R])      topPad |= (1u << 8);
     if (pressed[VBTN_L])      topPad |= (1u << 9);
-    if (topRightMode) {
+    if (pipOverlayMode) {
         if (pressed[VBTN_A])     topPad |= (1u << 0);
         if (pressed[VBTN_B])     topPad |= (1u << 1);
         if (pressed[VBTN_RIGHT]) topPad |= (1u << 4);
@@ -476,10 +537,14 @@ void TouchControls_DrawOverlay(void) {
     ImDrawList *dl = ImGui::GetForegroundDrawList();
     ImFont *boldFont = SIM::UI::BoldFont();
 
+    const bool screenHidden = pipOverlayMode && (cfg->topRightOverlayMinimized != FALSE);
     const bool switchActive = pressed[VBTN_SWITCH] || (SIM_Companion_IsFullScreen() != FALSE);
     const bool ffActive = pressed[VBTN_FF] || (SIM_IsFastForwarding() != FALSE);
 
     DrawPillButton(dl, boldFont, lX0, rowY0, lX1, rowY1, "L", pressed[VBTN_L], alpha);
+    if (pipOverlayMode) {
+        DrawTogglePillButton(dl, boldFont, pipX0, rowY0, pipX1, rowY1, "HIDE", screenHidden, alpha, IM_COL32(245, 185, 55, 255));
+    }
     DrawPillButton(dl, boldFont, swX0, rowY0, swX1, rowY1, "SWITCH", switchActive, alpha, IM_COL32(70, 195, 235, 255));
     DrawPillButton(dl, boldFont, selX0, rowY0, selX1, rowY1, "SELECT", pressed[VBTN_SELECT], alpha);
 
@@ -487,7 +552,7 @@ void TouchControls_DrawOverlay(void) {
     DrawPillButton(dl, boldFont, ffX0, rowY0, ffX1, rowY1, "FF", ffActive, alpha, IM_COL32(245, 155, 50, 255));
     DrawPillButton(dl, boldFont, rX0, rowY0, rX1, rowY1, "R", pressed[VBTN_R], alpha);
 
-    if (topRightMode) {
+    if (pipOverlayMode) {
         ImFont *font = ImGui::GetFont();
         DrawDpad(dl, L.dpadCx, L.dpadCy, L.dpadR,
                  pressed[VBTN_UP], pressed[VBTN_DOWN], pressed[VBTN_LEFT], pressed[VBTN_RIGHT], alpha);
@@ -503,9 +568,9 @@ void TouchControls_DrawBottomOverlay(float width, float height) {
     const bool allowFullExpand = (cfg->fullScreenCompanion != FALSE);
     const bool primaryFull = allowFullExpand && (SIM::Settings::IsOpen() || SIM_Carts_UIActive());
     const bool companionFull = allowFullExpand && !primaryFull && (SIM_Companion_IsFullScreen() != FALSE);
-    const bool topRightMode = !primaryFull && !companionFull && (cfg->topRightOverlay != FALSE);
+    const bool pipOverlayMode = !primaryFull && !companionFull && (cfg->topRightOverlay != FALSE);
 
-    if (primaryFull || topRightMode || width <= 1.0f || height <= 1.0f || (!companionFull && !cfg->touchOverlay)) {
+    if (primaryFull || pipOverlayMode || width <= 1.0f || height <= 1.0f || (!companionFull && !cfg->touchOverlay)) {
         std::lock_guard<std::mutex> lock(sInputMutex);
         if (sBottomPadMask != 0 || sBottomXYMask != 0) {
             sBottomPadMask = 0;
@@ -596,15 +661,22 @@ void TouchControls_DrawDisplaySettings(void) {
     ImGui::TextUnformatted("Screen layout");
     ImGui::Separator();
 
-    bool topRight = cfg->topRightOverlay != FALSE;
-    if (ImGui::Checkbox("Top-right interactive lower screen overlay", &topRight)) {
-        cfg->topRightOverlay = topRight ? TRUE : FALSE;
+    bool topLeft = cfg->topRightOverlay != FALSE;
+    if (ImGui::Checkbox("Top-left interactive lower screen overlay", &topLeft)) {
+        cfg->topRightOverlay = topLeft ? TRUE : FALSE;
         SIM_Config_prj_SaveConfigFile(cfg);
     }
-    ImGui::TextWrapped("Show the lower DS screen as an interactive 4:3 overlay in the top-right corner while the top screen fills the display.");
+    ImGui::TextWrapped("Show the lower DS screen as an interactive 4:3 overlay in the top-left corner while the top screen fills the display.");
 
-    float widthFrac = GetTopRightWidthFraction(cfg);
-    if (ImGui::SliderFloat("Top-right overlay width", &widthFrac, 0.24f, 0.52f, "%.2f")) {
+    bool minimized = cfg->topRightOverlayMinimized != FALSE;
+    if (ImGui::Checkbox("Hide top-left lower screen overlay", &minimized)) {
+        cfg->topRightOverlayMinimized = minimized ? TRUE : FALSE;
+        SIM_Config_prj_SaveConfigFile(cfg);
+    }
+    ImGui::TextWrapped("Minimize the top-left lower screen overlay until toggled back on with the on-screen [ HIDE ] button.");
+
+    float widthFrac = GetTopLeftWidthFraction(cfg);
+    if (ImGui::SliderFloat("Top-left overlay width", &widthFrac, 0.24f, 0.52f, "%.2f")) {
         cfg->topRightOverlayScale = widthFrac;
         SIM_Config_prj_SaveConfigFile(cfg);
     }
@@ -654,8 +726,8 @@ Java_org_pokeplatinum_port_SecondaryScreen_nativeUpdateSecondaryTouches(
     const bool allowFullExpand = (cfg->fullScreenCompanion != FALSE);
     const bool primaryFull = allowFullExpand && (SIM::Settings::IsOpen() || SIM_Carts_UIActive());
     const bool companionFull = allowFullExpand && !primaryFull && (SIM_Companion_IsFullScreen() != FALSE);
-    const bool topRightMode = !primaryFull && !companionFull && (cfg->topRightOverlay != FALSE);
-    const bool bottomControlsActive = cfg->touchOverlay && !primaryFull && !companionFull && !topRightMode;
+    const bool pipOverlayMode = !primaryFull && !companionFull && (cfg->topRightOverlay != FALSE);
+    const bool bottomControlsActive = cfg->touchOverlay && !primaryFull && !companionFull && !pipOverlayMode;
     const float scale = GetOverlayScale(cfg);
     const BottomLayout L = ComputeBottomLayout(viewWidth, viewHeight, scale);
     const PillRect sw = ComputeCompanionSwitchRect(viewWidth, viewHeight, scale);

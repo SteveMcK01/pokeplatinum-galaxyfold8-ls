@@ -175,6 +175,12 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
             return;
         }
 
+        if (inlineLayoutMode == 4) {
+            applyRelativeBounds(mSurface, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 0, 0);
+            applyRelativeBounds(inlineBottomSurfaceView, 1, 1, 0, 0);
+            return;
+        }
+
         if (inlineLayoutMode == 3) {
             applyRelativeBounds(mSurface, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 0, 0);
             int overlayWidth = Math.round(totalWidth * inlineOverlayWidthFraction);
@@ -185,8 +191,7 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
                 overlayWidth = Math.round(overlayHeight * (4.0f / 3.0f));
             }
             int pad = Math.max(12, Math.min(totalWidth, totalHeight) / 60);
-            int leftMargin = Math.max(0, totalWidth - overlayWidth - pad);
-            applyRelativeBounds(inlineBottomSurfaceView, overlayWidth, overlayHeight, leftMargin, pad);
+            applyRelativeBounds(inlineBottomSurfaceView, overlayWidth, overlayHeight, pad, pad);
             return;
         }
 

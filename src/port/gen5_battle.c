@@ -325,6 +325,10 @@ static BOOL PokemonFromGen5(Pokemon *mon, const Gen5Pokemon *src)
     Pokemon_SetValue(mon, MON_DATA_EXPERIENCE, &src->exp);
     for (int i = 0; i < 4; i++) {
         u32 move = Gen5Data_MoveFromGen5(src->moves[i]);
+        u32 prevMove = Pokemon_GetValue(mon, MON_DATA_MOVE1 + i, NULL);
+        if (move == MOVE_NONE && prevMove != MOVE_NONE) {
+            continue;
+        }
         Pokemon_SetValue(mon, MON_DATA_MOVE1 + i, &move);
         Pokemon_SetValue(mon, MON_DATA_MOVE1_PP_UPS + i, &src->ppUps[i]);
         Pokemon_SetValue(mon, MON_DATA_MOVE1_PP + i, &src->pp[i]);

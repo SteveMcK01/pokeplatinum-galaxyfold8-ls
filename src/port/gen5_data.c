@@ -291,6 +291,7 @@ static void EnsureMoveMap(void)
         return;
     }
     sMapBuilt = TRUE;
+    BuildMoveMap(NULL);
     sFairy = RomPatches_Info()->extraType;
     u32 size = 0;
     u8 *moves = ReadWhole("poketool/waza/pl_waza_tbl.narc", &size);

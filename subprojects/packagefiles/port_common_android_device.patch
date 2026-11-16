@@ -1,0 +1,42 @@
+--- a/src/gear_ui.cpp
++++ b/src/gear_ui.cpp
+@@ -117,7 +117,7 @@
+ 
+ // Battles: the Battle app comes up by itself and the Gear goes back to what it showed
+ // before when the battle ends. With battle controls on (the default) the Gear takes the
+-// whole lower screen and has the battle menu itself; the DS screen comes back for the
++// whole lower half of the display and has the battle menu itself; the DS screen comes back for the
+ // bag, the party and the like. Otherwise the DS screen shows the game's battle menu.
+ GearBattle sBattle;
+ int sBattleRefreshCountdown = 0;
+@@ -471,7 +471,7 @@
+   }
+ }
+ 
+-// The Pokétch takes the whole lower screen while it's open
++// The Pokétch takes the whole lower half of the display while it's open
+ bool sPoketchMadeFull = false;
+ 
+ void SelectApp(App app) {
+@@ -4121,10 +4121,10 @@
+   ImGui::PushFont(sBold, S(18.0f));
+   ImGui::TextUnformatted("Screen");
+   ImGui::PopFont();
+-  ImGui::TextWrapped("Tap Full (or press L3) to give the Gear the whole lower screen, and Split to bring the DS "
++  ImGui::TextWrapped("Tap Full (or press L3) to give the Gear the whole lower half of the display, and Split to bring the DS "
+                      "touch screen back. Battles bring the DS screen back by themselves.");
+   bool enabled = config->enabled != FALSE;
+-  if (ImGui::Checkbox("Show the Gear on the lower screen", &enabled) && !sDragging) {
++  if (ImGui::Checkbox("Show the Gear on the lower half of the display", &enabled) && !sDragging) {
+     config->enabled = enabled ? TRUE : FALSE;
+     changed = true;
+     if (!enabled) {
+@@ -4138,7 +4138,7 @@
+     config->battleControls = controls ? TRUE : FALSE;
+     changed = true;
+   }
+-  ImGui::TextWrapped("In battles the Gear takes the whole lower screen with Fight, Bag, Pokemon, Run and your moves "
++  ImGui::TextWrapped("In battles the Gear takes the whole lower half of the display with Fight, Bag, Pokemon, Run and your moves "
+                      "(with their matchups). The DS screen comes back for the bag and the party.");
+ 
+   if (changed) {

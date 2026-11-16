@@ -1,130 +1,51 @@
-# Pokémon Platinum for the AYN Thor
+# Pokémon Platinum for Android (Foldable & Phone Edition)
 
-A native port of Pokémon Platinum for the **AYN Thor** and other Android devices, with PC builds for Windows and
-Linux. It runs the decompiled game directly (no emulator), puts the DS bottom screen on the Thor's lower panel,
-and fills the rest of that panel with the **Gear**: a companion screen with the battle menu, damage and turn
-order, your party, the area's wild Pokémon, a Pokédex, a map with items, the PC and the bosses' teams.
+A native port of Pokémon Platinum built for **Android phones and foldables** (such as the Samsung Galaxy Fold series), with PC builds for Windows and Linux. It runs the decompiled game directly (no emulator), places the DS bottom touch screen on the lower half of the display alongside the **Gear** companion panel, and adds overworld wild encounters and modern quality-of-life upgrades.
 
-It is built on [cybervisi0n's PC port](https://github.com/cybervisi0n/pokeplatinum) and its
-[libntr](https://github.com/cybervisi0n/libntr) libraries, which are built on the
-[pret decompilation](https://github.com/pret/pokeplatinum). This is an independent fork: cybervisi0n and pret
-aren't involved in it, so please bring questions and bug reports here, not to them.
+This fork is based on [SilasMayes's pokeplatinum-thor](https://github.com/SilasMayes/pokeplatinum-thor) and [teton-dev's fork](https://github.com/teton-dev), which build on [cybervisi0n's PC port](https://github.com/cybervisi0n/pokeplatinum), [libntr](https://github.com/cybervisi0n/libntr), and the [pret decompilation](https://github.com/pret/pokeplatinum). This is an independent fork—upstream authors are not involved, so please open questions and bug reports here rather than on upstream repositories.
 
-<table>
-  <tr>
-    <td width="33%" colspan="2" valign="top"><img src="docs/thor/images/gear-map.png" alt="A beach on Route 213 on the top screen, with an item ball in view; below it, the Gear's map of the route showing sand, sea, grass, the item balls and the hidden items, and a list that says a hidden Pearl is 5 tiles west"></td>
-    <td width="33%" colspan="2" valign="top"><img src="docs/thor/images/gear-battle.png" alt="A wild Shellos battle on the top screen; below it, the Gear's battle menu with each move's type match-up and damage as a share of Shellos's HP, and a note that the opponent moves first"></td>
-    <td width="33%" colspan="2" valign="top"><img src="docs/thor/images/gear-encounters.png" alt="Route 209 on the top screen; below it, the Gear's Area tab listing the route's wild Pokemon when walking and surfing, with levels and encounter rates, and a shiny-hunt counter"></td>
-  </tr>
-  <tr>
-    <td colspan="2" valign="top">The map: item balls, and the hidden items you can't see</td>
-    <td colspan="2" valign="top">Battles: damage ranges, KO marks and who moves first</td>
-    <td colspan="2" valign="top">The wild Pokémon here, by method and time of day</td>
-  </tr>
-  <tr>
-    <td colspan="3" valign="top"><img src="docs/thor/images/link-play-battle.png" alt="Two players' top screens side by side during the same link battle, a Shinx against a Starly, each seen from its own side"></td>
-    <td colspan="3" valign="top"><img src="docs/thor/images/game-picker.png" alt="The game picker listing Pokemon Platinum, Renegade Platinum with its Complete and Classic versions, and a randomized copy of Renegade Platinum Classic"></td>
-  </tr>
-  <tr>
-    <td colspan="3" valign="top">Link play: a battle between two devices</td>
-    <td colspan="3" valign="top">Renegade Platinum and randomized games next to the original</td>
-  </tr>
-</table>
+## ROM Requirement: Following Platinum
 
-<sub>Screenshots from the PC build, laid out like the Thor's two screens: the game on the main panel, the Gear on
-the lower one.</sub>
+This repository and its releases contain **no ROM and no game assets**. On first launch, the app asks for your own `.nds` dump of **Pokémon Platinum (USA)** (game code `CPUE`) and extracts the assets it needs.
 
-## You need your own copy of the game
+- **Designed for Following Platinum:** To enable **Following Pokémon** (your lead Pokémon walking behind you in the overworld) and **Overworld Wild Pokémon**, supply a **Following Platinum** patched `.nds` ROM on first launch. The port detects the Following Platinum overworld sprite tables from your ROM and reuses them for both your follower and roaming wild encounters.
+- **Optional Gen 5 Battles & Screens:** You can also point `Settings > Games > Gen 5 battles` to your own dump of *Pokémon Black 2* or *White 2* (`.nds`) to unlock animated Gen 5 battle arenas and Summary screens while preserving your Platinum party, moves, and stats.
 
-This repository and its releases contain **no ROM and no game assets**. On first launch the game asks for your own
-dump of **Pokémon Platinum (USA)** (`.nds`, game code CPUE) and extracts what it needs from it. Renegade Platinum
-works the same way: the app applies Drayano's patch, which you download yourself, to your own ROM. Nothing here
-includes or links to ROMs or patches.
+## What's New in This Fork
 
-## Download
+- **Overworld Wild Pokémon (`Settings > Gameplay > Overworld wild Pokemon`):** Visible wild Pokémon dynamically spawn and wander in tall grass, caves, and water using the area's encounter tables (including time-of-day encounters and shiny variants). Walk into a wild Pokémon—or press `A` facing it—to start a battle. Water spawns have their lower third submerged and ground shadows hidden so they appear to swim naturally.
+- **Configurable Spawn Density:** Adjust the maximum number of active roaming wild Pokémon per area (`1` to `6`) directly in `Settings > Gameplay`.
+- **Android & Foldable Display Polish:** Replaced device-specific handheld references with phone/foldable layout defaults, refined the single-screen/split-screen touch overlay and Pokédex UI behavior, and removed the legacy companion follower toggle to prevent conflicts with Following Platinum's native followers.
+- **Gen 5 Battle Move Preservation Fix:** Fixed vanilla Platinum move-table initialization so party Pokémon retain all moves and PP across Gen 5 engine battles.
 
-Get the newest release from the [Releases page](https://github.com/SilasMayes/pokeplatinum-thor/releases):
+## Core Port Features
 
-| File | For |
-|---|---|
-| `.apk` | Android 10+ on arm64 (the AYN Thor, phones, other handhelds) |
-| `windows-x64.zip` | Windows 10/11, 64-bit. Run `main.exe` |
-| `linux-x64.tar.gz` | 64-bit Linux (glibc 2.38+). Run `main` or the AppImage |
+- **Split-Screen Layout & Widescreen:** Top screen on the main panel, DS touch screen and the **Gear** on the lower half of the display, with optional widescreen on the overworld and in battles.
+- **The Gear:** Battle menu with live damage ranges, KO indicators, and turn order; party, Day Care, and egg tracker; area wild encounter tables by method and time of day; Pokédex; route map with visible and hidden items; PC sorting; trainer card, level caps, and boss teams; and shiny-hunt counters.
+- **Multiple Games Side by Side:** Play vanilla Platinum, Following Platinum, Renegade Platinum, or randomized ROMs side by side, each with isolated save slots.
+- **Saves & Sync:** Four save slots, `.sav` import/export, autosave, and folder-based save sync across your Android device and PC via Syncthing or cloud storage.
+- **Quality of Life:** 60 FPS overworld, instant text and HP/EXP bars, fast-forward, field moves without teaching HMs, *Use another Repel?* prompts, whole-party Exp. Share, game clock offset, and Nuzlocke helpers.
+- **GBA Slot, Link Play & Texture Packs:** Dual-slot encounters and Pal Park support from a GBA save, local/network link battles and trades between devices, and custom texture pack loading.
 
-`thor-android-latest` is an automatic build of the newest commit; numbered releases are the ones played on a Thor.
+## Build from Source
 
-**Install the APK only from this repository's Releases page.** All builds are signed with one key so that each
-installs over the last and keeps your saves, and that key is part of the source code. Anyone can therefore build
-an APK that Android accepts as an update to this app. Details in
-[Getting started](docs/thor/getting-started.md#getting-the-apk).
+You need your own ROM to play what you build; building itself does not require one.
 
-## Features
-
-All optional, and the defaults stay close to the DS game. The [manual](docs/thor/README.md) covers each one.
-
-- **Two screens on the Thor**: top screen on the main panel, touch screen on the lower one; widescreen on the
-  overworld and in battles (experimental). [Features](docs/thor/features.md#screens)
-- **The Gear**: battle menu with damage ranges, KO marks and turn order; party, Day Care and eggs; wild Pokémon by
-  area and time; Pokédex; map with item balls and hidden items; PC sorting; trainer card, level cap and the bosses'
-  teams; shiny-hunt counters. [The Gear](docs/thor/gear.md)
-- **Renegade Platinum** and **randomized games** side by side with the original, each with its own saves.
-  [Features](docs/thor/features.md#more-than-one-game-renegade-platinum)
-- **Saves**: four slots, `.sav` import and export, autosave, and sync between devices through Syncthing or any
-  synced folder. [Saves and save sync](docs/thor/saves-and-sync.md)
-- **Quality of life**: 60 FPS on the overworld, instant text, fast-forward, field moves without HMs, *Use another
-  Repel?*, whole-party Exp. Share, game clock offset, Nuzlocke helper. [Features](docs/thor/features.md)
-- **GBA slot** for Pal Park and dual-slot encounters from a GBA save, **link play** between two devices for trades
-  and battles, and **texture packs**. [Features](docs/thor/features.md#gba-slot-pal-park-and-dual-slot-pokemon),
-  [Link play](docs/thor/link-play.md)
-- **Cheats and a save editor**, off unless you open them. [Cheats and the save editor](docs/thor/cheats-and-save-editor.md)
-
-## Build from source
-
-You need the same ROM to play what you build. Building doesn't need it.
-
-**Android:** see [docs/thor/building.md](docs/thor/building.md). In short, with the Android NDK, SDK, JDK 17 and
-Gradle installed:
-
-```sh
-make meson
-ANDROID_NDK_HOME=/path/to/ndk ./tools/android/build_apk.sh
-```
-
-**Linux:** with Docker, `./drun.sh make linux`. Without it, install `nasm`, `enet`, `arm-none-eabi-gcc`, `ninja`,
-`flex` and `bison`, then `make linux`. The game is built in `build_linux/pokeplatinum/`.
-
-**Windows:** upstream's MSYS2 route: run `Install_MSys2.ps1` once in PowerShell, then `Launch_MSys2.ps1` and
-`make win64` in the shell it opens. The released Windows builds are cross-compiled from Linux instead, and the
-changes that needs aren't in this repository yet.
-
-**The DS ROM** still builds from the same tree with `make`, as in pret's project; see [INSTALL.md](INSTALL.md).
-
-The port's own code is in `src/port/` and `include/port/`, and the game-independent part (save slots, autosave,
-save sync, cheats and more) is in [port-common](https://github.com/SilasMayes/port-common), shared with a
-HeartGold/SoulSilver port. Everything else under `src/` is the decompiled game.
-
-## Contributing
-
-Bug reports and ideas are welcome in [Issues](https://github.com/SilasMayes/pokeplatinum-thor/issues); questions in
-[Discussions](https://github.com/SilasMayes/pokeplatinum-thor/discussions). See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-**On AI:** this fork is built with AI assistance (Claude), and commits made that way say so. AI-assisted pull
-requests are welcome if you've tested them on hardware: say what you ran it on and what you checked.
+- **Android:** With the Android NDK, SDK, JDK 17, and Gradle installed (see [docs/thor/building.md](docs/thor/building.md)), run `make meson && ANDROID_NDK_HOME=/path/to/ndk ./tools/android/build_apk.sh`.
+- **Linux:** With Docker, run `./drun.sh make linux`. Without Docker, install `nasm`, `enet`, `arm-none-eabi-gcc`, `ninja`, `flex`, and `bison`, then run `make linux`.
+- **Windows:** Using MSYS2, run `Install_MSys2.ps1` once in PowerShell, then run `make win64` inside the MSYS2 shell.
 
 ## Credits
 
-- [pret](https://github.com/pret/pokeplatinum): the decompilation of Pokémon Platinum.
-- [cybervisi0n](https://github.com/cybervisi0n): the PC port and libntr, which do the hard part of running a DS
-  game natively.
-- Drayano: Renegade Platinum, which this build can apply to your ROM.
-- [SDL](https://www.libsdl.org/), [ENet](http://enet.bespin.org/), [Dear ImGui](https://github.com/ocornut/imgui),
-  and the [Atkinson Hyperlegible](https://brailleinstitute.org/freefont) font by the Braille Institute.
+- [pret](https://github.com/pret/pokeplatinum): The decompilation of Pokémon Platinum.
+- [cybervisi0n](https://github.com/cybervisi0n/pokeplatinum): The native PC port and `libntr` runtime libraries.
+- [SilasMayes](https://github.com/SilasMayes/pokeplatinum-thor): The Android port, the Gear companion UI, Gen 5 battle integration, and Following Platinum support.
+- [teton-dev](https://github.com/teton-dev): Upstream fork improvements, including the fix for crashing when catching new Pokémon.
+- **Following Platinum & Drayano:** The Following Platinum overworld sprite patch and Renegade Platinum.
+- [SDL](https://www.libsdl.org/), [ENet](http://enet.bespin.org/), [Dear ImGui](https://github.com/ocornut/imgui), and [Atkinson Hyperlegible](https://brailleinstitute.org/freefont) by the Braille Institute.
 
 ## License
 
-The code this fork adds (`src/port/`, `include/port/`, `android/`, `tools/android/`) is MIT; see [LICENSE](LICENSE).
-The decompiled game code has no license. Bundled libraries keep their own licenses; see
-[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md). Releases include all of these notices.
+The port code added in `src/port/`, `include/port/`, `android/`, and `tools/android/` is licensed under the MIT License; see [LICENSE](LICENSE). Bundled libraries retain their own licenses; see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 
-Pokémon is © Nintendo, Game Freak and Creatures. This project isn't affiliated with or endorsed by them. Please
-support the official games.
+Pokémon is © Nintendo, Game Freak, and Creatures. This project is not affiliated with or endorsed by them. Please support the official games.

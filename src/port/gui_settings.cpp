@@ -449,7 +449,7 @@ void OnSyncFolderPicked(const char *path, void *)
 void DrawSync()
 {
     Section("Sync with your other devices");
-    Note("Play the same game on the Thor and a computer: the saves go through a folder that Syncthing, a network "
+    Note("Play the same game on your Android device and a computer: the saves go through a folder that Syncthing, a network "
          "share or a cloud drive keeps the same on both. After you save, this device copies the save there; the "
          "other one loads it on its main menu.");
     const char *folder = SaveSync_Folder();
@@ -647,11 +647,6 @@ void DrawGameplay()
         &config->instantText);
     ConfigToggle("Instant HP and EXP bars", "Battle bars jump to their new value instead of sliding there.",
         &config->instantBars);
-    Section("Following Pokemon");
-    ConfigToggle("Following Pokemon", "As in HeartGold and SoulSilver: your first Pokemon that can battle walks "
-        "behind you. It goes back in its ball on a bike, surfing and with a partner. Talk to it to hear its cry. "
-        "Species without an overworld sprite in Platinum walk as their party icon. Off in Following Renegade "
-        "Platinum, which has followers of its own.", &config->followerPokemon);
     Section("Overworld wild Pokemon");
     ConfigToggle("Overworld wild Pokemon",
         "Visible wild Pokemon wander in tall grass, caves and water. Walk into one (or press A) to start a battle.",

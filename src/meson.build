@@ -1053,6 +1053,7 @@ pokeplatinum_c += files(
     'port/gui_save_editor.cpp',
     'port/catch_em_all.c',
     'port/sim_config_prj.c',
+    'port/overworld_wild.c',
     'port/sim_gui_prj.cpp',
     'port/touch_controls.cpp',
     'port/gui_cheats.cpp',

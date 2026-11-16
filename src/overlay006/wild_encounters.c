@@ -1561,3 +1561,91 @@ static void InitEncounterFieldParams(FieldSystem *fieldSystem, Pokemon *firstPar
 
     encounterFieldParams->trainerID = TrainerInfo_ID(SaveData_GetTrainerInfo(fieldSystem->saveData));
 }
+
+BOOL WildEncounters_TryRollOverworldSpecies(
+    FieldSystem *fieldSystem,
+    u8 tileBehavior,
+    BOOL isWater,
+    u16 *outSpecies,
+    u8 *outLevel,
+    u8 *outForm,
+    BOOL *outShiny)
+{
+    if (fieldSystem == NULL || outSpecies == NULL || outLevel == NULL || outForm == NULL || outShiny == NULL) {
+        return FALSE;
+    }
+
+    if (!WildEncounters_TileHasEncounterRate(fieldSystem, tileBehavior)) {
+        return FALSE;
+    }
+
+    WildEncounters *encounterData = MapHeaderData_GetWildEncounters(fieldSystem);
+    if (encounterData == NULL) {
+        return FALSE;
+    }
+
+    Party *party = SaveData_GetParty(fieldSystem->saveData);
+    Pokemon *firstPartyMon = Party_GetPokemonBySlotIndex(party, 0);
+    WildEncounters_FieldParams fieldParams;
+    InitEncounterFieldParams(fieldSystem, firstPartyMon, encounterData, &fieldParams);
+
+    u16 species = 0;
+    u8 level = 1;
+
+    if (isWater) {
+        EncounterSlot waterTable[MAX_WATER_ENCOUNTERS];
+        for (int i = 0; i < MAX_WATER_ENCOUNTERS; i++) {
+            waterTable[i].species = encounterData->surfEncounters.encounters[i].species;
+            waterTable[i].maxLevel = encounterData->surfEncounters.encounters[i].maxLevel;
+            waterTable[i].minLevel = encounterData->surfEncounters.encounters[i].minLevel;
+        }
+        u8 slot = GetWaterEncounterSlot();
+        species = (u16)waterTable[slot].species;
+        level = GetWildMonLevel(&waterTable[slot], &fieldParams);
+    } else {
+        EncounterSlot grassTable[MAX_GRASS_ENCOUNTERS];
+        for (int i = 0; i < MAX_GRASS_ENCOUNTERS; i++) {
+            grassTable[i].species = encounterData->grassEncounters.encounters[i].species;
+            grassTable[i].maxLevel = encounterData->grassEncounters.encounters[i].level;
+            grassTable[i].minLevel = encounterData->grassEncounters.encounters[i].level;
+        }
+
+        BOOL nationalDexObtained = Pokedex_IsNationalDexObtained(SaveData_GetPokedex(FieldSystem_GetSaveData(fieldSystem)));
+        BOOL safariGameActive = SystemFlag_CheckSafariGameActive(SaveData_GetVarsFlags(fieldSystem->saveData));
+
+        WildEncounters_ReplaceTimedEncounters(encounterData, &grassTable[2].species, &grassTable[3].species);
+        WildEncounters_ReplaceSwarmEncounters(fieldSystem, encounterData, &grassTable[0].species, &grassTable[1].species);
+        WildEncounters_ReplaceTrophyGardenEncounters(fieldSystem, nationalDexObtained, &grassTable[6].species, &grassTable[7].species);
+        WildEncounters_ReplaceDualSlotEncounters(encounterData, nationalDexObtained, &grassTable[8].species, &grassTable[9].species);
+        CatchEmAll_ApplyGrassSlots(fieldSystem->location->mapHeaderID, (CatchEmAllSlot *)grassTable);
+        WildEncounters_ReplaceGreatMarshDailyEncounters(fieldSystem, safariGameActive, nationalDexObtained, grassTable);
+
+        u8 slot = GetGroundEncounterSlot();
+        slot = TryFindHigherLevelSlot(grassTable, &fieldParams, slot);
+        species = (u16)grassTable[slot].species;
+        level = (u8)grassTable[slot].maxLevel;
+    }
+
+    if (species == 0 || species > MAX_SPECIES) {
+        return FALSE;
+    }
+
+    u8 form = 0;
+    if (species == SPECIES_SHELLOS || species == SPECIES_GASTRODON) {
+        form = fieldParams.encounterRatesForms[0];
+    } else if (species == SPECIES_UNOWN) {
+        u8 count = WildEncounters_UnownTables[fieldParams.unownTableID].numberForms;
+        if (count > 0) {
+            form = WildEncounters_UnownTables[fieldParams.unownTableID].forms[LCRNG_Next() % count];
+        }
+    }
+
+    // Standard 1/8192 shiny roll for overworld spawns
+    BOOL isShiny = (LCRNG_Next() % 8192) == 0;
+
+    *outSpecies = species;
+    *outLevel = level;
+    *outForm = form;
+    *outShiny = isShiny;
+    return TRUE;
+}

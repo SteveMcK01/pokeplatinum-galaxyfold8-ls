@@ -1,3 +1,6 @@
+#ifdef SDK_PORT
+#include "port/overworld_wild.h"
+#endif
 #include "map_object.h"
 
 #ifdef SDK_PORT
@@ -437,6 +440,11 @@ void MapObjectMan_SaveAll(FieldSystem *fieldSystem, const MapObjectManager *mapO
     MapObject *mapObj;
 
     while (MapObjectMan_FindObjectWithStatus(mapObjMan, &mapObj, &v0, MAP_OBJ_STATUS_0)) {
+#ifdef SDK_PORT
+        if (OverworldWild_IsTransientWildObject(mapObj)) {
+            continue;
+        }
+#endif
 #ifdef SDK_PORT
         // The following Pokemon is the port's: the save stays as the DS's (port/follower.h)
         if (Follower_IsFollower(mapObj)) {

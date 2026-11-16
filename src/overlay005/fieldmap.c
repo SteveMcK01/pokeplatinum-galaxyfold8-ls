@@ -2,6 +2,7 @@
 
 #ifdef SDK_PORT
 #include "port/following_hack.h"
+#include "port/overworld_wild.h"
 #endif
 
 #include <nitro.h>
@@ -880,6 +881,7 @@ static void ov5_021D1878(FieldSystem *fieldSystem)
     sub_02061C48(fieldSystem->mapObjMan);
 #ifdef SDK_PORT
     FollowingHack_MapObjectsReady(fieldSystem);
+    OverworldWild_Init(fieldSystem);
 #endif
     CommPlayerMan_ForcePos();
     sub_02062C3C(fieldSystem->mapObjMan);

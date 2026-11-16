@@ -46,8 +46,8 @@ typedef struct {
     BOOL catchEmAll;
     BOOL tradeEvos;
     BOOL reusableTMs;
-    BOOL infiniteTMs;         // any Pokemon can learn any TM or HM
-
+    BOOL infiniteTMs;          // any Pokemon can learn any TM or HM
+    BOOL overworldWildPokemon; // spawn wandering wild Pokemon in the overworld         // any Pokemon can learn any TM or HM
     // Saves section
     int saveSlot; // Save slot in use, 1-based (slot 1 is the original save.bin)
     BOOL autosave; // Save automatically while exploring, when it is safe to

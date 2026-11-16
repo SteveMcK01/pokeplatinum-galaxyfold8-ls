@@ -1,5 +1,6 @@
 // Following Renegade Platinum; see include/port/following_hack.h and docs/thor/dev/following-renegade.md
 #include "port/following_hack.h"
+#include "port/overworld_wild.h"
 
 #include <nitro.h>
 #include <stdio.h>
@@ -379,6 +380,14 @@ static u16 PokemonGraphicsID(u16 species, int form, int gender)
     return graphicsID;
 }
 
+u16 FollowingHack_GetSpeciesObjGfx(u16 species, u8 form, u8 gender)
+{
+    if (!sActive) {
+        return 0xFFFF;
+    }
+    return PokemonGraphicsID(species, form, gender);
+}
+
 // The graphics ID the lead Pokemon follows with
 static u16 LeadGraphicsID(FieldSystem *fieldSystem)
 {
@@ -467,7 +476,7 @@ static void FollowerRenderer_Update(MapObject *mapObj)
         return;
     }
 
-    if (FollowingHack_IsFollower(mapObj) && billboard->gfxSequence.plttIdx != NULL && billboard->animTexture != NULL) {
+    if ((FollowingHack_IsFollower(mapObj) || OverworldWild_IsTransientWildObject(mapObj)) && billboard->gfxSequence.plttIdx != NULL && billboard->animTexture != NULL) {
         const u8 palette = (MapObject_GetDataAt(mapObj, 2) & 0x80) != 0 ? 1 : 0;
         const NNSG3dResDict *palettes = (const NNSG3dResDict *)((const u8 *)billboard->animTexture
             + billboard->animTexture->plttInfo.ofsDict);

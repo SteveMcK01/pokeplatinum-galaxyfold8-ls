@@ -43,6 +43,7 @@ void FollowingHack_MapConnected(FieldSystem *fieldSystem);       // the player w
 MapObject *FollowingHack_ScriptObject(FieldSystem *fieldSystem, int localID); // a script's object by local ID
 BOOL FollowingHack_IsFollower(const MapObject *mapObj);
 BOOL FollowingHack_IsPokemonGraphics(u32 graphicsID);
+u16 FollowingHack_GetSpeciesObjGfx(u16 species, u8 form, u8 gender);
 BOOL FollowingHack_ObjectAt(const MapObject *mapObj, int x, int y, int z); // sub_02063F00 with the follower // 276 to 841, the hack's Pokemon
 const FieldEffectRendererFuncs *FollowingHack_RendererFuncs(u32 id); // the hack's field effect renderer
 void FollowingHack_InitRenderer(FieldEffectManager *fieldEffMan);

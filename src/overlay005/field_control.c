@@ -1,3 +1,6 @@
+#ifdef SDK_PORT
+#include "port/overworld_wild.h"
+#endif
 #include "overlay005/field_control.h"
 
 #include <nitro.h>
@@ -181,6 +184,17 @@ BOOL FieldInput_Process(const FieldInput *input, FieldSystem *fieldSystem)
         return TRUE;
     }
 
+#ifdef SDK_PORT
+    if (input->dummy5 == FALSE) {
+        OverworldWild_Update(fieldSystem);
+        if (OverworldWild_TryTriggerTouchEncounter(fieldSystem) == TRUE) {
+            PlayerAvatar_ClearMoveState(fieldSystem->playerAvatar);
+            MapObjectMan_PauseAllMovement(fieldSystem->mapObjMan);
+            return TRUE;
+        }
+    }
+#endif
+
     // dummy5 will always be false, so this branch will always be taken, but it doesn't match without the condition
     if (input->dummy5 == FALSE) {
         BOOL hasTwoAliveMons = Party_HasTwoAliveMons(SaveData_GetParty(fieldSystem->saveData));
@@ -271,6 +285,14 @@ BOOL FieldInput_Process(const FieldInput *input, FieldSystem *fieldSystem)
         }
 
         if (validInteraction == TRUE) {
+#ifdef SDK_PORT
+            if (OverworldWild_TryInteract(fieldSystem, object) == TRUE) {
+                if (PlayerAvatar_CheckForceStopMovement(fieldSystem->playerAvatar) == TRUE) {
+                    PlayerAvatar_ForceStopMovement(fieldSystem->playerAvatar, PlayerAvatar_GetFacingDir(fieldSystem->playerAvatar));
+                }
+                return TRUE;
+            }
+#endif
             if (PlayerAvatar_CheckForceStopMovement(fieldSystem->playerAvatar) == TRUE) {
                 PlayerAvatar_ForceStopMovement(fieldSystem->playerAvatar, PlayerAvatar_GetFacingDir(fieldSystem->playerAvatar));
             }

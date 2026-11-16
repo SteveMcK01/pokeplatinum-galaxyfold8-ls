@@ -53,6 +53,7 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
 
     private SecondaryScreen secondaryScreen;
     private SurfaceView inlineBottomSurfaceView;
+    private View inlineOverlayBezelView;
     private boolean inlineSplitEnabled;
     private int inlineLayoutMode = 0; // 0 = 50/50 split, 1 = full-screen companion, 2 = full-screen primary (settings)
 
@@ -95,6 +96,32 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
         secondaryScreen.bindSurfaceView(inlineBottomSurfaceView);
         mLayout.addView(inlineBottomSurfaceView, new RelativeLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 1));
+
+        inlineOverlayBezelView = new View(this);
+        inlineOverlayBezelView.setClickable(false);
+        inlineOverlayBezelView.setFocusable(false);
+        inlineOverlayBezelView.setVisibility(View.GONE);
+        float density = getResources().getDisplayMetrics().density;
+        android.graphics.drawable.GradientDrawable bezelBg = new android.graphics.drawable.GradientDrawable();
+        bezelBg.setColor(android.graphics.Color.TRANSPARENT);
+        bezelBg.setCornerRadius(12f * density);
+        bezelBg.setStroke(Math.max(2, Math.round(2.5f * density)), 0xCC58B8FF);
+        inlineOverlayBezelView.setBackground(bezelBg);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            final float innerRadius = 10f * density;
+            inlineBottomSurfaceView.setOutlineProvider(new android.view.ViewOutlineProvider() {
+                @Override
+                public void getOutline(View view, android.graphics.Outline outline) {
+                    if (inlineLayoutMode == 3 && view.getWidth() > 1 && view.getHeight() > 1) {
+                        outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), innerRadius);
+                    } else {
+                        outline.setRect(0, 0, view.getWidth(), view.getHeight());
+                    }
+                }
+            });
+            inlineBottomSurfaceView.setClipToOutline(true);
+        }
+        mLayout.addView(inlineOverlayBezelView, new RelativeLayout.LayoutParams(1, 1));
 
         mLayout.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
             if ((right - left) != (oldRight - oldLeft) || (bottom - top) != (oldBottom - oldTop)) {
@@ -156,6 +183,12 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
             return;
         }
 
+        if (inlineOverlayBezelView != null && (inlineLayoutMode != 3 || !inlineSplitEnabled)) {
+            if (inlineOverlayBezelView.getVisibility() != View.GONE) {
+                inlineOverlayBezelView.setVisibility(View.GONE);
+            }
+        }
+
         if (!inlineSplitEnabled || inlineLayoutMode == 2) {
             if (inlineSplitEnabled && inlineBottomSurfaceView.getVisibility() != View.INVISIBLE) {
                 inlineBottomSurfaceView.setVisibility(View.INVISIBLE);
@@ -192,6 +225,17 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
             }
             int pad = Math.max(12, Math.min(totalWidth, totalHeight) / 60);
             applyRelativeBounds(inlineBottomSurfaceView, overlayWidth, overlayHeight, pad, pad);
+            if (inlineOverlayBezelView != null) {
+                float density = getResources().getDisplayMetrics().density;
+                int border = Math.max(2, Math.round(2.5f * density));
+                applyRelativeBounds(inlineOverlayBezelView, overlayWidth + border * 2, overlayHeight + border * 2, pad - border, pad - border);
+                if (inlineOverlayBezelView.getVisibility() != View.VISIBLE) {
+                    inlineOverlayBezelView.setVisibility(View.VISIBLE);
+                }
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                inlineBottomSurfaceView.invalidateOutline();
+            }
             return;
         }
 

@@ -940,7 +940,7 @@ extern "C" const char *SIM_Prj_LinkPlayHint(void)
 
 void SIM_Prj_SettingsPages()
 {
-    SIM::Settings::AddPage("Games", "Reset to the title, switch games, add Renegade Platinum", DrawGames, 10);
+    SIM::Settings::AddPage("Games", "Reset to the title, switch games, add Following Platinum", DrawGames, 10);
     SIM::Settings::AddPage("Saves", "Slots, autosave, import and export", DrawSaves, 20);
     SIM::Settings::AddPage("Save editor", "Pokemon, items, money, badges, legendary events", SaveEditor_Draw, 25);
     SIM::Settings::AddPage("Gameplay", "Instant text, HM-free moves, Repel prompt, Exp. Share, level cap, clock, Nuzlocke, 60 FPS", DrawGameplay, 30);

@@ -11,6 +11,14 @@ This repository contains **no ROM and no game assets**. On first launch, supply 
 - **Designed for Following Platinum:** To enable **Following Pokémon** and **Overworld Wild Pokémon**, supply a **Following Platinum** patched `.nds` ROM on first launch. The port extracts Following Platinum's overworld sprite tables and uses them for both your follower and roaming wild encounters.
 - **Optional Gen 5 Battles & Screens:** Point `Settings > Games > Gen 5 battles` to your own *Pokémon Black 2* or *White 2* (`.nds`) dump for animated Gen 5 battle arenas and Summary screens while preserving your Platinum party, moves, and stats.
 
+## Setup Guide
+
+1. **Install the App:** Download the latest `.apk` from the **Releases** page and install it on your Android device (enable installs from unknown sources if prompted).
+2. **Import Pokémon Platinum (USA, Rev 1):** Launch the app and supply your own `.nds` dump of **Pokémon Platinum (USA, Rev 1)** (`CPUE`). *Note: The Rev 1 dump is required so the in-app patcher and asset extractor match cleanly.*
+3. **Apply the Following Platinum Patch (In-App):** Download the **Following Platinum** patch file, then open **Settings > Games** inside the app to apply it. This enables **Following Pokémon** and extracts the overworld sprite tables needed for **Overworld Wild Pokémon**.
+4. **Add Pokémon Black 2 or White 2 (Optional):** In **Settings > Games > Gen 5 battles**, import your own `.nds` dump of **Pokémon Black 2** or **Pokémon White 2** to enable animated 3D Gen 5 battle arenas and Summary screens while keeping your Platinum party, moves, and save data intact.
+5. **Configure & Play:** Customize your screen layout, touch overlay, and gameplay toggles in **Settings**, then jump in and enjoy!
+
 ## What's New in This Fork
 
 - **Overworld Wild Pokémon (`Settings > Gameplay > Overworld wild Pokemon`):** Visible wild Pokémon dynamically spawn and wander in tall grass, caves, and water using area encounter tables (including time-of-day spawns and shiny variants). Walk into one or press `A` to battle; water spawns have their lower third submerged and ground shadows hidden so they swim naturally, with configurable spawn density (`1` to `6`) in `Settings > Gameplay`.

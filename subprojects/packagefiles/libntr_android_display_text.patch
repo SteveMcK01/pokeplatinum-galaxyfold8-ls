@@ -1,0 +1,11 @@
+--- a/libraries/sim/src/sim_settings.cpp
++++ b/libraries/sim/src/sim_settings.cpp
+@@ -159,7 +159,7 @@
+ 
+ #ifdef SDK_BUILD_ANDROID
+   const char *secondLabel = "Bottom screen on the second display";
+-  const char *secondHelp = "On dual-screen devices like the AYN Thor. Off puts both screens on this display.";
++  const char *secondHelp = "For dual-screen devices with a secondary display. Off puts both screens on this display.";
+ #else
+   const char *secondLabel = "Bottom screen in its own window";
+   const char *secondHelp = "Off puts both screens in this window.";

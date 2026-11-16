@@ -703,7 +703,7 @@ void DrawGameplay()
 void DrawGear()
 {
     SIM_Config_prj_type *config = SIM_Config_prj_GetConfig();
-    if (ConfigToggle("Show the Gear", "The companion on the lower screen: battle info, party, encounters, trainer.",
+    if (ConfigToggle("Show the Gear", "The companion on the lower half of the display: battle info, party, encounters, trainer.",
             &config->gearEnabled)) {
         if (!config->gearEnabled) {
             SIM_Companion_SetFullScreen(FALSE);
@@ -725,10 +725,10 @@ void DrawGear()
         config->gearDiscovery = level;
         SaveConfig();
     }
-    ConfigToggle("Battle menu on the Gear", "In battles the Gear takes the whole lower screen with Fight, Bag, Pokemon, "
+    ConfigToggle("Battle menu on the Gear", "In battles the Gear takes the whole lower half of the display with Fight, Bag, Pokemon, "
         "Run and your moves with their matchups. The DS screen comes back for the bag and the party.",
         &config->gearBattleControls, config->gearEnabled != FALSE);
-    Note("Tap Full in the Gear (or press L3) to give it the whole lower screen, Split for the DS screen.");
+    Note("Tap Full in the Gear (or press L3) to give it the whole lower half of the display, Split for the DS screen.");
 }
 
 // --- Cheats ----------------------------------------------------------------------------------

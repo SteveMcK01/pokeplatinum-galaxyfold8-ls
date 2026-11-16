@@ -179,6 +179,7 @@ static void RestoreSavedBattleSlots(FieldSystem *fieldSystem)
         MapObject_SetMovementRangeX(obj, 2);
         MapObject_SetMovementRangeZ(obj, 2);
         MapObject_SetDataAt(obj, sv->isShiny ? 0x80 : 0, 2);
+        if (sv->isWaterSpawn) MapObject_SetStatusFlagOn(obj, MAP_OBJ_STATUS_HIDE_SHADOW);
         sWildSlots[slotIdx] = (OverworldWildSlot){
             TRUE, localId, sv->species, sv->level, sv->form, sv->gender,
             sv->isShiny, sv->isWaterSpawn, 0, obj
@@ -360,6 +361,7 @@ static BOOL TrySpawnOneWildPokemon(FieldSystem *fieldSystem, int maxAttempts)
         MapObject_SetMovementRangeX(wildObj, 2);
         MapObject_SetMovementRangeZ(wildObj, 2);
         MapObject_SetDataAt(wildObj, isShiny ? 0x80 : 0, 2);
+        if (isWater) MapObject_SetStatusFlagOn(wildObj, MAP_OBJ_STATUS_HIDE_SHADOW);
 
         sWildSlots[freeSlot].active = TRUE;
         sWildSlots[freeSlot].localId = localId;
@@ -429,6 +431,16 @@ static void TriggerSlotEncounter(FieldSystem *fieldSystem, int slotIdx)
     }
 
     Encounter_NewVsWild(fieldSystem, dto);
+}
+
+BOOL OverworldWild_IsWaterSpawn(const MapObject *obj) {
+    if (obj == NULL) return FALSE;
+    for (int i = 0; i < OVERWORLD_WILD_MAX_ACTIVE; i++) {
+        if (sWildSlots[i].active && sWildSlots[i].mapObj == obj) {
+            return sWildSlots[i].isWaterSpawn;
+        }
+    }
+    return FALSE;
 }
 
 BOOL OverworldWild_TryTriggerTouchEncounter(FieldSystem *fieldSystem, u16 heldKeys, u8 playerDir) {

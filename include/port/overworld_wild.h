@@ -23,4 +23,6 @@ BOOL OverworldWild_TryTriggerTouchEncounter(FieldSystem *fieldSystem, u16 heldKe
 BOOL OverworldWild_TryInteract(FieldSystem *fieldSystem, MapObject *targetObj);
 BOOL OverworldWild_IsTransientWildObject(const MapObject *mapObj);
 
+BOOL OverworldWild_IsWaterSpawn(const MapObject *obj);
+
 #endif // POKEPLATINUM_OVERWORLD_WILD_H

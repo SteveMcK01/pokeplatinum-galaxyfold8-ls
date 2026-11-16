@@ -1,3 +1,4 @@
+#include "port/overworld_wild.h"
 #include "overlay005/ov5_021ECC20.h"
 
 #include <nitro.h>
@@ -154,6 +155,11 @@ void ov5_021ECDA0(const MapObject *param0, VecFx32 *adjustedObjectPos)
     adjustedObjectPos->x = objectPosition.x + jumpOffset.x + posOffset.x + terrainSpriteOffset.x;
     adjustedObjectPos->y = objectPosition.y + jumpOffset.y + posOffset.y + terrainSpriteOffset.y;
     adjustedObjectPos->z = objectPosition.z + jumpOffset.z + posOffset.z + terrainSpriteOffset.z;
+#ifdef SDK_PORT
+    if (OverworldWild_IsWaterSpawn(param0)) {
+        adjustedObjectPos->y -= 9 * FX32_ONE;
+    }
+#endif
 }
 
 void ov5_021ECDFC(MapObject *mapObj, int dir)

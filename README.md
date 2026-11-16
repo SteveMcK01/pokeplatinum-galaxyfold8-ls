@@ -1,6 +1,6 @@
 # Pokémon Platinum for Android (Foldable & Phone Edition)
 
-A native port of Pokémon Platinum built for **Android phones and foldables** (such as the Samsung Galaxy Fold series), with PC builds for Windows and Linux. It runs the decompiled game directly (no emulator), places the DS bottom touch screen on the lower half of the display alongside the **Gear** companion panel, and adds overworld wild encounters, Dex completion options, and modern quality-of-life upgrades.
+A native port of Pokémon Platinum built specifically for **Android phones and foldables** (such as the Samsung Galaxy Fold series). It runs the decompiled game directly (no emulator), places the DS bottom touch screen on the lower half of the display alongside the **Gear** companion panel, and adds overworld wild encounters, Dex completion options, and modern quality-of-life upgrades.
 
 This fork builds on [SilasMayes's pokeplatinum-thor](https://github.com/SilasMayes/pokeplatinum-thor) and [teton-dev's fork](https://github.com/teton-dev), which are built on [cybervisi0n's PC port](https://github.com/cybervisi0n/pokeplatinum), [libntr](https://github.com/cybervisi0n/libntr), and the [pret decompilation](https://github.com/pret/pokeplatinum). Please open issues here rather than on upstream repositories.
 
@@ -26,11 +26,12 @@ This repository contains **no ROM and no game assets**. On first launch, supply 
 - **Gotta Catch 'Em All! Mode:** Adds missing Diamond/Pearl exclusives and unobtainable Sinnoh Dex Pokémon (Murkrow, Misdreavus, Glameow, Stunky, Trapinch, Clamperl, fossils, and more) directly to wild encounters and the Gear tracker.
 - **Infinite TMs & Universal TM/HM Compatibility:** Optional toggle to make TMs reusable like HMs without being consumed, plus an option allowing any Pokémon to learn any TM or HM.
 - **Trade Evolutions Without Trading:** Evolves trade-only Pokémon automatically on level-up (Lv. 36+ for Kadabra, Haunter, Machoke, and Graveler; any level-up while holding the required item for item-trade evolutions).
+- **Full-Screen PiP Display Mode:** Adds a floating, rounded Picture-in-Picture (PiP) overlay for the bottom DS touch screen in the top-left corner with a cyan bezel, adjustable overlay scale, quick hide/show toggle, and full-screen main display support for unfolded foldables and phones.
 - **Android & Foldable Polish:** Updated all Settings UI text for Android phones and foldables, refined split-screen touch overlay and Pokédex controls, and removed the legacy companion follower toggle to prevent conflicts with Following Platinum.
 - **Gen 5 Battle Move Preservation Fix:** Fixed vanilla Platinum move-map initialization so party Pokémon retain all moves and PP across Gen 5 battles.
 
 ## Core Port Features & Credits
 
 - **Split-Screen & Gear:** Top screen on the main panel; DS touch screen and the **Gear** (damage calculator, turn order, area encounters, Pokédex, item map, PC sort, boss teams, shiny counters) on the lower half of the display, with optional widescreen, 60 FPS, instant text, HM-free field moves, fast egg hatching, battle/exploration toggles, save slots/sync, link play, and texture packs.
-- **Build:** `make meson && ANDROID_NDK_HOME=/path/to/ndk ./tools/android/build_apk.sh` (Android) or `./drun.sh make linux` (Linux).
+- **Build:** `make meson && ANDROID_NDK_HOME=/path/to/ndk ./tools/android/build_apk.sh`.
 - **Credits:** [pret](https://github.com/pret/pokeplatinum), [cybervisi0n](https://github.com/cybervisi0n/pokeplatinum), [SilasMayes](https://github.com/SilasMayes/pokeplatinum-thor), [teton-dev](https://github.com/teton-dev) (catch-crash fix), **Following Platinum**, SDL, ENet, Dear ImGui, and Atkinson Hyperlegible. Pokémon is © Nintendo, Game Freak, and Creatures.

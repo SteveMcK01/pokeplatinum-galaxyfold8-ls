@@ -775,7 +775,7 @@ void DrawCheats()
     ConfigChoice("Shiny odds", "Wild Pokemon (legendaries too) and hatched eggs. Normal is the game's own 1 in 8192.",
         &config->shinyOdds, kShinyValues, kShinyLabels, 5);
     ConfigToggle("Any Pokemon learns any TM or HM", "Every Pokemon can be taught every TM and HM.", &config->anyTM);
-    ConfigToggle("Infinite TMs", "TMs are reusable like HMs and do not get consumed when taught.", &config->infiniteTMs);
+    ConfigToggle("Infinite TMs", "TMs are reusable like HMs and do not get consumed when taught.", &config->reusableTMs);
     ConfigToggle("Gotta Catch 'Em All!",
         "Adds missing Diamond/Pearl & unobtainable Sinnoh Dex Pokemon (Murkrow, Misdreavus, Glameow, Stunky, Trapinch, Clamperl, fossils, etc.) to wild encounters and the Gear tracker.",
         &config->catchEmAll);

@@ -45,7 +45,7 @@ typedef struct {
     BOOL anyTM;
     BOOL catchEmAll;
     BOOL tradeEvos;
-    BOOL infiniteTMs;
+    BOOL reusableTMs;
     BOOL infiniteTMs;         // any Pokemon can learn any TM or HM
 
     // Saves section

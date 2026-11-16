@@ -127,8 +127,8 @@ static int IniHandler(void* user, const char* section, const char* name,
     if(MATCH("Cheats", "TradeEvos")) {
         config->tradeEvos = StringToBool(value);
     }
-    if(MATCH("Cheats", "InfiniteTMs")) {
-        config->infiniteTMs = StringToBool(value);
+    if(MATCH("Cheats", "ReusableTMs")) {
+        config->reusableTMs = StringToBool(value);
     }
     if(MATCH("Cheats", "InfiniteTMs")) {
         config->infiniteTMs = StringToBool(value);
@@ -248,7 +248,7 @@ void SIM_Config_prj_LoadDefaults(SIM_Config_prj_type * aConfig)
   aConfig->anyTM = FALSE;
     aConfig->catchEmAll = FALSE;
     aConfig->tradeEvos = FALSE;
-    aConfig->infiniteTMs = FALSE;
+    aConfig->reusableTMs = FALSE;
     aConfig->infiniteTMs = FALSE;
 
   // Saves section
@@ -329,7 +329,7 @@ void SIM_Config_prj_SaveConfigFile(SIM_Config_prj_type * aConfig)
     fprintf(configFile, "AnyTM=%s\n", BoolToString(aConfig->anyTM));
     fprintf(configFile, "CatchEmAll=%s\n", BoolToString(aConfig->catchEmAll));
     fprintf(configFile, "TradeEvos=%s\n", BoolToString(aConfig->tradeEvos));
-    fprintf(configFile, "InfiniteTMs=%s\n", BoolToString(aConfig->infiniteTMs));
+    fprintf(configFile, "ReusableTMs=%s\n", BoolToString(aConfig->reusableTMs));
     fprintf(configFile, "InfiniteTMs=%s\n", BoolToString(aConfig->infiniteTMs));
     fprintf(configFile, "\n");
 

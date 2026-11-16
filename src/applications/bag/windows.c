@@ -330,7 +330,7 @@ void BagUI_PrintTMHMNumber(BagController *controller, BagItem *itemSlot, u32 yOf
     if (item < ITEM_HM01) {
         item = item - ITEM_TM01 + 1;
         FontSpecialChars_DrawPartyScreenText(controller->specialChars, SPECIAL_CHAR_NUMBER, item, 2, PADDING_MODE_ZEROES, &controller->windows[BAG_UI_WINDOW_ITEM_LIST], 0, yOffset + 5);
-        if (SIM_Config_prj_GetConfig() == NULL || !SIM_Config_prj_GetConfig()->infiniteTMs) {
+        if (SIM_Config_prj_GetConfig() == NULL || !SIM_Config_prj_GetConfig()->reusableTMs) {
             BagUI_PrintItemCount(controller, itemSlot->quantity, yOffset, TEXT_COLOR(1, 2, 0));
         }
     } else {

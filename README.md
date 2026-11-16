@@ -27,11 +27,23 @@ This repository contains **no ROM and no game assets**. On first launch, supply 
 - **Infinite TMs & Universal TM/HM Compatibility:** Optional toggle to make TMs reusable like HMs without being consumed, plus an option allowing any Pokémon to learn any TM or HM.
 - **Trade Evolutions Without Trading:** Evolves trade-only Pokémon automatically on level-up (Lv. 36+ for Kadabra, Haunter, Machoke, and Graveler; any level-up while holding the required item for item-trade evolutions).
 - **Full-Screen PiP Display Mode:** Adds a floating, rounded Picture-in-Picture (PiP) overlay for the bottom DS touch screen in the top-left corner with a cyan bezel, adjustable overlay scale, quick hide/show toggle, and full-screen main display support for unfolded foldables and phones.
+- **Pokémon-Themed UI:** Styled the Settings and Gear companion screens with a cohesive Pokémon-inspired theme.
 - **Android & Foldable Polish:** Updated all Settings UI text for Android phones and foldables, refined split-screen touch overlay and Pokédex controls, and removed the legacy companion follower toggle to prevent conflicts with Following Platinum.
 - **Gen 5 Battle Move Preservation Fix:** Fixed vanilla Platinum move-map initialization so party Pokémon retain all moves and PP across Gen 5 battles.
 
 ## Core Port Features & Credits
 
-- **Split-Screen & Gear:** Top screen on the main panel; DS touch screen and the **Gear** (damage calculator, turn order, area encounters, Pokédex, item map, PC sort, boss teams, shiny counters) on the lower half of the display, with optional widescreen, 60 FPS, instant text, HM-free field moves, fast egg hatching, battle/exploration toggles, save slots/sync, link play, and texture packs.
+- **Split-Screen & Gear:** Top screen on the main panel; DS touch screen and the **Gear** (damage calculator, turn order, area encounters, Pokédex, item map, PC sort, boss teams, shiny counters) on the lower half of the display, with optional widescreen, 60 FPS, instant text, fast egg hatching, save slots/sync, link play, and texture packs.
+- **Modern EXP Share:** Optional party-wide EXP Share toggle that awards full EXP to battling Pokémon and half EXP to the rest of the non-fainted party.
+- **Legendary Mystery Gift Events:** Built-in triggers for Nintendo's Mystery Gift events—gives the key item just like the Poké Mart delivery man and activates the event:
+  - **Darkrai (Member Card):** Sleep at the Harbor Inn in Canalave City.
+  - **Shaymin (Oak's Letter):** Visit the tablet on Route 224.
+  - **Arceus (Azure Flute):** Climb to the top of Spear Pillar.
+  - **Rotom Forms (Secret Key):** Enter the locked room of the Team Galactic building in Eterna City.
+  - *Note:* Each displays any remaining prerequisites first (such as entering the Hall of Fame and obtaining the National Pokédex for Darkrai, Shaymin, and Arceus). The game checks when you arrive at the location, so leave and re-enter if you are already there.
+- **Field Moves Without HMs:** Use Cut, Fly, Surf, Strength, Rock Smash, Waterfall, Rock Climb, and Defog directly from any compatible party Pokémon's menu without teaching the HM move (as long as the HM is in your bag and you have the required badge, with an optional toggle to bypass badge requirements).
+- **Hard Level Cap:** Prevents Pokémon from gaining EXP in battle once they reach the next Gym Leader's level cap.
+- **Game Clock Adjustment:** Adjust the in-game clock offset directly in Settings for time-of-day encounters and evolutions without changing your device time.
+- **No Wild Encounters Cheat:** Disables random encounters in grass, caves, and water while leaving visible **Overworld Wild Pokémon** active.
 - **Build:** `make meson && ANDROID_NDK_HOME=/path/to/ndk ./tools/android/build_apk.sh`.
 - **Credits:** [pret](https://github.com/pret/pokeplatinum), [cybervisi0n](https://github.com/cybervisi0n/pokeplatinum), [SilasMayes](https://github.com/SilasMayes/pokeplatinum-thor), [teton-dev](https://github.com/teton-dev) (catch-crash fix), **Following Platinum**, SDL, ENet, Dear ImGui, and Atkinson Hyperlegible. Pokémon is © Nintendo, Game Freak, and Creatures.

@@ -332,6 +332,43 @@ static void DrawTogglePillButton(ImDrawList *dl, ImFont *font, float x0, float y
     }
 }
 
+enum class PillIcon { StartTri, SelectWin, FastFwd, SwitchArr, EyeOpen, EyeClosed };
+static void DrawIconPill(ImDrawList *dl, float x0, float y0, float x1, float y1, PillIcon ic, bool act, float alpha, ImU32 acc = IM_COL32(95,165,255,255), bool darkInk = false) {
+    float r = (y1 - y0) * 0.5f, cx = (x0 + x1) * 0.5f, cy = (y0 + y1) * 0.5f, h = y1 - y0;
+    float s = std::min((x1 - x0) * 0.28f, h * 0.28f), st = std::max(1.8f, h * 0.065f);
+    ImU32 bg = act ? IM_COL32((acc>>0)&255,(acc>>8)&255,(acc>>16)&255,(int)(225*alpha)) : IM_COL32(24,28,36,(int)(170*alpha));
+    ImU32 bd = act ? IM_COL32(255,255,255,(int)(245*alpha)) : IM_COL32(220,228,240,(int)(155*alpha));
+    ImU32 ink = (act && darkInk) ? IM_COL32(20,22,28,(int)(250*alpha)) : IM_COL32(255,255,255,(int)((act?255:235)*alpha));
+    dl->AddRectFilled(ImVec2(x0,y0), ImVec2(x1,y1), bg, r);
+    dl->AddRect(ImVec2(x0,y0), ImVec2(x1,y1), bd, r, 0, act ? 2.4f : 1.6f);
+    if (ic == PillIcon::StartTri) {
+        dl->AddTriangleFilled(ImVec2(cx-s*0.6f,cy-s*0.8f), ImVec2(cx+s*0.9f,cy), ImVec2(cx-s*0.6f,cy+s*0.8f), ink);
+    } else if (ic == PillIcon::SelectWin) {
+        dl->AddRect(ImVec2(cx-s*1.05f,cy-s*0.95f), ImVec2(cx+s*0.45f,cy+s*0.45f), ink, 2.0f, 0, st);
+        dl->AddRectFilled(ImVec2(cx-s*0.45f,cy-s*0.45f), ImVec2(cx+s*1.05f,cy+s*0.95f), IM_COL32(24,28,36,(int)(225*alpha)), 2.0f);
+        dl->AddRect(ImVec2(cx-s*0.45f,cy-s*0.45f), ImVec2(cx+s*1.05f,cy+s*0.95f), ink, 2.0f, 0, st);
+    } else if (ic == PillIcon::FastFwd) {
+        float tw = s*0.82f, th = s*0.78f;
+        dl->AddTriangleFilled(ImVec2(cx-tw*1.15f,cy-th), ImVec2(cx-tw*0.05f,cy), ImVec2(cx-tw*1.15f,cy+th), ink);
+        dl->AddTriangleFilled(ImVec2(cx+tw*0.05f,cy-th), ImVec2(cx+tw*1.15f,cy), ImVec2(cx+tw*0.05f,cy+th), ink);
+    } else if (ic == PillIcon::SwitchArr) {
+        float hw = s*1.1f, yt = cy-s*0.44f, yb = cy+s*0.44f, hd = s*0.42f;
+        dl->AddLine(ImVec2(cx-hw,yt), ImVec2(cx+hw-hd*0.5f,yt), ink, st);
+        dl->AddTriangleFilled(ImVec2(cx+hw,yt), ImVec2(cx+hw-hd,yt-hd*0.72f), ImVec2(cx+hw-hd,yt+hd*0.72f), ink);
+        dl->AddLine(ImVec2(cx+hw,yb), ImVec2(cx-hw+hd*0.5f,yb), ink, st);
+        dl->AddTriangleFilled(ImVec2(cx-hw,yb), ImVec2(cx-hw+hd,yb-hd*0.72f), ImVec2(cx-hw+hd,yb+hd*0.72f), ink);
+    } else if (ic == PillIcon::EyeOpen) {
+        float ew = s*1.35f, eh = s*0.82f;
+        dl->AddBezierCubic(ImVec2(cx-ew,cy), ImVec2(cx-ew*0.45f,cy-eh), ImVec2(cx+ew*0.45f,cy-eh), ImVec2(cx+ew,cy), ink, st);
+        dl->AddBezierCubic(ImVec2(cx-ew,cy), ImVec2(cx-ew*0.45f,cy+eh), ImVec2(cx+ew*0.45f,cy+eh), ImVec2(cx+ew,cy), ink, st);
+        dl->AddCircleFilled(ImVec2(cx,cy), s*0.38f, ink, 16);
+    } else if (ic == PillIcon::EyeClosed) {
+        float ew = s*1.35f, eh = s*0.72f;
+        dl->AddBezierCubic(ImVec2(cx-ew,cy-eh*0.15f), ImVec2(cx-ew*0.45f,cy+eh*0.75f), ImVec2(cx+ew*0.45f,cy+eh*0.75f), ImVec2(cx+ew,cy-eh*0.15f), ink, st);
+        dl->AddLine(ImVec2(cx-ew*0.85f,cy+eh*0.85f), ImVec2(cx+ew*0.85f,cy-eh*0.85f), ink, st);
+    }
+}
+
 static void DrawDpad(ImDrawList *dl, float cx, float cy, float outerR,
                      bool up, bool down, bool left, bool right, float alpha) {
     const float armHalf = outerR * 0.34f;
@@ -543,13 +580,13 @@ void TouchControls_DrawOverlay(void) {
 
     DrawPillButton(dl, boldFont, lX0, rowY0, lX1, rowY1, "L", pressed[VBTN_L], alpha);
     if (pipOverlayMode) {
-        DrawTogglePillButton(dl, boldFont, pipX0, rowY0, pipX1, rowY1, "HIDE", screenHidden, alpha, IM_COL32(245, 185, 55, 255));
+        DrawIconPill(dl, pipX0, rowY0, pipX1, rowY1, screenHidden ? PillIcon::EyeClosed : PillIcon::EyeOpen, screenHidden, alpha, IM_COL32(245, 185, 55, 255), true);
     }
-    DrawPillButton(dl, boldFont, swX0, rowY0, swX1, rowY1, "SWITCH", switchActive, alpha, IM_COL32(70, 195, 235, 255));
-    DrawPillButton(dl, boldFont, selX0, rowY0, selX1, rowY1, "SELECT", pressed[VBTN_SELECT], alpha);
+    DrawIconPill(dl, swX0, rowY0, swX1, rowY1, PillIcon::SwitchArr, switchActive, alpha, IM_COL32(70, 195, 235, 255));
+    DrawIconPill(dl, selX0, rowY0, selX1, rowY1, PillIcon::SelectWin, pressed[VBTN_SELECT], alpha);
 
-    DrawPillButton(dl, boldFont, staX0, rowY0, staX1, rowY1, "START", pressed[VBTN_START], alpha);
-    DrawPillButton(dl, boldFont, ffX0, rowY0, ffX1, rowY1, "FF", ffActive, alpha, IM_COL32(245, 155, 50, 255));
+    DrawIconPill(dl, staX0, rowY0, staX1, rowY1, PillIcon::StartTri, pressed[VBTN_START], alpha);
+    DrawIconPill(dl, ffX0, rowY0, ffX1, rowY1, PillIcon::FastFwd, ffActive, alpha, IM_COL32(245, 155, 50, 255));
     DrawPillButton(dl, boldFont, rX0, rowY0, rX1, rowY1, "R", pressed[VBTN_R], alpha);
 
     if (pipOverlayMode) {
@@ -610,7 +647,7 @@ void TouchControls_DrawBottomOverlay(float width, float height) {
 
         ImDrawList *dl = ImGui::GetForegroundDrawList();
         ImFont *font = SIM::UI::BoldFont();
-        DrawPillButton(dl, font, sw.x0, sw.y0, sw.x1, sw.y1, "SWITCH", true, alpha, IM_COL32(70, 195, 235, 255));
+        DrawIconPill(dl, sw.x0, sw.y0, sw.x1, sw.y1, PillIcon::SwitchArr, true, alpha, IM_COL32(70, 195, 235, 255));
         return;
     }
     sPrevCompanionSwitchPressed = false;

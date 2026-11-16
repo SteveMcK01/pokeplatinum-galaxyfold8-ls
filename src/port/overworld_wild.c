@@ -37,8 +37,10 @@ typedef struct OverworldWildSlot {
     u8 gender;
     BOOL isShiny;
     BOOL isWaterSpawn;
+    u16 offscreenFrames;
     MapObject *mapObj;
 } OverworldWildSlot;
+#define OVERWORLD_WILD_OFFSCREEN_GRACE_FRAMES 420
 
 typedef struct SavedBattleWildSlot {
     BOOL valid;
@@ -179,7 +181,7 @@ static void RestoreSavedBattleSlots(FieldSystem *fieldSystem)
         MapObject_SetDataAt(obj, sv->isShiny ? 0x80 : 0, 2);
         sWildSlots[slotIdx] = (OverworldWildSlot){
             TRUE, localId, sv->species, sv->level, sv->form, sv->gender,
-            sv->isShiny, sv->isWaterSpawn, obj
+            sv->isShiny, sv->isWaterSpawn, 0, obj
         };
         slotIdx++;
     }
@@ -429,40 +431,19 @@ static void TriggerSlotEncounter(FieldSystem *fieldSystem, int slotIdx)
     Encounter_NewVsWild(fieldSystem, dto);
 }
 
-static inline fx32 FxAbsDiff(fx32 a, fx32 b) { return (a > b) ? (a - b) : (b - a); }
-
-BOOL OverworldWild_TryTriggerTouchEncounter(FieldSystem *fieldSystem, u16 heldKeys, u8 playerDir)
-{
-    (void)heldKeys;
-    (void)playerDir;
-    if (!SIM_Config_prj_GetConfig()->overworldWildPokemon || fieldSystem == NULL || fieldSystem->playerAvatar == NULL) {
-        return FALSE;
-    }
-    int playerX = PlayerAvatar_GetXPos(fieldSystem->playerAvatar);
-    int playerZ = PlayerAvatar_GetZPos(fieldSystem->playerAvatar);
-    const VecFx32 *playerPos = PlayerAvatar_GetPos(fieldSystem->playerAvatar);
-
+BOOL OverworldWild_TryTriggerTouchEncounter(FieldSystem *fieldSystem, u16 heldKeys, u8 playerDir) {
+    if (!SIM_Config_prj_GetConfig()->overworldWildPokemon || !fieldSystem || !fieldSystem->playerAvatar) return FALSE;
+    int px = PlayerAvatar_GetXPos(fieldSystem->playerAvatar), pz = PlayerAvatar_GetZPos(fieldSystem->playerAvatar);
+    int dir = (heldKeys & PAD_KEY_UP) ? DIR_NORTH : (heldKeys & PAD_KEY_DOWN) ? DIR_SOUTH :
+              (heldKeys & PAD_KEY_LEFT) ? DIR_WEST : (heldKeys & PAD_KEY_RIGHT) ? DIR_EAST :
+              (PlayerAvatar_GetMoveState(fieldSystem->playerAvatar) == AVATAR_MOVE_STATE_MOVING ? playerDir : DIR_NONE);
+    int fx = px + (dir == DIR_EAST) - (dir == DIR_WEST), fz = pz + (dir == DIR_SOUTH) - (dir == DIR_NORTH);
     for (int i = 0; i < OVERWORLD_WILD_MAX_ACTIVE; i++) {
-        MapObject *liveObj = ResolveLiveSlotObject(fieldSystem->mapObjMan, i);
-        if (liveObj == NULL) {
-            sWildSlots[i].mapObj = NULL;
-            sWildSlots[i].active = FALSE;
-            continue;
-        }
-        int objX = MapObject_GetX(liveObj);
-        int objZ = MapObject_GetZ(liveObj);
-        if (objX == playerX && objZ == playerZ) {
-            TriggerSlotEncounter(fieldSystem, i);
-            return TRUE;
-        }
-        if (playerPos != NULL) {
-            const VecFx32 *objPos = MapObject_GetPos(liveObj);
-            if (objPos != NULL &&
-                FxAbsDiff(playerPos->x, objPos->x) <= OVERWORLD_WILD_TOUCH_RADIUS_FX &&
-                FxAbsDiff(playerPos->z, objPos->z) <= OVERWORLD_WILD_TOUCH_RADIUS_FX) {
-                TriggerSlotEncounter(fieldSystem, i);
-                return TRUE;
-            }
+        MapObject *o = ResolveLiveSlotObject(fieldSystem->mapObjMan, i);
+        if (!o) { sWildSlots[i].mapObj = NULL; sWildSlots[i].active = FALSE; continue; }
+        int ox = MapObject_GetX(o), oz = MapObject_GetZ(o);
+        if ((ox == px && oz == pz) || (dir != DIR_NONE && ox == fx && oz == fz)) {
+            TriggerSlotEncounter(fieldSystem, i); return TRUE;
         }
     }
     return FALSE;
@@ -548,9 +529,10 @@ void OverworldWild_Update(FieldSystem *fieldSystem)
 
         int dist = AbsDiff(MapObject_GetX(obj), playerX) + AbsDiff(MapObject_GetZ(obj), playerZ);
         if (dist > OVERWORLD_WILD_DESPAWN_DIST) {
-            DespawnSlot(fieldSystem->mapObjMan, i);
+            if (++sWildSlots[i].offscreenFrames >= OVERWORLD_WILD_OFFSCREEN_GRACE_FRAMES) DespawnSlot(fieldSystem->mapObjMan, i);
             continue;
         }
+        sWildSlots[i].offscreenFrames = 0;
 
         BOOL isWaterTile = FALSE;
         if (!IsValidWildEncounterTile(fieldSystem, MapObject_GetX(obj), MapObject_GetZ(obj), &isWaterTile) ||

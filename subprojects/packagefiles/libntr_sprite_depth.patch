@@ -1,18 +1,279 @@
+diff --git a/include/simulator/sim.h b/include/simulator/sim.h
+index fa8a06e..afc4410 100644
 --- a/include/simulator/sim.h
 +++ b/include/simulator/sim.h
-@@ -152,6 +152,9 @@
- void SIM_SetWidescreenBgStripe(u8 bgLayers, float column);
- // Wide BG layers (SIM_SetWidescreenSceneOptions) whose sides mirror the 256-pixel picture instead of repeating it
- void SIM_SetWidescreenBgMirror(u8 bgLayers);
+@@ -137,7 +137,52 @@ void SIM_SetWidescreenScene(BOOL wide);
+ // drawn across the whole width from their tilemaps (a backdrop that scrolls), not only
+ // in the 4:3 middle. Default: neither (the game widens its camera; 2D stays 4:3).
+ void SIM_SetWidescreenSceneOptions(BOOL scale3D, u8 wideBgLayers);
++// Also asked for every frame: main-engine OBJ layers (bit n: priority n) repeated across the
++// sides of a wide scene, the 4:3 picture wrapping around (left of the middle shows its right
++// edge, and so on), for 2D effects with no edges of their own (rain, snow, sand). Default:
++// none (OBJs stay in the 4:3 middle).
++void SIM_SetWidescreenObjWrap(u8 objPriorities);
++// Also asked for every frame: main-engine text-mode BG layers (bit n: BGn) drawn in the 4:3 middle as
++// usual, with their leftmost and rightmost pixel columns continued across the sides of a wide scene,
++// for a bar or a box that reaches the screen's edges (its text stays in the middle). Default: none.
++void SIM_SetWidescreenBgEdgeExtend(u8 bgLayers);
++// Also asked for every frame: main- or sub-engine text-mode BG layers (bit n: BGn) whose sides, in a wide scene, repeat the
++// picture's pixel column `column` (0 to 1 across the 256 pixels) for each row, on both sides, instead of the edge columns:
++// for a background of horizontal stripes whose own edges are a frame. Wins over the edge extension and the mirror.
++void SIM_SetWidescreenBgStripe(u8 bgLayers, float column);
++// Wide BG layers (SIM_SetWidescreenSceneOptions) whose sides mirror the 256-pixel picture instead of repeating it
++void SIM_SetWidescreenBgMirror(u8 bgLayers);
 +// Polygons drawn while it is non-zero are moved toward the camera for the depth test only: nothing at their lowest point
 +// on screen, `top` (fx32, view units) at their highest. For the overworld's sprites. Default: 0
 +void SIM_SetSpriteDepthBias(fx32 top);
- // Layers (SIM_SetWidescreenBgEdgeExtend) whose sides mirror the 256-pixel picture instead of continuing its edge columns
- void SIM_SetWidescreenBgEdgeMirror(u8 bgLayers);
++// 0 = none, 1 = clip bottom 35% (submerged sprite), 2 = clip top 35% (upside-down reflection)
++void SIM_SetSpriteSubmergeClip(int mode);
++// Layers (SIM_SetWidescreenBgEdgeExtend) whose sides mirror the 256-pixel picture instead of continuing its edge columns
++void SIM_SetWidescreenBgEdgeMirror(u8 bgLayers);
++
++// Small images stamped onto a wide BG layer's picture each frame (Platinum's HP boxes get caps at their outer ends,
++// in the sides of the wide screen). The image is RGB, pure white is transparent. A stamp is placed with its top left
++// at (x, y) in the 256-pixel screen's coordinates (x may be negative or past 255), drawn height rows tall (the
++// row above the image's last five is repeated to stretch it), mirrored left to right when flipX
++typedef struct SIM_WideStamp {
++  short x;
++  short y;
++  short height;
++  unsigned char flipX;
++  unsigned char extraTop; // of a stretch, the rows added under the image's top (the rest go under its HP band)
++} SIM_WideStamp;
++void SIM_SetWidescreenStampImage(const unsigned char *rgb, int width, int height);
++void SIM_SetWidescreenStamps(unsigned char bgLayer, const SIM_WideStamp *stamps, int count);
++// Also asked for every frame: main-engine OBJ priorities (bit n: priority n) whose dark pixels at the 4:3 picture's
++// leftmost and rightmost columns continue across the sides of a wide scene, for a black bar that reaches the
++// screen's edge (the Gen 5 battle's party balls' bar and ability bar). Default: none.
++void SIM_SetWidescreenObjEdgeExtend(u8 objPriorities);
+ BOOL SIM_IsWidescreenActive(void);
++
++// The DS's polygon ID rule for translucent polygons: one is not blended over a pixel that another translucent
++// polygon with the same polygon ID drew (so overlapping parts of one object, such as a sprite's shadow, are not
++// darkened twice). Off by default (the game sets it as it needs, any time).
++void SIM_SetTranslucentPolygonIdRule(BOOL enabled);
+ float SIM_WidescreenRatio(void);
  
+ // The DS clock (RTC) the game reads: the device's local time plus this many seconds
+diff --git a/libraries/sim/src/g3_handler.cpp b/libraries/sim/src/g3_handler.cpp
+index 59cc18a..0d389a8 100644
 --- a/libraries/sim/src/g3_handler.cpp
 +++ b/libraries/sim/src/g3_handler.cpp
-@@ -1602,6 +1602,18 @@
+@@ -78,128 +78,113 @@ extern u8 s_SIM_useWBuffer;
+ 
+ static void CommonDebugCommandHandling(draw_command_type_t aCommand);
+ 
+-static float GetVtxPosition(G3SIM_Vertex_t * vtx, int comp)
++// Polygon clipping, as the DS's geometry engine does it (and melonDS after it): in clip space, before the divide
++// by W, against the six planes -w <= x, y, z <= w. A vertex outside a plane is replaced by the points where the
++// polygon's edges cross it, with the texture coordinates and colours interpolated there, so a polygon that reaches
++// past the screen's edges or behind the camera is cut to its visible part instead of being dropped or projected
++// through W = 0.
++typedef struct {
++    s32 pos[4];
++    GLfloat s, t, r, g, b, a;
++} G3SIM_ClipVtx_t;
++
++// A polygon of up to 4 vertices gains at most one per plane
++#define G3SIM_CLIP_MAX_VERTS 10
++
++// Where the edge from vin (inside the plane) to vout (outside it) crosses it. Always computed from the inside
++// vertex, so that the two polygons sharing an edge get the same point and no crack opens between them
++static void ClipSegment(G3SIM_ClipVtx_t * outbuf, const G3SIM_ClipVtx_t * vin, const G3SIM_ClipVtx_t * vout,
++                        int comp, s32 plane, BOOL attribs)
+ {
+-    switch(comp){
+-        case 0:
+-            return vtx->x;
+-        case 1:
+-            return vtx->y;
+-        case 2:
+-            return vtx->z;
+-        case 3:
+-            return vtx->w;
+-        default:
+-            return 0.0f;
+-    }
+-}
+-
+-
+-void ClipSegment(fx32* outbuf, fx32 * vin, fx32 * vout, int comp, s32 plane, BOOL attribs)
+-{
+-    s64 factor_num = (s32)vin[3] - (plane * (s32)vin[comp]);
+-    s32 factor_den = factor_num - ((s32)vout[3] - (plane*(s32)vout[comp]));
+-
+-#define INTERPOLATE(var)  { outbuf[var] = (vin[var] + ((vout[var] - vin[var]) * factor_num) / factor_den); }
+-
+-    if (comp != 0) INTERPOLATE(0);
+-    if (comp != 1) INTERPOLATE(1);
+-    if (comp != 2) INTERPOLATE(2);
+-    INTERPOLATE(3);
+-    outbuf[comp] = plane*outbuf[3];
+-
+-    //if (attribs)
+-    //{
+-    //    INTERPOLATE(Color[0]);
+-    //    INTERPOLATE(Color[1]);
+-    //    INTERPOLATE(Color[2]);
+-//
+-    //    INTERPOLATE(TexCoords[0]);
+-    //    INTERPOLATE(TexCoords[1]);
+-    //}
+-
+-    //outbuf->Clipped = true;
++    s64 distIn = (s64)vin->pos[3] - plane * (s64)vin->pos[comp];    // >= 0
++    s64 distOut = (s64)vout->pos[3] - plane * (s64)vout->pos[comp]; // < 0
++    s64 den = distIn - distOut;                                     // > 0
+ 
++    for (int i = 0; i < 4; i++) {
++        outbuf->pos[i] = (s32)(vin->pos[i] + (((s64)vout->pos[i] - vin->pos[i]) * distIn) / den);
++    }
++    outbuf->pos[comp] = plane * outbuf->pos[3];
++
++    if (attribs) {
++        GLfloat f = (GLfloat)((double)distIn / (double)den);
++#define INTERPOLATE(var) outbuf->var = vin->var + (vout->var - vin->var) * f
++        INTERPOLATE(s);
++        INTERPOLATE(t);
++        INTERPOLATE(r);
++        INTERPOLATE(g);
++        INTERPOLATE(b);
++        INTERPOLATE(a);
+ #undef INTERPOLATE
++    }
+ }
+ 
+-
+-
+-static int ClipAgainstPlane(fx32 verts[][4], int nVerts, int clipStart, int comp, BOOL attribs)
++// Sutherland-Hodgman against one plane: comp <= w (plane 1) or comp >= -w (plane -1)
++static int ClipAgainstPlane(G3SIM_ClipVtx_t * out, const G3SIM_ClipVtx_t * in, int nVerts, int comp, s32 plane,
++                            BOOL attribs)
+ {
+-    fx32 temp[10][4];
+-    int prev, next;
+-    int c = clipStart;
+-
+-    if (clipStart == 2)
+-    {
+-        temp[0][0] = verts[0][0]; temp[0][1] = verts[0][1]; temp[0][2] = verts[0][2]; temp[0][3] = verts[0][3];
+-        temp[1][0] = verts[1][0]; temp[1][1] = verts[1][1]; temp[1][2] = verts[1][2]; temp[1][3] = verts[1][3];
+-    }
++    int c = 0;
+ 
+-    for(int i = clipStart; i < nVerts; i++) {
+-        prev = i-1; if (prev < 0) prev = nVerts-1;
+-        next = i+1; if (next >= nVerts) next = 0;
++    for (int i = 0; i < nVerts; i++) {
++        const G3SIM_ClipVtx_t * cur = &in[i];
++        const G3SIM_ClipVtx_t * next = &in[(i + 1) % nVerts];
++        BOOL curIn = (s64)plane * cur->pos[comp] <= (s64)cur->pos[3];
++        BOOL nextIn = (s64)plane * next->pos[comp] <= (s64)next->pos[3];
+ 
+-        fx32 vtx[4];
+-        vtx[0] = verts[i][0]; vtx[1] = verts[i][1]; vtx[2] = verts[i][2]; vtx[3] = verts[i][3];
+-        if(vtx[comp] > vtx[3]) {
+-            //if ((comp == 2) && (!(gpu.CurPolygonAttr & (1<<12)))) return 0;  //I think this is the W buffering thing
+-
+-            fx32 * vprev = verts[prev];
+-            if(vprev[comp] <= vprev[3]) {
+-                //ClipSegment((fx32*)&temp[c], &vtx[0], vprev, comp, 1, attribs);
+-                c++;
+-            }
+-
+-            fx32 * vnext = verts[next];
+-            if(vnext[comp] <= vnext[3]) {
+-                //ClipSegment((fx32*)&temp[c], &vtx[0], vnext, comp, 1, attribs);
+-                c++;
++        if (curIn) {
++            out[c++] = *cur;
++        }
++        if (curIn != nextIn) {
++            if (curIn) {
++                ClipSegment(&out[c], cur, next, comp, plane, attribs);
++            } else {
++                ClipSegment(&out[c], next, cur, comp, plane, attribs);
++                if (!attribs) {
++                    out[c].s = out[c].t = out[c].r = out[c].g = out[c].b = out[c].a = 0.0f;
++                }
+             }
+-        } else {
+-            memcpy(&temp[c++], vtx, sizeof(fx32)*4);
++            c++;
+         }
+     }
+ 
+-    nVerts = c;
+-    c = clipStart;
+-    for(int i=clipStart; i < nVerts; i++) {
+-        prev = i-1; if (prev < 0) prev = nVerts-1;
+-        next = i+1; if (next >= nVerts) next = 0;
++    return c;
++}
+ 
+-        fx32 vtx[4];
+-        vtx[0] = temp[i][0]; vtx[1] = temp[i][1]; vtx[2] = temp[i][2]; vtx[3] = temp[i][3];
+-        if(vtx[comp] < -vtx[3]) {
+-            fx32 * vprev = temp[prev];
+-            if(vprev[comp] >= -vprev[3]) {
+-                //ClipSegment((fx32*)&verts[c], &vtx[0], vprev, comp, -1, attribs);
+-                c++;
+-            }
++// Clips verts (room for G3SIM_CLIP_MAX_VERTS) in place; returns how many are left (0: nothing is visible)
++static int ClipVertices(G3SIM_ClipVtx_t * verts, int nVerts, BOOL attribs)
++{
++    G3SIM_ClipVtx_t temp[G3SIM_CLIP_MAX_VERTS];
+ 
+-            fx32 * vnext = temp[next];
+-            if(vnext[comp] >= -vnext[3]) {
+-                //ClipSegment((fx32*)&verts[c], &vtx[0], vnext, comp, -1, attribs);
+-                c++;
+-            }
+-        } else {
+-            memcpy(&verts[c++], vtx, sizeof(fx32)*4);
++    // Z (near and far), then Y, then X
++    static const int comps[3] = { 2, 1, 0 };
++    for (int i = 0; i < 3 && nVerts > 0; i++) {
++        nVerts = ClipAgainstPlane(temp, verts, nVerts, comps[i], 1, attribs);
++        if (nVerts == 0) {
++            break;
+         }
++        nVerts = ClipAgainstPlane(verts, temp, nVerts, comps[i], -1, attribs);
+     }
+ 
+-    return c;
++    return nVerts;
+ }
+ 
++// Positions only (the box test): verts has room for G3SIM_CLIP_MAX_VERTS
+ int G3SIM_ClipPolygon(fx32 verts[][4], int nVerts, int clipStart, BOOL attribs)
+ {
+-    // Z clipping
+-    nVerts = ClipAgainstPlane(verts, nVerts, clipStart, 2, attribs);
++    G3SIM_ClipVtx_t clip[G3SIM_CLIP_MAX_VERTS] = {};
++    (void)clipStart;
++    (void)attribs;
+ 
+-    // Y clipping
+-    nVerts = ClipAgainstPlane(verts, nVerts, clipStart, 1, attribs);
+-
+-    // X clipping
+-    nVerts = ClipAgainstPlane(verts, nVerts, clipStart, 0, attribs);
++    for (int i = 0; i < nVerts; i++) {
++        for (int j = 0; j < 4; j++) {
++            clip[i].pos[j] = verts[i][j];
++        }
++    }
++    nVerts = ClipVertices(clip, nVerts, FALSE);
++    for (int i = 0; i < nVerts; i++) {
++        for (int j = 0; j < 4; j++) {
++            verts[i][j] = clip[i].pos[j];
++        }
++    }
+     return nVerts;
+ }
+ 
+@@ -1617,10 +1602,28 @@ void G3SIM_Vtx(s16 x, s16 y, s16 z)
      return;
  }
  
@@ -28,16 +289,140 @@
 +    s_spriteDepthBiasTop = top;
 +}
 +
++static int s_spriteSubmergeClipMode = 0;
++
++extern "C" void SIM_SetSpriteSubmergeClip(int mode)
++{
++    s_spriteSubmergeClipMode = mode;
++}
++
  void G3SIM_SubmitPolygon(G3SIM_FxVtx_t * fxVerts, int numVerts) {
-     G3SIM_ClipVtx_t clip[G3SIM_CLIP_MAX_VERTS];
-     G3SIM_Vertex_t polyVerts[G3SIM_CLIP_MAX_VERTS];
-@@ -1639,7 +1651,20 @@
-         }
-         while ((w >> wsize) && (wsize < 32)) {
-             wsize += 4;
+-    G3SIM_Vertex_t glVerts[6];
+-    u8 addPolygon = TRUE;
+-    int numFinalVerts = numVerts;
++    G3SIM_ClipVtx_t clip[G3SIM_CLIP_MAX_VERTS];
++    G3SIM_Vertex_t polyVerts[G3SIM_CLIP_MAX_VERTS];
+ 
+     if(numVerts < 3 || numVerts > 4) {
+         SIM_assert_always();
+@@ -1629,117 +1632,158 @@ void G3SIM_SubmitPolygon(G3SIM_FxVtx_t * fxVerts, int numVerts) {
+ 
+     for(int i=0; i < numVerts; i++) {
+         G3SIM_FxVtx_t * curVtx = &fxVerts[i];
+-    
+-        // Truncate W to 24 bits
+-        curVtx->w &= 0x00FFFFFF;
+-    
+-        float floatX, floatY, floatW;
+-        float screenX, screenY;
+-    
+-        floatX = FX_FX32_TO_F32(curVtx->x);
+-        floatY = FX_FX32_TO_F32(curVtx->y);
+-        floatW = FX_FX32_TO_F32(curVtx->w);
+-    
+-        screenX = (((floatX+floatW)*256.0f) / (2*floatW));
+-        screenY = (((floatY+floatW)*192.0f) / (2*floatW));
+-        					
+-        screenX = (screenX / 128.0f) - 1.0f;
+-        screenY = (screenY / 96.0f) - 1.0f;
+-    
+-        glVerts[i].x = screenX;
+-        glVerts[i].y = screenY;
+-        glVerts[i].s = curVtx->s;
+-        glVerts[i].t = curVtx->t;
+-        glVerts[i].r = curVtx->r;
+-        glVerts[i].g = curVtx->g;
+-        glVerts[i].b = curVtx->b;
+-        glVerts[i].a = curVtx->a;
++        for(int j=0; j < 4; j++) {
++            clip[i].pos[j] = curVtx->nums[j];
++        }
++        clip[i].s = curVtx->s;
++        clip[i].t = curVtx->t;
++        clip[i].r = curVtx->r;
++        clip[i].g = curVtx->g;
++        clip[i].b = curVtx->b;
++        clip[i].a = curVtx->a;
++    }
++
++    if (s_spriteSubmergeClipMode != 0 && numVerts >= 3) {
++        double lo = 1e9, hi = -1e9;
++        bool validW = true;
++        for (int i = 0; i < numVerts; i++) {
++            if (clip[i].pos[3] <= 0) { validW = false; break; }
++            double ny = (double)clip[i].pos[1] / (double)clip[i].pos[3];
++            if (ny < lo) lo = ny;
++            if (ny > hi) hi = ny;
++        }
++        if (validW && hi > lo) {
++            double cutY = (s_spriteSubmergeClipMode == 1)
++                ? (lo + (hi - lo) * 0.35)
++                : (hi - (hi - lo) * 0.35);
++            G3SIM_ClipVtx_t out[G3SIM_CLIP_MAX_VERTS];
++            int outCount = 0;
++            for (int i = 0; i < numVerts; i++) {
++                int j = (i + 1) % numVerts;
++                double yi = (double)clip[i].pos[1] / (double)clip[i].pos[3];
++                double yj = (double)clip[j].pos[1] / (double)clip[j].pos[3];
++                bool inI = (s_spriteSubmergeClipMode == 1) ? (yi >= cutY) : (yi <= cutY);
++                bool inJ = (s_spriteSubmergeClipMode == 1) ? (yj >= cutY) : (yj <= cutY);
++                if (inI) {
++                    out[outCount++] = clip[i];
++                }
++                if (inI != inJ) {
++                    // Solve (p1 + t*(q1 - p1)) / (p3 + t*(q3 - p3)) = cutY
++                    double p1 = (double)clip[i].pos[1], p3 = (double)clip[i].pos[3];
++                    double q1 = (double)clip[j].pos[1], q3 = (double)clip[j].pos[3];
++                    double denom = (q1 - p1) - cutY * (q3 - p3);
++                    double t = (denom != 0.0) ? ((cutY * p3 - p1) / denom) : 0.0;
++                    if (t < 0.0) t = 0.0;
++                    if (t > 1.0) t = 1.0;
++                    G3SIM_ClipVtx_t v;
++                    for (int k = 0; k < 4; k++) {
++                        v.pos[k] = (s32)(clip[i].pos[k] + t * (clip[j].pos[k] - clip[i].pos[k]));
++                    }
++                    v.s = (s16)(clip[i].s + t * (clip[j].s - clip[i].s));
++                    v.t = (s16)(clip[i].t + t * (clip[j].t - clip[i].t));
++                    v.r = (u8)(clip[i].r + t * (clip[j].r - clip[i].r));
++                    v.g = (u8)(clip[i].g + t * (clip[j].g - clip[i].g));
++                    v.b = (u8)(clip[i].b + t * (clip[j].b - clip[i].b));
++                    v.a = (u8)(clip[i].a + t * (clip[j].a - clip[i].a));
++                    out[outCount++] = v;
++                }
++            }
++            if (outCount >= 3) {
++                numVerts = outCount;
++                for (int i = 0; i < numVerts; i++) clip[i] = out[i];
++            }
 +        }
 +    }
 +
++    // Clipped in clip space: what is left has -w <= x, y, z <= w, so W >= 0 and the divide below stays on screen
++    numVerts = ClipVertices(clip, numVerts, TRUE);
++    if(numVerts < 3) {
++        return;
+     }
+ 
+     // Get the W size and remove the polygon if W is 0
+     u32 wsize = 0;
+-    for(int i=0; i < 4; i++) {
+-        G3SIM_FxVtx_t * curVtx = &fxVerts[i];
+-        u32 w = curVtx->w;
++    for(int i=0; i < numVerts; i++) {
++        u32 w = (u32)clip[i].pos[3];
+         if(w == 0){
+-            addPolygon = FALSE;
++            return;
+         }
+         while ((w >> wsize) && (wsize < 32)) {
+             wsize += 4;
+         }
+     }
+ 
+-    // Normalize W
+-    for(int i=0; i < 4; i++) {
+-        G3SIM_FxVtx_t * curVtx = &fxVerts[i];
+-        
 +    // The sprite depth bias's span: the polygon's lowest and highest points on screen (NDC y)
 +    double biasBottom = 0.0, biasSpan = 0.0;
 +    if(s_spriteDepthBiasTop != 0 && !s_SIM_useWBuffer) {
@@ -46,16 +431,47 @@
 +            double y = (double)clip[i].pos[1] / (double)clip[i].pos[3];
 +            lo = y < lo ? y : lo;
 +            hi = y > hi ? y : hi;
-         }
++        }
 +        biasBottom = lo;
 +        biasSpan = hi - lo;
-     }
- 
-     for(int i=0; i < numVerts; i++) {
-@@ -1668,6 +1693,19 @@
- 
-         s32 z = ((((s64)curVtx->pos[2] * 0x4000) / vw) + 0x3FFF) * 0x200;
- 
++    }
++
++    for(int i=0; i < numVerts; i++) {
++        G3SIM_ClipVtx_t * curVtx = &clip[i];
++        s32 vw = curVtx->pos[3];
++
++        polyVerts[i].x = (GLfloat)((double)curVtx->pos[0] / (double)vw);
++        polyVerts[i].y = (GLfloat)((double)curVtx->pos[1] / (double)vw);
++        polyVerts[i].s = curVtx->s;
++        polyVerts[i].t = curVtx->t;
++        polyVerts[i].r = curVtx->r;
++        polyVerts[i].g = curVtx->g;
++        polyVerts[i].b = curVtx->b;
++        polyVerts[i].a = curVtx->a;
++
++        // Normalize W
+         s32 w, wshifted;
+-        
++
+         if(wsize < 16) {
+-        	w = curVtx->w << (16-wsize);
++        	w = vw << (16-wsize);
+         	wshifted = w >> (16-wsize);
+         } else {
+-        	w = curVtx->w >> (wsize - 16);
++        	w = vw >> (wsize - 16);
+         	wshifted = w << (wsize - 16);
+         }
+-        
+-        s32 z;
+-        
+-        if(curVtx->w) {
+-        	z = ((((s64)curVtx->z * 0x4000) / curVtx->w) + 0x3FFF) * 0x200;
+-        } else {
+-        	z = 0x7FFE00;
++
++        s32 z = ((((s64)curVtx->pos[2] * 0x4000) / vw) + 0x3FFF) * 0x200;
++
 +        // The sprite depth bias: the depth of the same point moved d toward the camera. With the projection's z column,
 +        // z_clip = m22 * z_view + m32 and w = -z_view, so moving it d closer gives z_clip + m22 * d over w - d
 +        if(biasSpan > 0.0) {
@@ -67,8 +483,68 @@
 +                s64 zClip = (s64)curVtx->pos[2] + ((m22 * d) >> FX32_SHIFT);
 +                z = (s32)((((zClip * 0x4000) / vwBiased) + 0x3FFF) * 0x200);
 +            }
-+        }
+         }
+-        
 +
          if(s_SIM_useWBuffer) {
          	z = wshifted;
          }
+-        
++
+         if(z < 0) {
+         	z = 0;
+         } else if(z > 0xFFFFFF) {
+         	z = 0xFFFFFF;
+         }
+-        
+-        glVerts[i].z = (((float)z / 16777215.0f) * 2.0f) - 1.0f;
+-        glVerts[i].w = (((float)w / 16777215.0f) * 2.0f) - 1.0f;
+-    }
+-
+-    // If we have a quad, convert it into 2 triangles
+-    if(numVerts == 4) {
+-        //make a copy of the quad
+-        G3SIM_Vertex_t quad[4];
+-        memcpy(quad, glVerts, sizeof(G3SIM_Vertex_t) * 4);
+-
+-        //Convert to 2 triangles
+-        #define CopyVertex(srcIdx, destIdx) memcpy(&glVerts[destIdx], &quad[srcIdx], sizeof(G3SIM_Vertex_t))
+-        CopyVertex(0, 0);
+-        CopyVertex(1, 1);
+-        CopyVertex(2, 2);
+-        CopyVertex(2, 3);
+-        CopyVertex(3, 4);
+-        CopyVertex(0, 5);
+-        #undef CopyVertex
+-
+-        numFinalVerts = 6;
+-    }
+-
+-    // Check if any of the verts are horribly out of bounds
+-    // TODO: This is a HACK and we should eventually remove it
+-    for(int i=0; i < numFinalVerts; i++) {
+-        if(glVerts[i].x > 50.0f || glVerts[i].x < -50.0f) {
+-            addPolygon = FALSE;
+-        }
+-        if(glVerts[i].y > 50.0f || glVerts[i].y < -50.0f) {
+-            addPolygon = FALSE;
+-        }
+-    }
+ 
+-    if(addPolygon) {
+-        for(int i=0; i < numFinalVerts; i++) {
+-            G3SIM_AddVtx(&glVerts[i]);
+-        }
++        polyVerts[i].z = (((float)z / 16777215.0f) * 2.0f) - 1.0f;
++        // The clip-space W, for the vertex shader (W is not used otherwise)
++        polyVerts[i].w = (GLfloat)((double)vw / 4096.0);
+     }
+ 
+-
++    // The clipped polygon is convex: a fan of triangles
++    for(int i=1; i + 1 < numVerts; i++) {
++        G3SIM_AddVtx(&polyVerts[0]);
++        G3SIM_AddVtx(&polyVerts[i]);
++        G3SIM_AddVtx(&polyVerts[i + 1]);
++    }
+ }

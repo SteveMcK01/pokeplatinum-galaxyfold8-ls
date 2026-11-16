@@ -19,6 +19,7 @@
 
 #ifdef SDK_PORT
 #include "port/frame_rate.h"
+#include "port/overworld_wild.h"
 #endif
 
 typedef struct {
@@ -238,6 +239,9 @@ static void ov5_021F1978(OverworldAnimManager *param0, void *param1)
         Billboard_SetPos(v0->unk_24, &v3);
     }
 
+#ifdef SDK_PORT
+    v0->unk_24->submerged = OverworldWild_IsWaterSpawn(v1) ? 2 : 0;
+#endif
     Billboard_SetScale(v0->unk_24, &v0->unk_28);
 
     {
@@ -281,6 +285,11 @@ static void ov5_021F1A24(UnkStruct_ov5_021F1A24 *param0, MapObject *param1, VecF
     } else {
         param2->y -= v3[param0->unk_10];
     }
+#ifdef SDK_PORT
+    if (OverworldWild_IsWaterSpawn(param1)) {
+        param2->y += 11 * FX32_ONE;
+    }
+#endif
 }
 
 static void ov5_021F1A8C(OverworldAnimManager *param0, UnkStruct_ov5_021F1A24 *param1)

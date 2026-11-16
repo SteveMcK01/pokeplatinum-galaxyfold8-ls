@@ -287,14 +287,14 @@ static void BillboardList_Draw(BillboardList *list)
 #ifdef SDK_PORT
             if (billboard->submerged) {
                 NNS_G3dGeFlushBuffer();
-                SIM_SetSpriteDepthBias(0);
+                SIM_SetSpriteSubmergeClip(billboard->submerged);
             }
 #endif
             Easy3D_DrawRenderObj(&billboard->renderObj, &billboard->pos, rotMatrix, &billboard->scale);
 #ifdef SDK_PORT
             if (billboard->submerged) {
                 NNS_G3dGeFlushBuffer();
-                SIM_SetSpriteDepthBias(BILLBOARD_DEPTH_NUDGE);
+                SIM_SetSpriteSubmergeClip(0);
             }
 #endif
             ReleaseVRAMKeysAndModelSet(billboard);

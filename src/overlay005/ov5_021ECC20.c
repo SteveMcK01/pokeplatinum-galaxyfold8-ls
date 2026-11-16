@@ -157,7 +157,7 @@ void ov5_021ECDA0(const MapObject *param0, VecFx32 *adjustedObjectPos)
     adjustedObjectPos->z = objectPosition.z + jumpOffset.z + posOffset.z + terrainSpriteOffset.z;
 #ifdef SDK_PORT
     if (OverworldWild_IsWaterSpawn(param0)) {
-        adjustedObjectPos->y -= 9 * FX32_ONE;
+        adjustedObjectPos->y -= 11 * FX32_ONE;
     }
 #endif
 }

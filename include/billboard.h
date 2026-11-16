@@ -32,6 +32,7 @@ typedef struct Billboard {
     void *callbackParam;
     BillboardCallback callback;
     u8 draw;
+    u8 submerged;
     BillboardList *list;
     const BillboardAnim *anims;
     NNSG3dRenderObj renderObj;

@@ -1439,6 +1439,9 @@ BOOL ov5_021EDEB4(MapObject *param0, Billboard *param1)
     v1.y += 0;
     v1.z += (FX32_ONE * 6);
 
+#ifdef SDK_PORT
+    param1->submerged = OverworldWild_IsWaterSpawn(param0) ? 1 : 0;
+#endif
     Billboard_SetPos(param1, &v1);
 
     return 0;

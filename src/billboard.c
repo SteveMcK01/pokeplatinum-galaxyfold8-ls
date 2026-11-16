@@ -109,6 +109,7 @@ void Billboard_Reset(Billboard *billboard)
     billboard->next = NULL;
     billboard->prev = NULL;
     billboard->draw = FALSE;
+    billboard->submerged = FALSE;
     billboard->callback = NULL;
 }
 
@@ -283,7 +284,19 @@ static void BillboardList_Draw(BillboardList *list)
                 rotMatrix = &identityMatrix;
             }
 
+#ifdef SDK_PORT
+            if (billboard->submerged) {
+                NNS_G3dGeFlushBuffer();
+                SIM_SetSpriteDepthBias(0);
+            }
+#endif
             Easy3D_DrawRenderObj(&billboard->renderObj, &billboard->pos, rotMatrix, &billboard->scale);
+#ifdef SDK_PORT
+            if (billboard->submerged) {
+                NNS_G3dGeFlushBuffer();
+                SIM_SetSpriteDepthBias(BILLBOARD_DEPTH_NUDGE);
+            }
+#endif
             ReleaseVRAMKeysAndModelSet(billboard);
         }
 

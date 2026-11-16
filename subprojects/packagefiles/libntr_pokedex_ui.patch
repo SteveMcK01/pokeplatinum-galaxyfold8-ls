@@ -1,0 +1,225 @@
+diff --git a/libraries/sim/src/sim_settings.cpp b/libraries/sim/src/sim_settings.cpp
+index 364ba20..ea56f56 100644
+--- a/libraries/sim/src/sim_settings.cpp
++++ b/libraries/sim/src/sim_settings.cpp
+@@ -588,7 +588,8 @@ void Draw() {
+   if (wide) {
+     const float sideWidth = std::min(S(280.0f), width * 0.34f);
+     ImDrawList *draw = ImGui::GetWindowDrawList();
+-    draw->AddRectFilled(ImVec2(0, 0), ImVec2(sideWidth, height), IM_COL32(18, 22, 30, 255));
++    draw->AddRectFilled(ImVec2(0, 0), ImVec2(sideWidth, height), IM_COL32(10, 17, 27, 255));
++    draw->AddLine(ImVec2(sideWidth - S(1.0f), 0), ImVec2(sideWidth - S(1.0f), height), IM_COL32(198, 30, 48, 220), S(2.0f));
+     close = BeginPane("##pages", ImVec2(0, 0), ImVec2(sideWidth, height), "Settings", "Close");
+     bool sidebarFocused = false;
+     for (size_t i = 0; i < sPages.size(); i++) {
+diff --git a/libraries/sim/src/sim_ui.cpp b/libraries/sim/src/sim_ui.cpp
+index 0c8d03a..1f384ad 100644
+--- a/libraries/sim/src/sim_ui.cpp
++++ b/libraries/sim/src/sim_ui.cpp
+@@ -25,20 +25,28 @@ namespace SIM::UI {
+ 
+ namespace {
+ 
+-constexpr ImU32 kBackground = IM_COL32(22, 27, 36, 255);
+-constexpr ImU32 kTitleBar = IM_COL32(30, 36, 48, 255);
+-constexpr ImU32 kPanel = IM_COL32(37, 45, 59, 255);
+-constexpr ImU32 kPanelHover = IM_COL32(44, 54, 71, 255);
+-constexpr ImU32 kPanelPressed = IM_COL32(58, 71, 93, 255);
+-constexpr ImU32 kAccent = IM_COL32(96, 172, 232, 255);
+-constexpr ImU32 kAccentPressed = IM_COL32(72, 144, 204, 255);
+-constexpr ImU32 kOnAccent = IM_COL32(12, 20, 30, 255);
+-constexpr ImU32 kText = IM_COL32(236, 240, 247, 255);
+-constexpr ImU32 kTextDim = IM_COL32(146, 158, 176, 255);
+-constexpr ImU32 kTextOff = IM_COL32(92, 102, 120, 255);
+-constexpr ImU32 kError = IM_COL32(242, 116, 104, 255);
+-constexpr ImU32 kGood = IM_COL32(112, 208, 142, 255);
+-constexpr ImU32 kSwitchOff = IM_COL32(72, 82, 100, 255);
++// Sinnoh Pokedex hardware & LCD screen palette
++constexpr ImU32 kDexRed = IM_COL32(198, 30, 48, 255);
++constexpr ImU32 kDexRedDark = IM_COL32(138, 16, 30, 255);
++constexpr ImU32 kDexRedHighlight = IM_COL32(232, 72, 88, 255);
++constexpr ImU32 kDexLensCore = IM_COL32(46, 188, 255, 255);
++constexpr ImU32 kDexLensRim = IM_COL32(226, 236, 248, 255);
++constexpr ImU32 kCardBorder = IM_COL32(42, 68, 102, 255);
++
++constexpr ImU32 kBackground = IM_COL32(13, 22, 34, 255);
++constexpr ImU32 kTitleBar = kDexRed;
++constexpr ImU32 kPanel = IM_COL32(23, 36, 54, 255);
++constexpr ImU32 kPanelHover = IM_COL32(30, 47, 70, 255);
++constexpr ImU32 kPanelPressed = IM_COL32(40, 62, 92, 255);
++constexpr ImU32 kAccent = IM_COL32(56, 189, 248, 255);
++constexpr ImU32 kAccentPressed = IM_COL32(28, 152, 214, 255);
++constexpr ImU32 kOnAccent = IM_COL32(10, 18, 28, 255);
++constexpr ImU32 kText = IM_COL32(238, 244, 252, 255);
++constexpr ImU32 kTextDim = IM_COL32(148, 170, 198, 255);
++constexpr ImU32 kTextOff = IM_COL32(88, 104, 128, 255);
++constexpr ImU32 kError = IM_COL32(248, 113, 113, 255);
++constexpr ImU32 kGood = IM_COL32(74, 222, 128, 255);
++constexpr ImU32 kSwitchOff = IM_COL32(48, 64, 88, 255);
+ constexpr ImU32 kFocus = IM_COL32(255, 214, 102, 255);
+ 
+ ImFont *sRegular = nullptr;
+@@ -334,33 +342,59 @@ bool BeginPane(const char *id, ImVec2 pos, ImVec2 size, const char *title, const
+   float barHeight = 0.0f;
+   if (title != nullptr) {
+     ImDrawList *draw = ImGui::GetWindowDrawList();
+-    barHeight = S(54.0f);
+-    draw->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + barHeight), kTitleBar);
++    barHeight = S(58.0f);
++    // Pokedex crimson top hardware casing with highlight and recessed hinge line
++    draw->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + barHeight), kDexRed);
++    draw->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + S(2.0f)), kDexRedHighlight);
++    draw->AddRectFilled(ImVec2(pos.x, pos.y + barHeight - S(4.0f)), ImVec2(pos.x + size.x, pos.y + barHeight), kDexRedDark);
++    draw->AddLine(ImVec2(pos.x, pos.y + barHeight - S(1.0f)), ImVec2(pos.x + size.x, pos.y + barHeight - S(1.0f)),
++                  IM_COL32(10, 14, 22, 255), S(2.0f));
+ 
+     float titleX = pos.x + S(18.0f);
+     if (backLabel != nullptr) {
+       char label[64];
+       snprintf(label, sizeof(label), "<  %s", backLabel);
+       ImVec2 textSize = Measure(BoldFont(), S(16.0f), label);
+-      ImVec2 buttonSize(textSize.x + S(28.0f), barHeight - S(14.0f));
+-      ImVec2 buttonPos(pos.x + S(8.0f), pos.y + S(7.0f));
++      ImVec2 buttonSize(textSize.x + S(28.0f), barHeight - S(18.0f));
++      ImVec2 buttonPos(pos.x + S(10.0f), pos.y + S(7.0f));
+       ImGui::SetCursorScreenPos(buttonPos);
+       ImGui::PushItemFlag(ImGuiItemFlags_NoNavDefaultFocus, true); // the pad starts on the content (B is back)
+       bool pressed = ImGui::InvisibleButton("##back", buttonSize, ImGuiButtonFlags_EnableNav);
+       ImGui::PopItemFlag();
+       bool held = ImGui::IsItemActive();
+       ImVec2 max(buttonPos.x + buttonSize.x, buttonPos.y + buttonSize.y);
+-      draw->AddRectFilled(buttonPos, max, held ? kPanelPressed : (Hovered() ? kPanelHover : kPanel), S(10.0f));
++      draw->AddRectFilled(buttonPos, max, held ? kPanelPressed : (Hovered() ? kPanelHover : IM_COL32(22, 32, 48, 255)), S(10.0f));
++      draw->AddRect(buttonPos, max, IM_COL32(255, 255, 255, 70), S(10.0f), 0, S(1.5f));
+       Text(draw, BoldFont(), S(16.0f), ImVec2(buttonPos.x + S(14.0f), buttonPos.y + (buttonSize.y - textSize.y) * 0.5f),
+            kText, label);
+       FocusRing(buttonPos, max);
+       back = pressed;
+       titleX = max.x + S(14.0f);
++    } else {
++      // Pokedex blue camera sensor lens + R/Y/G indicator LEDs when no back button occupies left bezel
++      const float lensR = S(15.0f);
++      ImVec2 lensCenter(pos.x + S(26.0f), pos.y + (barHeight - S(4.0f)) * 0.5f);
++      draw->AddCircleFilled(lensCenter, lensR + S(3.0f), IM_COL32(18, 24, 34, 255));
++      draw->AddCircleFilled(lensCenter, lensR + S(1.5f), kDexLensRim);
++      draw->AddCircleFilled(lensCenter, lensR - S(1.0f), IM_COL32(16, 118, 186, 255));
++      draw->AddCircleFilled(ImVec2(lensCenter.x - S(2.0f), lensCenter.y - S(2.0f)), lensR * 0.68f, kDexLensCore);
++      draw->AddCircleFilled(ImVec2(lensCenter.x - S(4.5f), lensCenter.y - S(4.5f)), lensR * 0.26f, IM_COL32(255, 255, 255, 230));
++      const ImU32 leds[3] = {
++        IM_COL32(255, 72, 72, 255),
++        IM_COL32(255, 214, 64, 255),
++        IM_COL32(72, 232, 128, 255),
++      };
++      for (int led = 0; led < 3; led++) {
++        ImVec2 lp(lensCenter.x + lensR + S(12.0f) + led * S(12.0f), lensCenter.y - S(5.0f));
++        draw->AddCircleFilled(lp, S(4.2f), IM_COL32(18, 24, 34, 255));
++        draw->AddCircleFilled(lp, S(3.0f), leds[led]);
++      }
++      titleX = lensCenter.x + lensR + S(48.0f);
+     }
+     float titleWidth = pos.x + size.x - titleX - S(12.0f);
+     ImVec2 titleSize = Measure(BoldFont(), S(21.0f), title);
+-    draw->PushClipRect(ImVec2(titleX, pos.y), ImVec2(titleX + titleWidth, pos.y + barHeight), true);
+-    Text(draw, BoldFont(), S(21.0f), ImVec2(titleX, pos.y + (barHeight - titleSize.y) * 0.5f), kText, title);
++    draw->PushClipRect(ImVec2(titleX, pos.y), ImVec2(titleX + titleWidth, pos.y + barHeight - S(4.0f)), true);
++    Text(draw, BoldFont(), S(21.0f), ImVec2(titleX, pos.y + (barHeight - S(4.0f) - titleSize.y) * 0.5f), kText, title);
+     draw->PopClipRect();
+   }
+ 
+@@ -416,10 +450,18 @@ void Space(float px) {
+ 
+ void Section(const char *title) {
+   Space(10.0f);
++  ImDrawList *draw = ImGui::GetWindowDrawList();
+   ImVec2 pos = ImGui::GetCursorScreenPos();
+   float width = ImGui::GetContentRegionAvail().x;
+   ImVec2 size = Measure(BoldFont(), S(15.0f), title, width);
+-  Text(ImGui::GetWindowDrawList(), BoldFont(), S(15.0f), ImVec2(pos.x + S(4.0f), pos.y), kAccent, title, width);
++  draw->AddRectFilled(ImVec2(pos.x + S(2.0f), pos.y + S(2.0f)), ImVec2(pos.x + S(6.0f), pos.y + size.y - S(2.0f)),
++                      kDexRed, S(2.0f));
++  Text(draw, BoldFont(), S(15.0f), ImVec2(pos.x + S(12.0f), pos.y), kAccent, title, width - S(12.0f));
++  float lineX = pos.x + S(18.0f) + size.x;
++  if (lineX < pos.x + width - S(8.0f)) {
++    float midY = pos.y + size.y * 0.5f;
++    draw->AddLine(ImVec2(lineX, midY), ImVec2(pos.x + width - S(4.0f), midY), kCardBorder, S(1.5f));
++  }
+   ImGui::Dummy(ImVec2(width, size.y + S(8.0f)));
+ }
+ 
+@@ -490,14 +532,26 @@ bool Toggle(const char *label, const char *help, bool *value, bool enabled) {
+   bool held = ImGui::IsItemActive() && !sDragging;
+ 
+   draw->AddRectFilled(pos, max, RowColor(held, Hovered()), S(kRounding));
++  draw->AddRect(pos, max, *value && enabled ? IM_COL32(56, 189, 248, 110) : kCardBorder, S(kRounding), 0, S(1.5f));
+   RowText(draw, ImVec2(pos.x + pad, pos.y + (height - textHeight) * 0.5f), textWidth, label, help, enabled, false);
+ 
+   ImVec2 sw(pos.x + width - pad - switchW, pos.y + (height - switchH) * 0.5f);
+   ImU32 track = *value ? (enabled ? kAccent : kTextOff) : kSwitchOff;
+   draw->AddRectFilled(sw, ImVec2(sw.x + switchW, sw.y + switchH), track, switchH * 0.5f);
++  draw->AddRect(sw, ImVec2(sw.x + switchW, sw.y + switchH), IM_COL32(12, 18, 28, 180), switchH * 0.5f, 0, S(1.5f));
+   float knobX = *value ? sw.x + switchW - switchH * 0.5f : sw.x + switchH * 0.5f;
+-  draw->AddCircleFilled(ImVec2(knobX, sw.y + switchH * 0.5f), switchH * 0.5f - S(3.0f),
+-                        enabled ? IM_COL32(246, 248, 252, 255) : kTextDim);
++  ImVec2 knobCenter(knobX, sw.y + switchH * 0.5f);
++  float knobR = switchH * 0.5f - S(3.0f);
++  draw->AddCircleFilled(knobCenter, knobR, enabled ? IM_COL32(246, 248, 252, 255) : kTextDim);
++  if (*value && enabled) {
++    // Poke Ball top crimson arc + center band & button
++    draw->PathArcTo(knobCenter, knobR, 3.14159265f, 6.2831853f, 16);
++    draw->PathFillConvex(kDexRed);
++    draw->AddLine(ImVec2(knobCenter.x - knobR, knobCenter.y), ImVec2(knobCenter.x + knobR, knobCenter.y),
++                  IM_COL32(18, 24, 34, 255), S(2.0f));
++    draw->AddCircleFilled(knobCenter, S(3.4f), IM_COL32(18, 24, 34, 255));
++    draw->AddCircleFilled(knobCenter, S(1.8f), IM_COL32(248, 250, 252, 255));
++  }
+   FocusRing(pos, max);
+   EndRow(pos, width, height);
+ 
+@@ -531,6 +585,7 @@ bool Choice(const char *label, const char *help, int *value, const char *const *
+   ImVec2 pos = ImGui::GetCursorScreenPos();
+ 
+   draw->AddRectFilled(pos, ImVec2(pos.x + width, pos.y + height), kPanel, S(kRounding));
++  draw->AddRect(pos, ImVec2(pos.x + width, pos.y + height), kCardBorder, S(kRounding), 0, S(1.5f));
+   RowText(draw, ImVec2(pos.x + pad, pos.y + pad), inner, label, help, enabled, false);
+ 
+   bool changed = false;
+@@ -575,6 +630,7 @@ bool Stepper(const char *label, const char *help, int *value, int min, int max,
+   ImVec2 pos = ImGui::GetCursorScreenPos();
+ 
+   draw->AddRectFilled(pos, ImVec2(pos.x + width, pos.y + height), kPanel, S(kRounding));
++  draw->AddRect(pos, ImVec2(pos.x + width, pos.y + height), kCardBorder, S(kRounding), 0, S(1.5f));
+   RowText(draw, ImVec2(pos.x + pad, pos.y + (height - textHeight) * 0.5f), textWidth, label, help, enabled, false);
+ 
+   bool changed = false;
+@@ -634,6 +690,7 @@ bool ButtonAt(const char *label, const char *help, bool primary, bool enabled, f
+   bool held = ImGui::IsItemActive() && !sDragging;
+   ImU32 fill = primary && enabled ? (held ? kAccentPressed : kAccent) : RowColor(held, Hovered());
+   draw->AddRectFilled(pos, max, fill, S(kRounding));
++  draw->AddRect(pos, max, primary && enabled ? IM_COL32(180, 232, 255, 160) : kCardBorder, S(kRounding), 0, S(1.5f));
+ 
+   if (centred) {
+     ImVec2 size = Measure(BoldFont(), S(17.0f), label, textWidth);
+@@ -699,6 +756,7 @@ bool Card(const char *title, const char *subtitle, bool selected, bool enabled)
+   ImGui::PopID();
+   bool held = ImGui::IsItemActive() && !sDragging;
+   draw->AddRectFilled(pos, max, selected && !held ? kPanelPressed : RowColor(held, Hovered()), S(kRounding));
++  draw->AddRect(pos, max, selected ? kAccent : kCardBorder, S(kRounding), 0, S(1.5f));
+   if (selected) {
+     draw->AddRectFilled(ImVec2(pos.x + S(6.0f), pos.y + S(12.0f)), ImVec2(pos.x + S(10.0f), max.y - S(12.0f)), kAccent,
+                         S(2.0f));
+@@ -976,6 +1034,7 @@ void Panel(const char *title, const char *text) {
+   const float height = textHeight + pad * 2;
+   ImVec2 pos = ImGui::GetCursorScreenPos();
+   draw->AddRectFilled(pos, ImVec2(pos.x + width, pos.y + height), kPanel, S(kRounding));
++  draw->AddRect(pos, ImVec2(pos.x + width, pos.y + height), kCardBorder, S(kRounding), 0, S(1.5f));
+   RowText(draw, ImVec2(pos.x + pad, pos.y + pad), width - pad * 2, title, text, true, false);
+   EndRow(pos, width, height);
+ }
+@@ -1006,6 +1065,7 @@ bool Tile(const char *label, const char *sub, bool selected, bool enabled) {
+   bool held = ImGui::IsItemActive() && !sDragging;
+   ImU32 fill = selected ? (held ? kAccentPressed : kAccent) : RowColor(held, Hovered());
+   draw->AddRectFilled(pos, max, fill, S(10.0f));
++  draw->AddRect(pos, max, selected ? IM_COL32(180, 232, 255, 160) : kCardBorder, S(10.0f), 0, S(1.5f));
+ 
+   const float labelPx = S(15.0f), subPx = S(13.0f);
+   const bool hasSub = sub != nullptr && sub[0] != '\0';

@@ -1,0 +1,136 @@
+diff --git a/src/gear_ui.cpp b/src/gear_ui.cpp
+index 7550acf..aa85362 100644
+--- a/src/gear_ui.cpp
++++ b/src/gear_ui.cpp
+@@ -45,16 +45,24 @@ namespace {
+ 
+ // --- look --------------------------------------------------------------------------------
+ 
+-constexpr ImU32 kBackground = IM_COL32(24, 29, 38, 255);
+-constexpr ImU32 kPanel = IM_COL32(38, 46, 60, 255);
+-constexpr ImU32 kPanelPressed = IM_COL32(52, 63, 82, 255);
+-constexpr ImU32 kAccent = IM_COL32(96, 172, 232, 255);
+-constexpr ImU32 kText = IM_COL32(234, 239, 246, 255);
+-constexpr ImU32 kTextDim = IM_COL32(140, 152, 170, 255);
+-constexpr ImU32 kGood = IM_COL32(88, 200, 120, 255);
+-constexpr ImU32 kWarn = IM_COL32(236, 196, 70, 255);
+-constexpr ImU32 kBad = IM_COL32(232, 88, 80, 255);
+-constexpr ImU32 kBarBack = IM_COL32(18, 22, 30, 255);
++// Sinnoh Pokedex companion device palette
++constexpr ImU32 kDexRed = IM_COL32(198, 30, 48, 255);
++constexpr ImU32 kDexRedDark = IM_COL32(138, 16, 30, 255);
++constexpr ImU32 kDexRedHighlight = IM_COL32(232, 72, 88, 255);
++constexpr ImU32 kDexLensCore = IM_COL32(46, 188, 255, 255);
++constexpr ImU32 kDexLensRim = IM_COL32(226, 236, 248, 255);
++constexpr ImU32 kDexBorder = IM_COL32(42, 68, 102, 255);
++
++constexpr ImU32 kBackground = IM_COL32(13, 22, 34, 255);
++constexpr ImU32 kPanel = IM_COL32(23, 36, 54, 255);
++constexpr ImU32 kPanelPressed = IM_COL32(38, 58, 86, 255);
++constexpr ImU32 kAccent = IM_COL32(56, 189, 248, 255);
++constexpr ImU32 kText = IM_COL32(238, 244, 252, 255);
++constexpr ImU32 kTextDim = IM_COL32(148, 170, 198, 255);
++constexpr ImU32 kGood = IM_COL32(74, 222, 128, 255);
++constexpr ImU32 kWarn = IM_COL32(250, 204, 21, 255);
++constexpr ImU32 kBad = IM_COL32(248, 113, 113, 255);
++constexpr ImU32 kBarBack = IM_COL32(10, 16, 26, 255);
+ 
+ // Standard type colors, by the game's type numbers (TYPE_MYSTERY is "???")
+ constexpr ImU32 kTypeColors[18] = {
+@@ -490,12 +498,43 @@ void SelectApp(App app) {
+ 
+ void DrawHeader(const SIM_CompanionFrame *frame) {
+   ImDrawList *draw = ImGui::GetWindowDrawList();
+-  const float height = S(40.0f);
++  const float height = S(44.0f);
+   ImVec2 origin = ImGui::GetCursorScreenPos();
+   const float width = ImGui::GetContentRegionAvail().x;
+ 
++  // Pokedex crimson top casing & dark screen viewport border
++  ImVec2 winMin(frame->x, frame->y);
++  ImVec2 winMax(frame->x + frame->width, frame->y + frame->height);
++  ImVec2 barMax(winMax.x, origin.y + height + S(4.0f));
++  draw->AddRectFilled(winMin, barMax, kDexRed);
++  draw->AddRectFilled(winMin, ImVec2(winMax.x, winMin.y + S(2.0f)), kDexRedHighlight);
++  draw->AddRectFilled(ImVec2(winMin.x, barMax.y - S(3.0f)), barMax, kDexRedDark);
++  // Outer Pokedex crimson rim around the recessed LCD screen
++  draw->AddRect(winMin, winMax, kDexRed, 0.0f, 0, S(5.0f));
++  draw->AddRect(ImVec2(winMin.x + S(3.0f), barMax.y), ImVec2(winMax.x - S(3.0f), winMax.y - S(3.0f)),
++                kDexBorder, S(6.0f), 0, S(1.5f));
++
++  // Glowing blue Pokedex sensor lens + R/Y/G indicator LEDs on the left bezel
++  const float lensR = S(12.0f);
++  ImVec2 lensCenter(origin.x + lensR + S(2.0f), origin.y + height * 0.5f);
++  draw->AddCircleFilled(lensCenter, lensR + S(2.5f), IM_COL32(18, 24, 34, 255));
++  draw->AddCircleFilled(lensCenter, lensR + S(1.2f), kDexLensRim);
++  draw->AddCircleFilled(lensCenter, lensR - S(0.8f), IM_COL32(16, 118, 186, 255));
++  draw->AddCircleFilled(ImVec2(lensCenter.x - S(1.5f), lensCenter.y - S(1.5f)), lensR * 0.68f, kDexLensCore);
++  draw->AddCircleFilled(ImVec2(lensCenter.x - S(3.5f), lensCenter.y - S(3.5f)), lensR * 0.26f, IM_COL32(255, 255, 255, 230));
++  const ImU32 leds[3] = {
++    IM_COL32(255, 72, 72, 255),
++    IM_COL32(255, 214, 64, 255),
++    IM_COL32(72, 232, 128, 255),
++  };
++  for (int led = 0; led < 3; led++) {
++    ImVec2 lp(lensCenter.x + lensR + S(9.0f) + led * S(9.5f), lensCenter.y - S(5.0f));
++    draw->AddCircleFilled(lp, S(3.4f), IM_COL32(18, 24, 34, 255));
++    draw->AddCircleFilled(lp, S(2.4f), leds[led]);
++  }
++
+   // App tabs (Settings is a gear icon, to leave room)
+-  float x = origin.x;
++  float x = lensCenter.x + lensR + S(38.0f);
+   for (int i = 0; i < APP_COUNT; i++) {
+     if (!AppAvailable((App)i)) {
+       continue;
+@@ -509,8 +548,11 @@ void DrawHeader(const SIM_CompanionFrame *frame) {
+     bool pressed = Tap("tab", ImVec2(tabWidth, height));
+     ImGui::PopID();
+     bool selected = sApp == i;
+-    draw->AddRectFilled(ImVec2(x, origin.y + S(4.0f)), ImVec2(x + tabWidth, origin.y + height - S(4.0f)),
+-                        selected ? kAccent : (ImGui::IsItemActive() ? kPanelPressed : kPanel), S(16.0f));
++    ImVec2 tMin(x, origin.y + S(4.0f));
++    ImVec2 tMax(x + tabWidth, origin.y + height - S(4.0f));
++    draw->AddRectFilled(tMin, tMax,
++                        selected ? kAccent : (ImGui::IsItemActive() ? kPanelPressed : IM_COL32(20, 30, 44, 255)), S(16.0f));
++    draw->AddRect(tMin, tMax, selected ? IM_COL32(255, 255, 255, 210) : IM_COL32(255, 255, 255, 55), S(16.0f), 0, S(1.5f));
+     const ImU32 ink = selected ? IM_COL32(16, 24, 34, 255) : kText;
+     if (icon) {
+       GearIcon(draw, ImVec2(x + tabWidth * 0.5f, origin.y + height * 0.5f), S(8.0f), ink,
+@@ -537,8 +579,10 @@ void DrawHeader(const SIM_CompanionFrame *frame) {
+       sBattleLayoutManual = true; // until the battle ends
+     }
+   }
++  draw->AddRectFilled(ImVec2(toggleX, origin.y + S(4.0f)), ImVec2(toggleX + toggleWidth, origin.y + height - S(4.0f)),
++                      IM_COL32(20, 30, 44, 255), S(16.0f));
+   draw->AddRect(ImVec2(toggleX, origin.y + S(4.0f)), ImVec2(toggleX + toggleWidth, origin.y + height - S(4.0f)), kAccent,
+-                S(16.0f), 0, S(2.0f));
++                S(16.0f), 0, S(1.8f));
+   TextAt(draw, sBold, S(16.0f), ImVec2(toggleX + (toggleWidth - toggleText.x) * 0.5f, origin.y + (height - toggleText.y) * 0.5f),
+          kAccent, toggleLabel);
+ 
+@@ -556,8 +600,10 @@ void DrawHeader(const SIM_CompanionFrame *frame) {
+     draw->AddRectFilled(ImVec2(ffX, origin.y + S(4.0f)), ImVec2(ffX + ffWidth, origin.y + height - S(4.0f)), kAccent,
+                         S(16.0f));
+   } else {
++    draw->AddRectFilled(ImVec2(ffX, origin.y + S(4.0f)), ImVec2(ffX + ffWidth, origin.y + height - S(4.0f)),
++                        IM_COL32(20, 30, 44, 255), S(16.0f));
+     draw->AddRect(ImVec2(ffX, origin.y + S(4.0f)), ImVec2(ffX + ffWidth, origin.y + height - S(4.0f)), kAccent,
+-                  S(16.0f), 0, S(2.0f));
++                  S(16.0f), 0, S(1.8f));
+   }
+   TextAt(draw, sBold, S(16.0f), ImVec2(ffX + (ffWidth - ffText.x) * 0.5f, origin.y + (height - ffText.y) * 0.5f),
+          fastForward ? IM_COL32(16, 24, 34, 255) : kAccent, ffLabel);
+@@ -4177,8 +4223,10 @@ extern "C" void SIM_Prj_CompanionSetup(float outputWidth) {
+   style.WindowPadding = ImVec2(12, 10);
+   style.ItemSpacing = ImVec2(8, 6);
+   style.FramePadding = ImVec2(8, 6);
+-  style.FrameRounding = 8;
+-  style.GrabRounding = 8;
++  style.FrameRounding = 10;
++  style.GrabRounding = 10;
++  style.FrameBorderSize = 1.0f;
++  style.Colors[ImGuiCol_Border] = ImColor(kDexBorder);
+   style.ScrollbarSize = 6;
+   style.ScaleAllSizes(sScale);
+   style.Colors[ImGuiCol_WindowBg] = ImColor(kBackground);

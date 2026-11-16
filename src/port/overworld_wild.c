@@ -76,16 +76,28 @@ BOOL OverworldWild_IsTransientWildObject(const MapObject *mapObj)
             localId < (OVERWORLD_WILD_BASE_LOCAL_ID + OVERWORLD_WILD_MAX_ACTIVE));
 }
 
+static void DeleteTransientObjectWithLocalID(MapObjectManager *mapObjMan, u32 targetLocalId)
+{
+    if (mapObjMan == NULL) {
+        return;
+    }
+    MapObject *obj = NULL;
+    int index = 0;
+    while (MapObjectMan_FindObjectWithStatus(mapObjMan, &obj, &index, MAP_OBJ_STATUS_0)) {
+        if (MapObject_GetLocalID(obj) == targetLocalId) {
+            MapObject_Delete(obj);
+            return;
+        }
+    }
+}
+
 static void DeleteOrphanedTransientObjects(MapObjectManager *mapObjMan)
 {
     if (mapObjMan == NULL) {
         return;
     }
     for (int i = 0; i < OVERWORLD_WILD_MAX_ACTIVE; i++) {
-        MapObject *existing = MapObjectMan_FindObjectByID(mapObjMan, OVERWORLD_WILD_BASE_LOCAL_ID + i);
-        if (existing != NULL) {
-            MapObject_Delete(existing);
-        }
+        DeleteTransientObjectWithLocalID(mapObjMan, OVERWORLD_WILD_BASE_LOCAL_ID + i);
     }
 }
 
@@ -228,10 +240,7 @@ static BOOL TrySpawnOneWildPokemon(FieldSystem *fieldSystem, int maxAttempts)
         }
 
         u16 localId = OVERWORLD_WILD_BASE_LOCAL_ID + freeSlot;
-        MapObject *stale = MapObjectMan_FindObjectByID(fieldSystem->mapObjMan, localId);
-        if (stale != NULL) {
-            MapObject_Delete(stale);
-        }
+        DeleteTransientObjectWithLocalID(fieldSystem->mapObjMan, localId);
 
         MapObject *wildObj = MapObjectMan_AddMapObject(
             fieldSystem->mapObjMan,

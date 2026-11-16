@@ -1,3 +1,7 @@
+#ifdef SDK_PORT
+#include "port/overworld_wild.h"
+#endif
+
 #include "overlay005/ov5_021ECE40.h"
 
 #include <nitro.h>

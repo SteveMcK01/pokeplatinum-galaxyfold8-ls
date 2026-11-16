@@ -55,12 +55,6 @@ void CatchEmAll_ApplyGrassSlots(int mapHeaderID, CatchEmAllSlot *slots)
         slots[6].species = SPECIES_TRAPINCH;
         slots[8].species = SPECIES_VIBRAVA;
         break;
-    case MAP_HEADER_OREBURGH_MINE_B1F:
-    case MAP_HEADER_OREBURGH_MINE_B2F:
-    case MAP_HEADER_MT_CORONET_1F_SOUTH:
-        slots[8].species = SPECIES_CRANIDOS;
-        slots[9].species = SPECIES_SHIELDON;
-        break;
     case MAP_HEADER_ROUTE_205_NORTH:
         slots[10].species = SPECIES_MUNCHLAX;
         break;

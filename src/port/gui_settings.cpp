@@ -652,6 +652,15 @@ void DrawGameplay()
         "behind you. It goes back in its ball on a bike, surfing and with a partner. Talk to it to hear its cry. "
         "Species without an overworld sprite in Platinum walk as their party icon. Off in Following Renegade "
         "Platinum, which has followers of its own.", &config->followerPokemon);
+    Section("Overworld wild Pokemon");
+    ConfigToggle("Overworld wild Pokemon",
+        "Visible wild Pokemon wander in tall grass, caves and water. Walk into one (or press A) to start a battle.",
+        &config->overworldWildPokemon);
+    int density = (config->overworldWildDensity >= 1 && config->overworldWildDensity <= 6) ? config->overworldWildDensity : 3;
+    if (Stepper("Spawn density", "Maximum active wild Pokemon per area.", &density, 1, 6, 1, "%d", config->overworldWildPokemon != FALSE)) {
+        config->overworldWildDensity = density;
+        SaveConfig();
+    }
 #ifdef GEN5_BATTLES
     Section("Gen 5 battles");
     ConfigToggle("Gen 5 battles", "Battles in Black 2 and White 2's engine: their 3D arenas, moving camera, "

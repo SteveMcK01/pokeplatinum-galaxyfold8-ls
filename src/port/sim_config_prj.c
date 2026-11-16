@@ -136,6 +136,10 @@ static int IniHandler(void* user, const char* section, const char* name,
     if(MATCH("Features", "OverworldWildPokemon") || MATCH("Cheats", "OverworldWildPokemon")) {
         config->overworldWildPokemon = StringToBool(value);
     }
+    if(MATCH("Features", "OverworldWildDensity") || MATCH("Cheats", "OverworldWildDensity")) {
+        int d = atoi(value);
+        config->overworldWildDensity = (d >= 1 && d <= 6) ? d : 3;
+    }
 
     // Saves section
     if(MATCH("Saves", "Slot")) {
@@ -219,6 +223,7 @@ void SIM_Config_prj_LoadDefaults(SIM_Config_prj_type * aConfig)
   aConfig->enable60fps = TRUE;
   aConfig->enable60fpsSpeedFix = TRUE;
     aConfig->overworldWildPokemon = TRUE;
+  aConfig->overworldWildDensity = 3;
   aConfig->enable60fpsEverywhere = FALSE;
   aConfig->drawEveryFrame = FALSE;
   aConfig->instantText = TRUE;
@@ -336,6 +341,7 @@ void SIM_Config_prj_SaveConfigFile(SIM_Config_prj_type * aConfig)
     fprintf(configFile, "ReusableTMs=%s\n", BoolToString(aConfig->reusableTMs));
     fprintf(configFile, "InfiniteTMs=%s\n", BoolToString(aConfig->infiniteTMs));
     fprintf(configFile, "OverworldWildPokemon=%s\n", BoolToString(aConfig->overworldWildPokemon));
+    fprintf(configFile, "OverworldWildDensity=%d\n", aConfig->overworldWildDensity);
     fprintf(configFile, "\n");
 
     fprintf(configFile, "[Saves]\n");

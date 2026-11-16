@@ -187,7 +187,7 @@ BOOL FieldInput_Process(const FieldInput *input, FieldSystem *fieldSystem)
 #ifdef SDK_PORT
     if (input->dummy5 == FALSE) {
         OverworldWild_Update(fieldSystem);
-        if (OverworldWild_TryTriggerTouchEncounter(fieldSystem) == TRUE) {
+        if (OverworldWild_TryTriggerTouchEncounter(fieldSystem, input->heldKeys, input->playerDir) == TRUE) {
             PlayerAvatar_ClearMoveState(fieldSystem->playerAvatar);
             MapObjectMan_PauseAllMovement(fieldSystem->mapObjMan);
             return TRUE;

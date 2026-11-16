@@ -25,6 +25,7 @@
 #include "player_avatar.h"
 #include "pokemon.h"
 #include "savedata.h"
+#include "system.h"
 #include "terrain_collision_manager.h"
 
 typedef struct OverworldWildSlot {
@@ -40,12 +41,29 @@ typedef struct OverworldWildSlot {
 } OverworldWildSlot;
 
 static OverworldWildSlot sWildSlots[OVERWORLD_WILD_MAX_ACTIVE];
-static u16 sSpawnCooldownTimer = 0;
+static u16 sRespawnCooldownTimer = 0;
 static enum MapHeaderID sLastMapHeaderID = (enum MapHeaderID)-1;
+static BOOL sNeedsAreaSpawn = TRUE;
 
 static inline int AbsDiff(int a, int b)
 {
     return (a > b) ? (a - b) : (b - a);
+}
+
+static int GetTargetDensity(void)
+{
+    SIM_Config_prj_type *cfg = SIM_Config_prj_GetConfig();
+    if (!cfg->overworldWildPokemon) {
+        return 0;
+    }
+    int d = cfg->overworldWildDensity;
+    if (d < 1) {
+        return OVERWORLD_WILD_DEFAULT_DENSITY;
+    }
+    if (d > OVERWORLD_WILD_MAX_ACTIVE) {
+        return OVERWORLD_WILD_MAX_ACTIVE;
+    }
+    return d;
 }
 
 BOOL OverworldWild_IsTransientWildObject(const MapObject *mapObj)
@@ -58,11 +76,21 @@ BOOL OverworldWild_IsTransientWildObject(const MapObject *mapObj)
             localId < (OVERWORLD_WILD_BASE_LOCAL_ID + OVERWORLD_WILD_MAX_ACTIVE));
 }
 
-static void DespawnSlot(int idx)
+static void DeleteOrphanedTransientObjects(MapObjectManager *mapObjMan)
 {
-    if (!sWildSlots[idx].active) {
+    if (mapObjMan == NULL) {
         return;
     }
+    for (int i = 0; i < OVERWORLD_WILD_MAX_ACTIVE; i++) {
+        MapObject *existing = MapObjectMan_FindObjectByID(mapObjMan, OVERWORLD_WILD_BASE_LOCAL_ID + i);
+        if (existing != NULL) {
+            MapObject_Delete(existing);
+        }
+    }
+}
+
+static void DespawnSlot(int idx)
+{
     if (sWildSlots[idx].mapObj != NULL) {
         MapObject_Delete(sWildSlots[idx].mapObj);
         sWildSlots[idx].mapObj = NULL;
@@ -72,30 +100,44 @@ static void DespawnSlot(int idx)
 
 void OverworldWild_ClearAll(FieldSystem *fieldSystem)
 {
-    (void)fieldSystem;
     for (int i = 0; i < OVERWORLD_WILD_MAX_ACTIVE; i++) {
         DespawnSlot(i);
     }
-    sSpawnCooldownTimer = OVERWORLD_WILD_SPAWN_COOLDOWN;
+    if (fieldSystem != NULL) {
+        DeleteOrphanedTransientObjects(fieldSystem->mapObjMan);
+    }
+    sRespawnCooldownTimer = OVERWORLD_WILD_RESPAWN_COOLDOWN;
+    sNeedsAreaSpawn = TRUE;
 }
 
 void OverworldWild_Init(FieldSystem *fieldSystem)
 {
+    if (fieldSystem != NULL) {
+        DeleteOrphanedTransientObjects(fieldSystem->mapObjMan);
+    }
     memset(sWildSlots, 0, sizeof(sWildSlots));
-    sSpawnCooldownTimer = OVERWORLD_WILD_SPAWN_COOLDOWN;
+    sRespawnCooldownTimer = OVERWORLD_WILD_RESPAWN_COOLDOWN;
     sLastMapHeaderID = fieldSystem ? fieldSystem->location->mapHeaderID : (enum MapHeaderID)-1;
+    sNeedsAreaSpawn = TRUE;
 }
 
-static BOOL IsTileOccupiedByAnyObject(const MapObjectManager *mapObjMan, int x, int z)
+static BOOL IsTileOccupiedOrTooClose(const MapObjectManager *mapObjMan, int x, int z)
 {
     MapObject *obj = NULL;
     int index = 0;
     while (MapObjectMan_FindObjectWithStatus(mapObjMan, &obj, &index, MAP_OBJ_STATUS_0)) {
-        if (MapObject_GetX(obj) == x && MapObject_GetZ(obj) == z) {
+        int ox = MapObject_GetX(obj);
+        int oz = MapObject_GetZ(obj);
+        if (ox == x && oz == z) {
             return TRUE;
         }
         if (MapObject_GetXPrev(obj) == x && MapObject_GetZPrev(obj) == z) {
             return TRUE;
+        }
+        if (OverworldWild_IsTransientWildObject(obj)) {
+            if ((AbsDiff(ox, x) + AbsDiff(oz, z)) < OVERWORLD_WILD_MIN_SPACING) {
+                return TRUE;
+            }
         }
     }
     return FALSE;
@@ -121,30 +163,33 @@ static BOOL IsValidWildEncounterTile(const FieldSystem *fieldSystem, int x, int 
     return TRUE;
 }
 
-static void TrySpawnOneWildPokemon(FieldSystem *fieldSystem)
+static BOOL TrySpawnOneWildPokemon(FieldSystem *fieldSystem, int maxAttempts)
 {
     if (!FollowingHack_IsActive()) {
-        return;
+        return FALSE;
     }
     if (!MapHeader_HasWildEncounters(fieldSystem->location->mapHeaderID)) {
-        return;
+        return FALSE;
     }
 
+    int targetDensity = GetTargetDensity();
+    int activeCount = 0;
     int freeSlot = -1;
     for (int i = 0; i < OVERWORLD_WILD_MAX_ACTIVE; i++) {
-        if (!sWildSlots[i].active) {
+        if (sWildSlots[i].active) {
+            activeCount++;
+        } else if (freeSlot == -1) {
             freeSlot = i;
-            break;
         }
     }
-    if (freeSlot == -1) {
-        return;
+    if (activeCount >= targetDensity || freeSlot == -1) {
+        return FALSE;
     }
 
     int playerX = PlayerAvatar_GetXPos(fieldSystem->playerAvatar);
     int playerZ = PlayerAvatar_GetZPos(fieldSystem->playerAvatar);
 
-    for (int attempt = 0; attempt < 6; attempt++) {
+    for (int attempt = 0; attempt < maxAttempts; attempt++) {
         int dx = (int)(LCRNG_Next() % (OVERWORLD_WILD_SPAWN_MAX_DIST * 2 + 1)) - OVERWORLD_WILD_SPAWN_MAX_DIST;
         int dz = (int)(LCRNG_Next() % (OVERWORLD_WILD_SPAWN_MAX_DIST * 2 + 1)) - OVERWORLD_WILD_SPAWN_MAX_DIST;
         int dist = AbsDiff(dx, 0) + AbsDiff(dz, 0);
@@ -161,7 +206,7 @@ static void TrySpawnOneWildPokemon(FieldSystem *fieldSystem)
             continue;
         }
 
-        if (IsTileOccupiedByAnyObject(fieldSystem->mapObjMan, targetX, targetZ)) {
+        if (IsTileOccupiedOrTooClose(fieldSystem->mapObjMan, targetX, targetZ)) {
             continue;
         }
 
@@ -183,6 +228,10 @@ static void TrySpawnOneWildPokemon(FieldSystem *fieldSystem)
         }
 
         u16 localId = OVERWORLD_WILD_BASE_LOCAL_ID + freeSlot;
+        MapObject *stale = MapObjectMan_FindObjectByID(fieldSystem->mapObjMan, localId);
+        if (stale != NULL) {
+            MapObject_Delete(stale);
+        }
 
         MapObject *wildObj = MapObjectMan_AddMapObject(
             fieldSystem->mapObjMan,
@@ -195,7 +244,7 @@ static void TrySpawnOneWildPokemon(FieldSystem *fieldSystem)
         );
 
         if (wildObj == NULL) {
-            return;
+            return FALSE;
         }
 
         MapObject_SetLocalID(wildObj, localId);
@@ -215,7 +264,17 @@ static void TrySpawnOneWildPokemon(FieldSystem *fieldSystem)
         sWildSlots[freeSlot].isShiny = isShiny;
         sWildSlots[freeSlot].isWaterSpawn = isWater;
         sWildSlots[freeSlot].mapObj = wildObj;
-        return;
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+static void PopulateAreaBatch(FieldSystem *fieldSystem)
+{
+    int targetDensity = GetTargetDensity();
+    for (int i = 0; i < targetDensity; i++) {
+        TrySpawnOneWildPokemon(fieldSystem, 28);
     }
 }
 
@@ -245,7 +304,6 @@ static void TriggerSlotEncounter(FieldSystem *fieldSystem, int slotIdx)
         if (isShiny) {
             u32 otId = TrainerInfo_ID(SaveData_GetTrainerInfo(fieldSystem->saveData));
             u32 pid = Pokemon_GetValue(wildMon, MON_DATA_PERSONALITY, NULL);
-            // Force low 16 bits to match high 16 bits XOR otId for guaranteed shiny PID
             u16 high = (u16)(pid >> 16);
             u16 idLow = (u16)(otId & 0xFFFF);
             u16 idHigh = (u16)(otId >> 16);
@@ -258,7 +316,29 @@ static void TriggerSlotEncounter(FieldSystem *fieldSystem, int slotIdx)
     Encounter_NewVsWild(fieldSystem, dto);
 }
 
-BOOL OverworldWild_TryTriggerTouchEncounter(FieldSystem *fieldSystem)
+static void GetStepDeltaForDir(int dir, int *outDx, int *outDz)
+{
+    *outDx = 0;
+    *outDz = 0;
+    switch (dir) {
+    case DIR_NORTH:
+        *outDz = -1;
+        break;
+    case DIR_SOUTH:
+        *outDz = 1;
+        break;
+    case DIR_WEST:
+        *outDx = -1;
+        break;
+    case DIR_EAST:
+        *outDx = 1;
+        break;
+    default:
+        break;
+    }
+}
+
+BOOL OverworldWild_TryTriggerTouchEncounter(FieldSystem *fieldSystem, u16 heldKeys, u8 playerDir)
 {
     if (!SIM_Config_prj_GetConfig()->overworldWildPokemon || fieldSystem == NULL || fieldSystem->playerAvatar == NULL) {
         return FALSE;
@@ -266,6 +346,26 @@ BOOL OverworldWild_TryTriggerTouchEncounter(FieldSystem *fieldSystem)
 
     int playerX = PlayerAvatar_GetXPos(fieldSystem->playerAvatar);
     int playerZ = PlayerAvatar_GetZPos(fieldSystem->playerAvatar);
+
+    // Determine if the player is actively walking in a direction
+    int stepDir = DIR_NONE;
+    if (heldKeys & PAD_KEY_UP) {
+        stepDir = DIR_NORTH;
+    } else if (heldKeys & PAD_KEY_DOWN) {
+        stepDir = DIR_SOUTH;
+    } else if (heldKeys & PAD_KEY_LEFT) {
+        stepDir = DIR_WEST;
+    } else if (heldKeys & PAD_KEY_RIGHT) {
+        stepDir = DIR_EAST;
+    } else if (PlayerAvatar_GetMoveState(fieldSystem->playerAvatar) != AVATAR_MOVE_STATE_NONE) {
+        stepDir = playerDir;
+    }
+
+    int stepDx = 0;
+    int stepDz = 0;
+    GetStepDeltaForDir(stepDir, &stepDx, &stepDz);
+    int frontX = playerX + stepDx;
+    int frontZ = playerZ + stepDz;
 
     for (int i = 0; i < OVERWORLD_WILD_MAX_ACTIVE; i++) {
         if (!sWildSlots[i].active || sWildSlots[i].mapObj == NULL) {
@@ -275,9 +375,28 @@ BOOL OverworldWild_TryTriggerTouchEncounter(FieldSystem *fieldSystem)
         int objX = MapObject_GetX(sWildSlots[i].mapObj);
         int objZ = MapObject_GetZ(sWildSlots[i].mapObj);
 
+        // 1. Overlapping tile
         if (objX == playerX && objZ == playerZ) {
             TriggerSlotEncounter(fieldSystem, i);
             return TRUE;
+        }
+
+        // 2. Player walks directly into the wild Pokemon's tile
+        if (stepDir != DIR_NONE && objX == frontX && objZ == frontZ) {
+            TriggerSlotEncounter(fieldSystem, i);
+            return TRUE;
+        }
+
+        // 3. Wild Pokemon is actively moving toward the player's adjacent tile
+        int objMoveDir = MapObject_GetMovingDir(sWildSlots[i].mapObj);
+        if (objMoveDir != DIR_NONE) {
+            int odx = 0;
+            int odz = 0;
+            GetStepDeltaForDir(objMoveDir, &odx, &odz);
+            if ((objX + odx) == playerX && (objZ + odz) == playerZ) {
+                TriggerSlotEncounter(fieldSystem, i);
+                return TRUE;
+            }
         }
     }
 
@@ -306,15 +425,39 @@ void OverworldWild_Update(FieldSystem *fieldSystem)
         return;
     }
 
-    if (!SIM_Config_prj_GetConfig()->overworldWildPokemon) {
+    int targetDensity = GetTargetDensity();
+    if (targetDensity <= 0) {
         OverworldWild_ClearAll(fieldSystem);
         return;
     }
 
+    // Refresh spawns when entering a new area/route
     if (fieldSystem->location->mapHeaderID != sLastMapHeaderID) {
         OverworldWild_ClearAll(fieldSystem);
         sLastMapHeaderID = fieldSystem->location->mapHeaderID;
+        PopulateAreaBatch(fieldSystem);
+        sNeedsAreaSpawn = FALSE;
+        sRespawnCooldownTimer = OVERWORLD_WILD_RESPAWN_COOLDOWN;
         return;
+    }
+
+    if (sNeedsAreaSpawn) {
+        PopulateAreaBatch(fieldSystem);
+        sNeedsAreaSpawn = FALSE;
+        sRespawnCooldownTimer = OVERWORLD_WILD_RESPAWN_COOLDOWN;
+        return;
+    }
+
+    // Trim excess slots immediately if user lowered spawn density in Settings
+    int activeCount = 0;
+    for (int i = 0; i < OVERWORLD_WILD_MAX_ACTIVE; i++) {
+        if (sWildSlots[i].active) {
+            activeCount++;
+            if (activeCount > targetDensity) {
+                DespawnSlot(i);
+                activeCount--;
+            }
+        }
     }
 
     int playerX = PlayerAvatar_GetXPos(fieldSystem->playerAvatar);
@@ -343,10 +486,10 @@ void OverworldWild_Update(FieldSystem *fieldSystem)
         }
     }
 
-    if (sSpawnCooldownTimer > 0) {
-        sSpawnCooldownTimer--;
+    if (sRespawnCooldownTimer > 0) {
+        sRespawnCooldownTimer--;
     } else {
-        TrySpawnOneWildPokemon(fieldSystem);
-        sSpawnCooldownTimer = OVERWORLD_WILD_SPAWN_COOLDOWN;
+        TrySpawnOneWildPokemon(fieldSystem, 12);
+        sRespawnCooldownTimer = OVERWORLD_WILD_RESPAWN_COOLDOWN;
     }
 }

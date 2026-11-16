@@ -2,6 +2,8 @@
 #include "port/following_hack.h"
 #include "port/sim_config_prj.h"
 #include "constants/map_object.h"
+#include "generated/movement_types.h"
+#include "save_player.h"
 #include "trainer_info.h"
 #include "constants/battle.h"
 
@@ -235,7 +237,7 @@ static void TriggerSlotEncounter(FieldSystem *fieldSystem, int slotIdx)
     FieldBattleDTO_Init(dto, fieldSystem);
     CreateWildMon_Scripted(fieldSystem, species, level, dto);
 
-    Pokemon *wildMon = Party_GetPokemonBySlotIndex(dto->parties[BATTLE_PARTY_ENEMY], 0);
+    Pokemon *wildMon = Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], 0);
     if (wildMon != NULL) {
         if (form > 0) {
             Pokemon_SetValue(wildMon, MON_DATA_FORM, &form);

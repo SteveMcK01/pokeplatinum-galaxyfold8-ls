@@ -149,7 +149,7 @@ static void BuildIndex(void)
         MapHeaderData_LoadWildEncounters(&data, header);
 
         if (data.grassEncounters.encounterRate != 0) {
-            EncounterSlot grassSlots[MAX_GRASS_ENCOUNTERS];
+            CatchEmAllSlot grassSlots[MAX_GRASS_ENCOUNTERS];
             for (int i = 0; i < MAX_GRASS_ENCOUNTERS; i++) {
                 grassSlots[i].species = data.grassEncounters.encounters[i].species;
                 grassSlots[i].minLevel = data.grassEncounters.encounters[i].level;
@@ -195,7 +195,7 @@ static void BuildIndex(void)
         AddWaterPlaces(label, GEAR_ENC_OLD_ROD, &data.oldRodEncounters, sWaterRates);
         AddWaterPlaces(label, GEAR_ENC_GOOD_ROD, &data.goodRodEncounters, sRodRates);
         if (data.superRodEncounters.encounterRate != 0) {
-            EncounterSlot superSlots[MAX_WATER_ENCOUNTERS];
+            CatchEmAllSlot superSlots[MAX_WATER_ENCOUNTERS];
             for (int i = 0; i < MAX_WATER_ENCOUNTERS; i++) {
                 superSlots[i].species = data.superRodEncounters.encounters[i].species;
                 superSlots[i].minLevel = data.superRodEncounters.encounters[i].minLevel;

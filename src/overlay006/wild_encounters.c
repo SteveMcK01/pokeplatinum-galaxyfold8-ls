@@ -340,7 +340,7 @@ BOOL WildEncounters_TryWildEncounter(FieldSystem *fieldSystem)
         WildEncounters_ReplaceSwarmEncounters(fieldSystem, encounterData, &encounterTable[0].species, &encounterTable[1].species);
         WildEncounters_ReplaceTrophyGardenEncounters(fieldSystem, nationalDexObtained, &encounterTable[6].species, &encounterTable[7].species);
         WildEncounters_ReplaceDualSlotEncounters(encounterData, nationalDexObtained, &encounterTable[8].species, &encounterTable[9].species);
-        CatchEmAll_ApplyGrassSlots(fieldSystem->location->mapHeaderID, encounterTable);
+        CatchEmAll_ApplyGrassSlots(fieldSystem->location->mapHeaderID, (CatchEmAllSlot *)encounterTable);
 
         if (!withPartner) {
             WildEncounters_ReplaceGreatMarshDailyEncounters(fieldSystem, safariGameActive, nationalDexObtained, encounterTable);
@@ -444,7 +444,7 @@ BOOL WildEncounters_TryFishingEncounter(FieldSystem *fieldSystem, enum Encounter
             encounterTable[i].minLevel = fishingEncounters[i].minLevel;
         }
         if (fishingRodType == FISHING_TYPE_SUPER_ROD) {
-            CatchEmAll_ApplySuperRodSlots(fieldSystem->location->mapHeaderID, encounterTable);
+            CatchEmAll_ApplySuperRodSlots(fieldSystem->location->mapHeaderID, (CatchEmAllSlot *)encounterTable);
         }
     }
 

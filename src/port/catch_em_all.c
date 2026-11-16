@@ -10,7 +10,7 @@ BOOL CatchEmAll_IsEnabled(void)
     return config != NULL && config->catchEmAll;
 }
 
-void CatchEmAll_ApplyGrassSlots(int mapHeaderID, EncounterSlot *slots)
+void CatchEmAll_ApplyGrassSlots(int mapHeaderID, CatchEmAllSlot *slots)
 {
     if (!CatchEmAll_IsEnabled() || slots == NULL) {
         return;
@@ -119,7 +119,7 @@ void CatchEmAll_ApplyGrassSlots(int mapHeaderID, EncounterSlot *slots)
     }
 }
 
-void CatchEmAll_ApplySuperRodSlots(int mapHeaderID, EncounterSlot *slots)
+void CatchEmAll_ApplySuperRodSlots(int mapHeaderID, CatchEmAllSlot *slots)
 {
     if (!CatchEmAll_IsEnabled() || slots == NULL) {
         return;

@@ -2,15 +2,19 @@
 #define POKEPLATINUM_PORT_CATCH_EM_ALL_H
 
 #include <nitro/types.h>
-#include "overlay006/wild_encounters.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+typedef struct CatchEmAllSlot {
+    int species;
+    u16 maxLevel;
+    u16 minLevel;
+} CatchEmAllSlot;
+
 BOOL CatchEmAll_IsEnabled(void);
-void CatchEmAll_ApplyGrassSlots(int mapHeaderID, EncounterSlot *slots);
-void CatchEmAll_ApplySuperRodSlots(int mapHeaderID, EncounterSlot *slots);
+void CatchEmAll_ApplyGrassSlots(int mapHeaderID, CatchEmAllSlot *slots);
+void CatchEmAll_ApplySuperRodSlots(int mapHeaderID, CatchEmAllSlot *slots);
 
 #ifdef __cplusplus
 }

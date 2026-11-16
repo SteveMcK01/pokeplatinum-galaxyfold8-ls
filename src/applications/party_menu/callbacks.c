@@ -1,3 +1,4 @@
+#include "port/sim_config_prj.h"
 #include "applications/party_menu/callbacks.h"
 
 #include <nitro.h>
@@ -1114,7 +1115,8 @@ static void TeachMove(PartyMenuApplication *application, Pokemon *mon, u32 moveS
     Pokemon_SetValue(mon, MON_DATA_MOVE1_PP + moveSlot, &tempVar);
 
     if (application->partyMenu->usedItemID != ITEM_NONE) {
-        if (Item_IsHMMove(application->partyMenu->learnedMove) == FALSE) {
+        BOOL infiniteTMs = SIM_Config_prj_GetConfig() != NULL && SIM_Config_prj_GetConfig()->infiniteTMs;
+        if (Item_IsHMMove(application->partyMenu->learnedMove) == FALSE && !infiniteTMs) {
             Bag_TryRemoveItem(application->partyMenu->bag, application->partyMenu->usedItemID, 1, HEAP_ID_PARTY_MENU);
         }
 

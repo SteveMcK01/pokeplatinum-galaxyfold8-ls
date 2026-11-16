@@ -40,8 +40,12 @@ typedef struct OverworldWildSlot {
     MapObject *mapObj;
 } OverworldWildSlot;
 
+#define OVERWORLD_WILD_AREA_SETTLE_FRAMES 120
+
 static OverworldWildSlot sWildSlots[OVERWORLD_WILD_MAX_ACTIVE];
 static u16 sRespawnCooldownTimer = 0;
+static u16 sAreaSettleTimer = 0;
+static u8 sPendingBatchSpawns = 0;
 static enum MapHeaderID sLastMapHeaderID = (enum MapHeaderID)-1;
 static BOOL sNeedsAreaSpawn = TRUE;
 
@@ -101,35 +105,61 @@ static void DeleteOrphanedTransientObjects(MapObjectManager *mapObjMan)
     }
 }
 
-static void DespawnSlot(int idx)
+static MapObject *ResolveLiveSlotObject(const MapObjectManager *mapObjMan, int idx)
 {
-    if (sWildSlots[idx].mapObj != NULL) {
-        MapObject_Delete(sWildSlots[idx].mapObj);
-        sWildSlots[idx].mapObj = NULL;
+    if (mapObjMan == NULL || !sWildSlots[idx].active || sWildSlots[idx].mapObj == NULL) {
+        return NULL;
     }
+    MapObject *obj = NULL;
+    int index = 0;
+    u32 expectedLocalId = sWildSlots[idx].localId;
+    while (MapObjectMan_FindObjectWithStatus(mapObjMan, &obj, &index, MAP_OBJ_STATUS_0)) {
+        if (obj == sWildSlots[idx].mapObj && MapObject_GetLocalID(obj) == expectedLocalId) {
+            return obj;
+        }
+    }
+    return NULL;
+}
+
+static void DespawnSlot(MapObjectManager *mapObjMan, int idx)
+{
+    MapObject *liveObj = ResolveLiveSlotObject(mapObjMan, idx);
+    if (liveObj != NULL) {
+        MapObject_Delete(liveObj);
+    } else if (mapObjMan != NULL && sWildSlots[idx].active) {
+        DeleteTransientObjectWithLocalID(mapObjMan, sWildSlots[idx].localId);
+    }
+    sWildSlots[idx].mapObj = NULL;
     sWildSlots[idx].active = FALSE;
 }
 
 void OverworldWild_ClearAll(FieldSystem *fieldSystem)
 {
+    MapObjectManager *mapObjMan = (fieldSystem != NULL) ? fieldSystem->mapObjMan : NULL;
     for (int i = 0; i < OVERWORLD_WILD_MAX_ACTIVE; i++) {
-        DespawnSlot(i);
+        DespawnSlot(mapObjMan, i);
     }
-    if (fieldSystem != NULL) {
-        DeleteOrphanedTransientObjects(fieldSystem->mapObjMan);
+    if (mapObjMan != NULL) {
+        DeleteOrphanedTransientObjects(mapObjMan);
     }
     sRespawnCooldownTimer = OVERWORLD_WILD_RESPAWN_COOLDOWN;
+    sAreaSettleTimer = OVERWORLD_WILD_AREA_SETTLE_FRAMES;
+    sPendingBatchSpawns = 0;
     sNeedsAreaSpawn = TRUE;
 }
 
 void OverworldWild_Init(FieldSystem *fieldSystem)
 {
-    if (fieldSystem != NULL) {
+    if (fieldSystem != NULL && fieldSystem->mapObjMan != NULL) {
         DeleteOrphanedTransientObjects(fieldSystem->mapObjMan);
     }
     memset(sWildSlots, 0, sizeof(sWildSlots));
     sRespawnCooldownTimer = OVERWORLD_WILD_RESPAWN_COOLDOWN;
-    sLastMapHeaderID = fieldSystem ? fieldSystem->location->mapHeaderID : (enum MapHeaderID)-1;
+    sAreaSettleTimer = OVERWORLD_WILD_AREA_SETTLE_FRAMES;
+    sPendingBatchSpawns = 0;
+    sLastMapHeaderID = (fieldSystem != NULL && fieldSystem->location != NULL)
+        ? fieldSystem->location->mapHeaderID
+        : (enum MapHeaderID)-1;
     sNeedsAreaSpawn = TRUE;
 }
 
@@ -279,14 +309,6 @@ static BOOL TrySpawnOneWildPokemon(FieldSystem *fieldSystem, int maxAttempts)
     return FALSE;
 }
 
-static void PopulateAreaBatch(FieldSystem *fieldSystem)
-{
-    int targetDensity = GetTargetDensity();
-    for (int i = 0; i < targetDensity; i++) {
-        TrySpawnOneWildPokemon(fieldSystem, 28);
-    }
-}
-
 static void TriggerSlotEncounter(FieldSystem *fieldSystem, int slotIdx)
 {
     OverworldWildSlot *slot = &sWildSlots[slotIdx];
@@ -295,7 +317,7 @@ static void TriggerSlotEncounter(FieldSystem *fieldSystem, int slotIdx)
     u8 form = slot->form;
     BOOL isShiny = slot->isShiny;
 
-    DespawnSlot(slotIdx);
+    DespawnSlot(fieldSystem->mapObjMan, slotIdx);
 
     if (Party_GetCurrentCount(SaveData_GetParty(fieldSystem->saveData)) == 0) {
         return;
@@ -377,12 +399,15 @@ BOOL OverworldWild_TryTriggerTouchEncounter(FieldSystem *fieldSystem, u16 heldKe
     int frontZ = playerZ + stepDz;
 
     for (int i = 0; i < OVERWORLD_WILD_MAX_ACTIVE; i++) {
-        if (!sWildSlots[i].active || sWildSlots[i].mapObj == NULL) {
+        MapObject *liveObj = ResolveLiveSlotObject(fieldSystem->mapObjMan, i);
+        if (liveObj == NULL) {
+            sWildSlots[i].mapObj = NULL;
+            sWildSlots[i].active = FALSE;
             continue;
         }
 
-        int objX = MapObject_GetX(sWildSlots[i].mapObj);
-        int objZ = MapObject_GetZ(sWildSlots[i].mapObj);
+        int objX = MapObject_GetX(liveObj);
+        int objZ = MapObject_GetZ(liveObj);
 
         // 1. Overlapping tile
         if (objX == playerX && objZ == playerZ) {
@@ -397,7 +422,7 @@ BOOL OverworldWild_TryTriggerTouchEncounter(FieldSystem *fieldSystem, u16 heldKe
         }
 
         // 3. Wild Pokemon is actively moving toward the player's adjacent tile
-        int objMoveDir = MapObject_GetMovingDir(sWildSlots[i].mapObj);
+        int objMoveDir = MapObject_GetMovingDir(liveObj);
         if (objMoveDir != DIR_NONE) {
             int odx = 0;
             int odz = 0;
@@ -419,7 +444,8 @@ BOOL OverworldWild_TryInteract(FieldSystem *fieldSystem, MapObject *targetObj)
     }
 
     for (int i = 0; i < OVERWORLD_WILD_MAX_ACTIVE; i++) {
-        if (sWildSlots[i].active && sWildSlots[i].mapObj == targetObj) {
+        MapObject *liveObj = ResolveLiveSlotObject(fieldSystem->mapObjMan, i);
+        if (liveObj != NULL && liveObj == targetObj) {
             TriggerSlotEncounter(fieldSystem, i);
             return TRUE;
         }
@@ -430,7 +456,8 @@ BOOL OverworldWild_TryInteract(FieldSystem *fieldSystem, MapObject *targetObj)
 
 void OverworldWild_Update(FieldSystem *fieldSystem)
 {
-    if (fieldSystem == NULL || fieldSystem->playerAvatar == NULL || fieldSystem->mapObjMan == NULL) {
+    if (fieldSystem == NULL || fieldSystem->location == NULL ||
+        fieldSystem->playerAvatar == NULL || fieldSystem->mapObjMan == NULL) {
         return;
     }
 
@@ -440,21 +467,26 @@ void OverworldWild_Update(FieldSystem *fieldSystem)
         return;
     }
 
-    // Refresh spawns when entering a new area/route
+    // Clear existing spawns and start a settle delay when entering a new area/route
     if (fieldSystem->location->mapHeaderID != sLastMapHeaderID) {
         OverworldWild_ClearAll(fieldSystem);
         sLastMapHeaderID = fieldSystem->location->mapHeaderID;
-        PopulateAreaBatch(fieldSystem);
-        sNeedsAreaSpawn = FALSE;
-        sRespawnCooldownTimer = OVERWORLD_WILD_RESPAWN_COOLDOWN;
+        sAreaSettleTimer = OVERWORLD_WILD_AREA_SETTLE_FRAMES;
+        sNeedsAreaSpawn = TRUE;
+        sPendingBatchSpawns = 0;
+        return;
+    }
+
+    // Wait for map matrix, collision chunks, and sprite VRAM to stabilize after transitions
+    if (sAreaSettleTimer > 0) {
+        sAreaSettleTimer--;
         return;
     }
 
     if (sNeedsAreaSpawn) {
-        PopulateAreaBatch(fieldSystem);
         sNeedsAreaSpawn = FALSE;
+        sPendingBatchSpawns = (u8)targetDensity;
         sRespawnCooldownTimer = OVERWORLD_WILD_RESPAWN_COOLDOWN;
-        return;
     }
 
     // Trim excess slots immediately if user lowered spawn density in Settings
@@ -463,7 +495,7 @@ void OverworldWild_Update(FieldSystem *fieldSystem)
         if (sWildSlots[i].active) {
             activeCount++;
             if (activeCount > targetDensity) {
-                DespawnSlot(i);
+                DespawnSlot(fieldSystem->mapObjMan, i);
                 activeCount--;
             }
         }
@@ -476,23 +508,31 @@ void OverworldWild_Update(FieldSystem *fieldSystem)
         if (!sWildSlots[i].active) {
             continue;
         }
-        MapObject *obj = sWildSlots[i].mapObj;
+        MapObject *obj = ResolveLiveSlotObject(fieldSystem->mapObjMan, i);
         if (obj == NULL) {
+            sWildSlots[i].mapObj = NULL;
             sWildSlots[i].active = FALSE;
             continue;
         }
 
         int dist = AbsDiff(MapObject_GetX(obj), playerX) + AbsDiff(MapObject_GetZ(obj), playerZ);
         if (dist > OVERWORLD_WILD_DESPAWN_DIST) {
-            DespawnSlot(i);
+            DespawnSlot(fieldSystem->mapObjMan, i);
             continue;
         }
 
         BOOL isWaterTile = FALSE;
         if (!IsValidWildEncounterTile(fieldSystem, MapObject_GetX(obj), MapObject_GetZ(obj), &isWaterTile) ||
             (isWaterTile != sWildSlots[i].isWaterSpawn)) {
-            DespawnSlot(i);
+            DespawnSlot(fieldSystem->mapObjMan, i);
         }
+    }
+
+    // Stagger initial area population 1 per frame instead of bursting all spawns at once
+    if (sPendingBatchSpawns > 0) {
+        TrySpawnOneWildPokemon(fieldSystem, 16);
+        sPendingBatchSpawns--;
+        return;
     }
 
     if (sRespawnCooldownTimer > 0) {

@@ -1,12 +1,13 @@
 #include "port/overworld_wild.h"
 #include "port/following_hack.h"
 #include "port/sim_config_prj.h"
+#include "constants/map_object.h"
+#include "trainer_info.h"
+#include "constants/battle.h"
 
 #include <string.h>
 
-#include "constants/field/map_object.h"
 #include "constants/heap.h"
-#include "constants/movements.h"
 #include "constants/pokemon.h"
 #include "generated/pokemon_data_params.h"
 

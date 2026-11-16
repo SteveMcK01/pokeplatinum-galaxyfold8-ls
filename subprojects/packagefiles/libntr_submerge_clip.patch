@@ -1,28 +1,31 @@
 --- a/include/simulator/sim.h
 +++ b/include/simulator/sim.h
-@@ -155,6 +155,7 @@
+@@ -155,6 +155,8 @@
  // Polygons drawn while it is non-zero are moved toward the camera for the depth test only: nothing at their lowest point
  // on screen, `top` (fx32, view units) at their highest. For the overworld's sprites. Default: 0
  void SIM_SetSpriteDepthBias(fx32 top);
 +// 0 = none, 1 = clip bottom 35% (submerged sprite), 2 = clip top 35% (upside-down reflection)
- void SIM_SetSpriteSubmergeClip(int mode);
++void SIM_SetSpriteSubmergeClip(int mode);
  // Layers (SIM_SetWidescreenBgEdgeExtend) whose sides mirror the 256-pixel picture instead of continuing its edge columns
  void SIM_SetWidescreenBgEdgeMirror(u8 bgLayers);
+ 
 --- a/libraries/sim/src/g3_handler.cpp
 +++ b/libraries/sim/src/g3_handler.cpp
-@@ -1614,9 +1614,11 @@
+@@ -1614,6 +1614,13 @@
      s_spriteDepthBiasTop = top;
  }
  
 +static int s_spriteSubmergeClipMode = 0;
- 
- extern "C" void SIM_SetSpriteSubmergeClip(int mode)
- {
++
++extern "C" void SIM_SetSpriteSubmergeClip(int mode)
++{
 +    s_spriteSubmergeClipMode = mode;
- }
- 
++}
++
  void G3SIM_SubmitPolygon(G3SIM_FxVtx_t * fxVerts, int numVerts) {
-@@ -1641,6 +1643,59 @@
+     G3SIM_ClipVtx_t clip[G3SIM_CLIP_MAX_VERTS];
+     G3SIM_Vertex_t polyVerts[G3SIM_CLIP_MAX_VERTS];
+@@ -1634,6 +1641,58 @@
          clip[i].a = curVtx->a;
      }
  
@@ -78,7 +81,6 @@
 +        }
 +    }
 +
-+    // Clipped in clip space: what is left has -w <= x, y, z <= w, so W >= 0 and the divide below stays on screen
+     // Clipped in clip space: what is left has -w <= x, y, z <= w, so W >= 0 and the divide below stays on screen
      numVerts = ClipVertices(clip, numVerts, TRUE);
      if(numVerts < 3) {
-         return;

@@ -657,53 +657,79 @@ void TouchControls_DrawBottomOverlay(float width, float height) {
 
 void TouchControls_DrawDisplaySettings(void) {
     SIM_Config_prj_type *cfg = SIM_Config_prj_GetConfig();
-    ImGui::Spacing();
-    ImGui::TextUnformatted("Screen layout");
-    ImGui::Separator();
+    SIM::UI::Section("Screen layout");
 
     bool topLeft = cfg->topRightOverlay != FALSE;
-    if (ImGui::Checkbox("Top-left interactive lower screen overlay", &topLeft)) {
+    if (SIM::UI::Toggle(
+            "Top-left interactive lower screen overlay",
+            "Show the lower DS screen as an interactive 4:3 overlay in the top-left corner while the top screen fills the display.",
+            &topLeft)) {
         cfg->topRightOverlay = topLeft ? TRUE : FALSE;
         SIM_Config_prj_SaveConfigFile(cfg);
     }
-    ImGui::TextWrapped("Show the lower DS screen as an interactive 4:3 overlay in the top-left corner while the top screen fills the display.");
 
     bool minimized = cfg->topRightOverlayMinimized != FALSE;
-    if (ImGui::Checkbox("Hide top-left lower screen overlay", &minimized)) {
+    if (SIM::UI::Toggle(
+            "Hide top-left lower screen overlay",
+            "Minimize the top-left lower screen overlay until toggled back on with the on-screen [ HIDE ] button.",
+            &minimized, topLeft)) {
         cfg->topRightOverlayMinimized = minimized ? TRUE : FALSE;
         SIM_Config_prj_SaveConfigFile(cfg);
     }
-    ImGui::TextWrapped("Minimize the top-left lower screen overlay until toggled back on with the on-screen [ HIDE ] button.");
 
-    float widthFrac = GetTopLeftWidthFraction(cfg);
-    if (ImGui::SliderFloat("Top-left overlay width", &widthFrac, 0.24f, 0.52f, "%.2f")) {
-        cfg->topRightOverlayScale = widthFrac;
+    int widthPct = (int)(GetTopLeftWidthFraction(cfg) * 100.0f + 0.5f);
+    if (widthPct < 24) widthPct = 24;
+    if (widthPct > 52) widthPct = 52;
+    if (SIM::UI::Stepper(
+            "Top-left overlay width",
+            "Width of the corner lower-screen overlay as a percentage of the display.",
+            &widthPct, 24, 52, 2, "%d%%", topLeft)) {
+        cfg->topRightOverlayScale = (float)widthPct / 100.0f;
         SIM_Config_prj_SaveConfigFile(cfg);
     }
 
-    ImGui::Spacing();
     bool fullExpand = cfg->fullScreenCompanion != FALSE;
-    if (ImGui::Checkbox("Full-screen Gear companion & Settings", &fullExpand)) {
+    if (SIM::UI::Toggle(
+            "Full-screen Gear companion & Settings",
+            "Expand the Gear companion and Settings menu to fill the whole screen with a bottom [ SWITCH ] pill.",
+            &fullExpand)) {
         cfg->fullScreenCompanion = fullExpand ? TRUE : FALSE;
         SIM_Config_prj_SaveConfigFile(cfg);
     }
-    ImGui::TextWrapped("Expand the Gear companion and Settings menu to fill the whole screen with a bottom [ SWITCH ] pill.");
 }
 
 void TouchControls_DrawSettings(void) {
     SIM_Config_prj_type *cfg = SIM_Config_prj_GetConfig();
+    SIM::UI::Section("On-screen controller");
+
     bool enabled = cfg->touchOverlay != FALSE;
-    if (ImGui::Checkbox("Enable on-screen touch controller", &enabled)) {
+    if (SIM::UI::Toggle(
+            "Enable on-screen touch controller",
+            "Multi-touch controller: D-Pad & A/B/X/Y plus L/R, Start/Select, Switch & FF.",
+            &enabled)) {
         cfg->touchOverlay = enabled ? TRUE : FALSE;
         SIM_Config_prj_SaveConfigFile(cfg);
     }
-    ImGui::TextWrapped("Multi-touch controller: D-Pad & A/B/X/Y plus L/R, Start/Select, Switch & FF.");
 
-    ImGui::Spacing();
-    if (ImGui::SliderFloat("Button opacity", &cfg->touchOverlayOpacity, 0.15f, 1.0f, "%.2f")) {
+    int opacityPct = (int)(cfg->touchOverlayOpacity * 100.0f + 0.5f);
+    if (opacityPct < 15) opacityPct = 15;
+    if (opacityPct > 100) opacityPct = 100;
+    if (SIM::UI::Stepper(
+            "Button opacity",
+            "Transparency of the virtual buttons over the lower display.",
+            &opacityPct, 15, 100, 5, "%d%%", enabled)) {
+        cfg->touchOverlayOpacity = (float)opacityPct / 100.0f;
         SIM_Config_prj_SaveConfigFile(cfg);
     }
-    if (ImGui::SliderFloat("Button scale", &cfg->touchOverlayScale, 0.65f, 1.50f, "%.2f")) {
+
+    int scalePct = (int)(cfg->touchOverlayScale * 100.0f + 0.5f);
+    if (scalePct < 65) scalePct = 65;
+    if (scalePct > 150) scalePct = 150;
+    if (SIM::UI::Stepper(
+            "Button scale",
+            "Overall size of the D-Pad, face buttons, and shoulder triggers.",
+            &scalePct, 65, 150, 5, "%d%%", enabled)) {
+        cfg->touchOverlayScale = (float)scalePct / 100.0f;
         SIM_Config_prj_SaveConfigFile(cfg);
     }
 }

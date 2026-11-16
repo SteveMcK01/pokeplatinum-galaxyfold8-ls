@@ -40,16 +40,16 @@
 +        }
 +        if (validW && hi > lo) {
 +            double cutY = (s_spriteSubmergeClipMode == 1)
-+                ? (lo + (hi - lo) * 0.35)
-+                : (hi - (hi - lo) * 0.35);
++                ? (hi - (hi - lo) * 0.35)
++                : (lo + (hi - lo) * 0.35);
 +            G3SIM_ClipVtx_t out[G3SIM_CLIP_MAX_VERTS];
 +            int outCount = 0;
 +            for (int i = 0; i < numVerts; i++) {
 +                int j = (i + 1) % numVerts;
 +                double yi = (double)clip[i].pos[1] / (double)clip[i].pos[3];
 +                double yj = (double)clip[j].pos[1] / (double)clip[j].pos[3];
-+                bool inI = (s_spriteSubmergeClipMode == 1) ? (yi >= cutY) : (yi <= cutY);
-+                bool inJ = (s_spriteSubmergeClipMode == 1) ? (yj >= cutY) : (yj <= cutY);
++                bool inI = (s_spriteSubmergeClipMode == 1) ? (yi <= cutY) : (yi >= cutY);
++                bool inJ = (s_spriteSubmergeClipMode == 1) ? (yj <= cutY) : (yj >= cutY);
 +                if (inI) {
 +                    out[outCount++] = clip[i];
 +                }

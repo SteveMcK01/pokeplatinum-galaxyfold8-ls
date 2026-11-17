@@ -91,6 +91,7 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
         inlineBottomSurfaceView.setFocusable(false);
         inlineBottomSurfaceView.setFocusableInTouchMode(false);
         inlineBottomSurfaceView.setVisibility(View.GONE);
+        inlineBottomSurfaceView.getHolder().setFormat(android.graphics.PixelFormat.TRANSLUCENT);
         inlineBottomSurfaceView.setZOrderMediaOverlay(true);
 
         secondaryScreen.bindSurfaceView(inlineBottomSurfaceView, this::onInlineBottomScreenTouched);
@@ -219,6 +220,14 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
         currentPipAlpha = alpha;
         if (inlineBottomSurfaceView != null) {
             inlineBottomSurfaceView.setAlpha(alpha);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                android.view.SurfaceControl sc = inlineBottomSurfaceView.getSurfaceControl();
+                if (sc != null && sc.isValid()) {
+                    new android.view.SurfaceControl.Transaction()
+                            .setAlpha(sc, alpha)
+                            .apply();
+                }
+            }
         }
         if (inlineOverlayBezelView != null) {
             inlineOverlayBezelView.setAlpha(alpha);

@@ -764,6 +764,8 @@ void DrawCheats()
         &config->instantHoneyTrees);
     ConfigToggle("Fast Berry growth", "Planted Berries mature in ~8 minutes and stay ripe on the tree until harvested.",
         &config->fastBerries);
+    ConfigToggle("Portable PC Box", "Access your PC Boxes directly from the Start Menu (disabled in Distortion World, Safari Zone, Pal Park, etc.).",
+        &config->portablePC);
 
     Section("Battles");
     static const int kExpValues[] = { 100, 150, 200, 300, 500 };

@@ -11,7 +11,7 @@
 #include "menu.h"
 #include "string_list.h"
 
-#define MAX_START_MENU_OPTIONS 7
+#define MAX_START_MENU_OPTIONS 8
 
 typedef struct StartMenu {
     Window primaryWindow;

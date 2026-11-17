@@ -44,6 +44,7 @@ typedef struct {
     BOOL fastEggs;      // eggs hatch after a few steps
     BOOL instantHoneyTrees; // slathered honey trees attract Pokemon immediately
     BOOL fastBerries;   // planted berries mature in ~8 minutes
+    BOOL portablePC;    // access PC boxes directly from the Start Menu
     BOOL anyTM;
     BOOL catchEmAll;
     BOOL tradeEvos;

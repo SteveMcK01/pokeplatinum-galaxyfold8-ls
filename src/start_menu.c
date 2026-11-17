@@ -16,6 +16,7 @@
 #include "applications/mail.h"
 #include "applications/party_menu/defs.h"
 #include "applications/party_menu/main.h"
+#include "applications/pc_boxes/box_settings.h"
 #include "applications/poffin_case/main.h"
 #include "applications/pokedex/pokedex_main.h"
 #include "applications/pokemon_summary_screen/main.h"
@@ -84,7 +85,13 @@
 #include "unk_0205B33C.h"
 #include "unk_0205C22C.h"
 #include "unk_0206B9D8.h"
+#include "persisted_map_features_init.h"
 #include "vars_flags.h"
+#include "constants/field/dynamic_map_features.h"
+#ifdef SDK_PORT
+#include "port/charcode_convert.h"
+#include "port/sim_config_prj.h"
+#endif
 
 #include "res/graphics/start_menu/start_menu.naix"
 #include "res/text/bank/easy_chat.h"
@@ -101,6 +108,7 @@ enum StartMenuOption {
     START_MENU_OPTION_EXIT,
     START_MENU_OPTION_CHAT,
     START_MENU_OPTION_RETIRE,
+    START_MENU_OPTION_PC,
 };
 
 typedef struct MenuMailData {
@@ -138,7 +146,7 @@ static u32 StartMenu_GetColosseumHiddenOptions(FieldSystem *fieldSystem);
 static void StartMenu_InitSprites(StartMenu *menu, u8 *options, u32 optionCount, u8 gender);
 static void StartMenu_FreeSprites(StartMenu *menu);
 static void StartMenu_AnimateSprites(StartMenu *menu);
-static void StartMenu_SetCursorPos(Sprite *sprite, u32 pos);
+static void StartMenu_SetCursorPos(Sprite *sprite, u32 pos, u32 optionCount);
 static void StartMenu_SetIconAnimationAndPalette(Sprite *sprite, u16 anim, u16 palette);
 static void StartMenu_ChangeActiveMenuIcon(StartMenu *menu, u16 oldIndex, u16 index);
 static void StartMenu_TryTransitionIconAnimationToWiggle(Sprite *sprite);
@@ -176,6 +184,9 @@ static BOOL StartMenu_OpenPartyMenu(FieldTask *fieldTask);
 static BOOL StartMenu_SelectBag(FieldTask *fieldTask);
 static BOOL StartMenu_Bag(FieldTask *fieldTask);
 static BOOL StartMenu_ExitBag(FieldTask *fieldTask);
+static BOOL StartMenu_SelectPC(FieldTask *fieldTask);
+static BOOL StartMenu_OpenPC(FieldTask *fieldTask);
+static BOOL StartMenu_ExitPC(FieldTask *fieldTask);
 static BOOL StartMenu_SelectSave(FieldTask *fieldTask);
 static void StartMenu_SaveWait(FieldTask *fieldTask);
 static void StartMenu_Save(FieldTask *fieldTask);
@@ -205,6 +216,7 @@ static const StartMenuAction sStartMenuActions[] = {
     [START_MENU_OPTION_EXIT]         = { .bankEntry = StartMenu_Text_Exit,           .callback = (void *)MENU_CANCEL         },
     [START_MENU_OPTION_CHAT]         = { .bankEntry = StartMenu_Text_Chat,           .callback = StartMenu_SelectChat        },
     [START_MENU_OPTION_RETIRE]       = { .bankEntry = StartMenu_Text_Retire,         .callback = StartMenu_SelectRetire      },
+    [START_MENU_OPTION_PC]           = { .bankEntry = 0,                             .callback = StartMenu_SelectPC          },
 };
 // clang-format on
 
@@ -279,6 +291,7 @@ BOOL FieldSystem_IsInValidLocation(FieldSystem *fieldSystem)
 #define HIDE_OPTION_EXIT         (1 << 6)
 #define HIDE_OPTION_CHAT         (1 << 7)
 #define HIDE_OPTION_RETIRE       (1 << 8)
+#define HIDE_OPTION_PC           (1 << 9)
 
 void StartMenu_Open(FieldSystem *fieldSystem)
 {
@@ -391,32 +404,46 @@ static u32 StartMenu_GetNormalHiddenOptions(FieldSystem *fieldSystem)
     hideFlags |= HIDE_OPTION_CHAT;
     hideFlags |= HIDE_OPTION_RETIRE;
 
+#ifdef SDK_PORT
+    const SIM_Config_prj_type *config = SIM_Config_prj_GetConfig();
+    if (config == NULL || !config->portablePC
+        || (hideFlags & (HIDE_OPTION_POKEMON | HIDE_OPTION_BAG))
+        || !FieldSystem_IsInValidLocation(fieldSystem)
+        || SystemFlag_CheckHasPartner(SaveData_GetVarsFlags(fieldSystem->saveData)) == TRUE
+        || PersistedMapFeatures_IsCurrentDynamicMap(fieldSystem, DYNAMIC_MAP_FEATURES_DISTORTION_WORLD) == TRUE
+        || CommServerClient_IsInitialized()) {
+        hideFlags |= HIDE_OPTION_PC;
+    }
+#else
+    hideFlags |= HIDE_OPTION_PC;
+#endif
+
     return hideFlags;
 }
 
 static u32 StartMenu_GetSafariHiddenOptions(FieldSystem *fieldSystem)
 {
-    return HIDE_OPTION_SAVE | HIDE_OPTION_CHAT;
+    return HIDE_OPTION_SAVE | HIDE_OPTION_CHAT | HIDE_OPTION_PC;
 }
 
 static u32 StartMenu_GetPalParkHiddenOptions(FieldSystem *fieldSystem)
 {
-    return HIDE_OPTION_SAVE | HIDE_OPTION_CHAT | HIDE_OPTION_BAG;
+    return HIDE_OPTION_SAVE | HIDE_OPTION_CHAT | HIDE_OPTION_BAG | HIDE_OPTION_PC;
 }
 
 static u32 StartMenu_GetBattleTowerSalonHiddenOptions(FieldSystem *fieldSystem)
 {
-    return HIDE_OPTION_POKEDEX | HIDE_OPTION_BAG | HIDE_OPTION_SAVE | HIDE_OPTION_CHAT | HIDE_OPTION_RETIRE;
+    return HIDE_OPTION_POKEDEX | HIDE_OPTION_BAG | HIDE_OPTION_SAVE | HIDE_OPTION_CHAT | HIDE_OPTION_RETIRE | HIDE_OPTION_PC;
 }
 
 static u32 StartMenu_GetUnionRoomHiddenOptions(FieldSystem *fieldSystem)
 {
-    return HIDE_OPTION_SAVE | HIDE_OPTION_RETIRE;
+    return HIDE_OPTION_SAVE | HIDE_OPTION_RETIRE | HIDE_OPTION_PC;
 }
 
 static u32 StartMenu_GetColosseumHiddenOptions(FieldSystem *fieldSystem)
 {
-    return HIDE_OPTION_SAVE | HIDE_OPTION_POKEDEX | HIDE_OPTION_CHAT | HIDE_OPTION_RETIRE;
+    return HIDE_OPTION_SAVE | HIDE_OPTION_POKEDEX | HIDE_OPTION_CHAT | HIDE_OPTION_RETIRE | HIDE_OPTION_PC;
 }
 
 static BOOL StartMenu_Main(FieldTask *fieldTask)
@@ -531,7 +558,8 @@ static void StartMenu_InitMenu(FieldTask *fieldTask)
     StartMenu *menu = FieldTask_GetEnv(fieldTask);
     u32 optionCount = StartMenu_MakeOptionList(menu, menu->options);
 
-    Window_Add(fieldSystem->bgConfig, &menu->primaryWindow, BG_LAYER_MAIN_3, 20, 1, 11, optionCount * 3, 12, BASE_TILE_MESSAGE_WINDOW - 11 * 22);
+    u8 windowHeight = (optionCount >= 8) ? 22 : (u8)(optionCount * 3);
+    Window_Add(fieldSystem->bgConfig, &menu->primaryWindow, BG_LAYER_MAIN_3, 20, 1, 11, windowHeight, 12, BASE_TILE_MESSAGE_WINDOW - 11 * 22);
     LoadStandardWindowGraphics(fieldSystem->bgConfig, BG_LAYER_MAIN_3, BASE_TILE_STANDARD_WINDOW_FRAME, 11, STANDARD_WINDOW_FIELD, HEAP_ID_FIELD2);
     Window_DrawStandardFrame(&menu->primaryWindow, TRUE, BASE_TILE_STANDARD_WINDOW_FRAME, 11);
 
@@ -553,6 +581,15 @@ static void StartMenu_InitMenu(FieldTask *fieldTask)
             String_Free(fmtString);
             String_Free(string);
             StringTemplate_Free(template);
+#ifdef SDK_PORT
+        } else if (menu->options[i] == START_MENU_OPTION_PC) {
+            String *string = String_Init(8, HEAP_ID_FIELD2);
+            charcode_t chars[8];
+            CharCode_FromAscii("PC", chars, NELEMS(chars));
+            String_CopyChars(string, chars);
+            StringList_AddFromString(menu->menuOptions, string, menu->options[i]);
+            String_Free(string);
+#endif
         } else {
             StringList_AddFromMessageBank(menu->menuOptions, loader, sStartMenuActions[menu->options[i]].bankEntry, menu->options[i]);
         }
@@ -571,7 +608,7 @@ static void StartMenu_InitMenu(FieldTask *fieldTask)
     template.fontID = FONT_MESSAGE;
     template.xSize = 1;
     template.ySize = optionCount;
-    template.lineSpacing = 8;
+    template.lineSpacing = (optionCount >= 8) ? 6 : 8;
     template.suppressCursor = TRUE;
 
     if (optionCount >= 4) {
@@ -602,6 +639,7 @@ static u32 StartMenu_MakeOptionList(StartMenu *menu, u8 *listOut)
     ADD_OPTION_IF_NOT_HIDDEN(START_MENU_OPTION_POKEDEX, HIDE_OPTION_POKEDEX);
     ADD_OPTION_IF_NOT_HIDDEN(START_MENU_OPTION_POKEMON, HIDE_OPTION_POKEMON);
     ADD_OPTION_IF_NOT_HIDDEN(START_MENU_OPTION_BAG, HIDE_OPTION_BAG);
+    ADD_OPTION_IF_NOT_HIDDEN(START_MENU_OPTION_PC, HIDE_OPTION_PC);
     ADD_OPTION_IF_NOT_HIDDEN(START_MENU_OPTION_TRAINER_CASE, HIDE_OPTION_TRAINER_CASE);
     ADD_OPTION_IF_NOT_HIDDEN(START_MENU_OPTION_SAVE, HIDE_OPTION_SAVE);
     ADD_OPTION_IF_NOT_HIDDEN(START_MENU_OPTION_OPTIONS, HIDE_OPTION_OPTIONS);
@@ -698,7 +736,7 @@ static BOOL StartMenu_Select(FieldTask *fieldTask)
     menu->cursorPos = Menu_GetCursorPos(menu->menu);
 
     if (prevPos != menu->cursorPos) {
-        StartMenu_SetCursorPos(menu->sprites[CURSOR_SPRITE_INDEX]->sprite, menu->cursorPos);
+        StartMenu_SetCursorPos(menu->sprites[CURSOR_SPRITE_INDEX]->sprite, menu->cursorPos, menu->spriteCount - 1);
         StartMenu_ChangeActiveMenuIcon(menu, prevPos, menu->cursorPos);
         fieldSystem->menuCursorPos = menu->options[menu->cursorPos];
     }
@@ -759,20 +797,25 @@ static void StartMenu_InitSprites(StartMenu *menu, u8 *options, u32 optionCount,
 
     menu->sprites[CURSOR_SPRITE_INDEX] = SpriteResourceManager_CreateManagedSprite(&menu->spriteManager, &sSpriteTemplates[CURSOR_TEMPLATE]);
 
-    StartMenu_SetCursorPos(menu->sprites[CURSOR_SPRITE_INDEX]->sprite, menu->cursorPos);
+    StartMenu_SetCursorPos(menu->sprites[CURSOR_SPRITE_INDEX]->sprite, menu->cursorPos, optionCount);
 
     SpriteResourceManager_LoadCell(&menu->spriteManager, narc, icons_cell_NCER, FALSE, 13529);
     SpriteResourceManager_LoadAnimation(&menu->spriteManager, narc, icons_anim_NANR, FALSE, 13529);
     SpriteResourceManager_LoadTiles(&menu->spriteManager, narc, icons_NCGR, FALSE, NNS_G2D_VRAM_TYPE_2DMAIN, 13529);
 
+    s16 iconYBase = (optionCount >= 8) ? 18 : 20;
+    s16 iconYStep = (optionCount >= 8) ? 22 : 24;
+
     for (u32 i = 0; i < optionCount; i++) {
         SpriteTemplate template;
 
         template = sSpriteTemplates[ICON_TEMPLATE];
-        template.y += 24 * i;
+        template.y = iconYBase + iconYStep * i;
 
         if (options[i] == START_MENU_OPTION_BAG && gender == GENDER_FEMALE) {
             template.animIdx = 9 * ICON_ANIM_COUNT;
+        } else if (options[i] == START_MENU_OPTION_PC) {
+            template.animIdx = START_MENU_OPTION_POKEDEX * ICON_ANIM_COUNT;
         } else {
             template.animIdx = options[i] * ICON_ANIM_COUNT;
         }
@@ -806,10 +849,12 @@ static void StartMenu_AnimateSprites(StartMenu *menu)
     }
 }
 
-static void StartMenu_SetCursorPos(Sprite *sprite, u32 pos)
+static void StartMenu_SetCursorPos(Sprite *sprite, u32 pos, u32 optionCount)
 {
     VecFx32 position = *(Sprite_GetPosition(sprite));
-    position.y = (20 + 24 * pos) * FX32_ONE;
+    s16 yBase = (optionCount >= 8) ? 18 : 20;
+    s16 yStep = (optionCount >= 8) ? 22 : 24;
+    position.y = (yBase + yStep * pos) * FX32_ONE;
 
     Sprite_SetPosition(sprite, &position);
 }
@@ -1260,6 +1305,38 @@ static BOOL StartMenu_ExitBag(FieldTask *fieldTask)
 
     Heap_Free(bagCtx);
 
+    return FALSE;
+}
+
+static BOOL StartMenu_SelectPC(FieldTask *fieldTask)
+{
+    StartMenu *menu = FieldTask_GetEnv(fieldTask);
+    FieldMap_FadeScreen(FADE_TYPE_BRIGHTNESS_OUT);
+    menu->callback = StartMenu_OpenPC;
+    menu->state = START_MENU_STATE_APP_START;
+    return TRUE;
+}
+
+static BOOL StartMenu_OpenPC(FieldTask *fieldTask)
+{
+    FieldSystem *fieldSystem = FieldTask_GetFieldSystem(fieldTask);
+    StartMenu *menu = FieldTask_GetEnv(fieldTask);
+    menu->taskData = sub_0203D88C(fieldSystem, PC_MODE_MOVE_MONS);
+    menu->callback = StartMenu_ExitPC;
+    FieldSystem_SaveStateIfCommunicationOff(fieldSystem);
+    return FALSE;
+}
+
+static BOOL StartMenu_ExitPC(FieldTask *fieldTask)
+{
+    FieldSystem *fieldSystem = FieldTask_GetFieldSystem(fieldTask);
+    StartMenu *menu = FieldTask_GetEnv(fieldTask);
+    if (menu->taskData != NULL) {
+        Heap_Free(menu->taskData);
+        menu->taskData = NULL;
+    }
+    FieldSystem_StartFieldMap(fieldSystem);
+    menu->state = START_MENU_STATE_REINIT;
     return FALSE;
 }
 

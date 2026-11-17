@@ -124,6 +124,9 @@ static int IniHandler(void* user, const char* section, const char* name,
     if(MATCH("Cheats", "FastBerries")) {
         config->fastBerries = StringToBool(value);
     }
+    if(MATCH("Cheats", "PortablePC")) {
+        config->portablePC = StringToBool(value);
+    }
     if(MATCH("Cheats", "AnyTM")) {
         config->anyTM = StringToBool(value);
     }
@@ -265,6 +268,7 @@ void SIM_Config_prj_LoadDefaults(SIM_Config_prj_type * aConfig)
   aConfig->fastEggs = FALSE;
   aConfig->instantHoneyTrees = FALSE;
   aConfig->fastBerries = FALSE;
+  aConfig->portablePC = TRUE;
   aConfig->anyTM = FALSE;
     aConfig->catchEmAll = FALSE;
     aConfig->tradeEvos = FALSE;
@@ -349,6 +353,7 @@ void SIM_Config_prj_SaveConfigFile(SIM_Config_prj_type * aConfig)
     fprintf(configFile, "FastEggs=%s\n", BoolToString(aConfig->fastEggs));
     fprintf(configFile, "InstantHoneyTrees=%s\n", BoolToString(aConfig->instantHoneyTrees));
     fprintf(configFile, "FastBerries=%s\n", BoolToString(aConfig->fastBerries));
+    fprintf(configFile, "PortablePC=%s\n", BoolToString(aConfig->portablePC));
     fprintf(configFile, "AnyTM=%s\n", BoolToString(aConfig->anyTM));
     fprintf(configFile, "CatchEmAll=%s\n", BoolToString(aConfig->catchEmAll));
     fprintf(configFile, "TradeEvos=%s\n", BoolToString(aConfig->tradeEvos));

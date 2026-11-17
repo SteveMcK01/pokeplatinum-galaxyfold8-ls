@@ -19,6 +19,11 @@
 
 #include "port/sim_config_prj.h"
 #include "port/touch_controls.h"
+#ifdef GEN5_BATTLES
+#include "port/gen5_battle.h"
+#endif
+
+extern "C" struct BattleSystem *Gear_ActiveBattleSystem(void);
 
 namespace {
 
@@ -69,6 +74,7 @@ static bool sPrevCompanionSwitchPressed = false;
 static bool sPrevFFPressed = false;
 static int sLastAndroidLayoutMode = -1;
 static float sLastAndroidOverlayScale = -1.0f;
+static int sLastAndroidBattleMode = -1;
 
 static std::vector<TouchPt> sSecondaryTouches;
 static float sSecondaryViewW = 0.0f;
@@ -111,6 +117,47 @@ static void SyncAndroidLayoutMode(int mode) {
     env->DeleteLocalRef(cls);
 #else
     (void)mode;
+#endif
+}
+
+static bool IsBattleScreenActive(void) {
+    if (Gear_ActiveBattleSystem() != NULL) {
+        return true;
+    }
+#ifdef GEN5_BATTLES
+    if (Gen5Battle_IsShown() != FALSE) {
+        return true;
+    }
+#endif
+    return false;
+}
+
+static void SyncAndroidBattleMode(bool inBattle) {
+#ifdef __ANDROID__
+    const int val = inBattle ? 1 : 0;
+    if (sLastAndroidBattleMode == val) {
+        return;
+    }
+    JNIEnv *env = static_cast<JNIEnv *>(SDL_AndroidGetJNIEnv());
+    if (!env) {
+        return;
+    }
+    jclass cls = env->FindClass("org/pokeplatinum/port/PlatinumActivity");
+    if (!cls) {
+        env->ExceptionClear();
+        return;
+    }
+    jmethodID mid = env->GetStaticMethodID(cls, "setInlineBattleMode", "(Z)V");
+    if (mid) {
+        env->CallStaticVoidMethod(cls, mid, inBattle ? JNI_TRUE : JNI_FALSE);
+        sLastAndroidBattleMode = val;
+    }
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+    }
+    env->DeleteLocalRef(cls);
+#else
+    (void)inBattle;
 #endif
 }
 
@@ -198,7 +245,7 @@ static bool PointInRect(float px, float py, float x0, float y0, float x1, float 
     return px >= x0 && px <= x1 && py >= y0 && py <= y1;
 }
 
-static void EvalBottomPoint(float fx, float fy, const BottomLayout &L, bool pressed[VBTN_COUNT]) {
+static void EvalBottomPoint(float fx, float fy, const BottomLayout &L, bool pressed[VBTN_COUNT], bool includeFaceButtons = true) {
     const float dx = fx - L.dpadCx;
     const float dy = fy - L.dpadCy;
     const float distSq = dx * dx + dy * dy;
@@ -212,11 +259,13 @@ static void EvalBottomPoint(float fx, float fy, const BottomLayout &L, bool pres
         if (angle > -0.98f && angle < 0.98f) pressed[VBTN_RIGHT] = true;
     }
 
-    const float hitR = L.faceBtnR * 1.22f;
-    if (PointInCircle(fx, fy, L.aCx, L.aCy, hitR)) pressed[VBTN_A] = true;
-    if (PointInCircle(fx, fy, L.bCx, L.bCy, hitR)) pressed[VBTN_B] = true;
-    if (PointInCircle(fx, fy, L.xCx, L.xCy, hitR)) pressed[VBTN_X] = true;
-    if (PointInCircle(fx, fy, L.yCx, L.yCy, hitR)) pressed[VBTN_Y] = true;
+    if (includeFaceButtons) {
+        const float hitR = L.faceBtnR * 1.22f;
+        if (PointInCircle(fx, fy, L.aCx, L.aCy, hitR)) pressed[VBTN_A] = true;
+        if (PointInCircle(fx, fy, L.bCx, L.bCy, hitR)) pressed[VBTN_B] = true;
+        if (PointInCircle(fx, fy, L.xCx, L.xCy, hitR)) pressed[VBTN_X] = true;
+        if (PointInCircle(fx, fy, L.yCx, L.yCy, hitR)) pressed[VBTN_Y] = true;
+    }
 }
 
 static bool IsPointOnBottomControls(float fx, float fy, const BottomLayout &L) {
@@ -419,8 +468,11 @@ void TouchControls_DrawOverlay(void) {
     const bool companionFull = allowFullExpand && !primaryFull && (SIM_Companion_IsFullScreen() != FALSE);
     const bool pipOverlayMode = !primaryFull && !companionFull && (cfg->topRightOverlay != FALSE);
     const bool pipMinimized = pipOverlayMode && (cfg->topRightOverlayMinimized != FALSE);
+    const bool inBattle = IsBattleScreenActive();
+    const bool hideFaceButtonsInBattle = pipOverlayMode && inBattle;
 
     SyncAndroidOverlayScale(GetTopLeftWidthFraction(cfg));
+    SyncAndroidBattleMode(inBattle);
     SyncAndroidLayoutMode(primaryFull ? 2 : (companionFull ? 1 : (pipOverlayMode ? (pipMinimized ? 4 : 3) : 0)));
 
     if (!cfg->touchOverlay || primaryFull || companionFull) {
@@ -520,7 +572,7 @@ void TouchControls_DrawOverlay(void) {
             if (PointInRect(fx, fy, rX0, rowY0, rX1, rowY1)) pressed[VBTN_R] = true;
 
             if (pipOverlayMode) {
-                EvalBottomPoint(fx, fy, L, pressed);
+                EvalBottomPoint(fx, fy, L, pressed, !hideFaceButtonsInBattle);
             }
         }
     }
@@ -593,10 +645,12 @@ void TouchControls_DrawOverlay(void) {
         ImFont *font = ImGui::GetFont();
         DrawDpad(dl, L.dpadCx, L.dpadCy, L.dpadR,
                  pressed[VBTN_UP], pressed[VBTN_DOWN], pressed[VBTN_LEFT], pressed[VBTN_RIGHT], alpha);
-        DrawCircleButton(dl, font, L.aCx, L.aCy, L.faceBtnR, "A", pressed[VBTN_A], alpha, IM_COL32(235, 75, 85, 255));
-        DrawCircleButton(dl, font, L.bCx, L.bCy, L.faceBtnR, "B", pressed[VBTN_B], alpha, IM_COL32(235, 185, 55, 255));
-        DrawCircleButton(dl, font, L.xCx, L.xCy, L.faceBtnR, "X", pressed[VBTN_X], alpha, IM_COL32(75, 145, 240, 255));
-        DrawCircleButton(dl, font, L.yCx, L.yCy, L.faceBtnR, "Y", pressed[VBTN_Y], alpha, IM_COL32(70, 200, 120, 255));
+        if (!hideFaceButtonsInBattle) {
+            DrawCircleButton(dl, font, L.aCx, L.aCy, L.faceBtnR, "A", pressed[VBTN_A], alpha, IM_COL32(235, 75, 85, 255));
+            DrawCircleButton(dl, font, L.bCx, L.bCy, L.faceBtnR, "B", pressed[VBTN_B], alpha, IM_COL32(235, 185, 55, 255));
+            DrawCircleButton(dl, font, L.xCx, L.xCy, L.faceBtnR, "X", pressed[VBTN_X], alpha, IM_COL32(75, 145, 240, 255));
+            DrawCircleButton(dl, font, L.yCx, L.yCy, L.faceBtnR, "Y", pressed[VBTN_Y], alpha, IM_COL32(70, 200, 120, 255));
+        }
     }
 }
 

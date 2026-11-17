@@ -145,6 +145,7 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
     }
 
     private float inlineOverlayWidthFraction = 0.36f;
+    private boolean inlineBattleMode = false;
 
     @SuppressWarnings("unused")
     public static void setInlineOverlayWidthFraction(float fraction) {
@@ -167,6 +168,19 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
             act.runOnUiThread(() -> {
                 if (act.inlineLayoutMode != mode) {
                     act.inlineLayoutMode = mode;
+                    act.updateSplitSurfaceBounds();
+                }
+            });
+        }
+    }
+
+    @SuppressWarnings("unused")
+    public static void setInlineBattleMode(boolean inBattle) {
+        PlatinumActivity act = sInstance;
+        if (act != null) {
+            act.runOnUiThread(() -> {
+                if (act.inlineBattleMode != inBattle) {
+                    act.inlineBattleMode = inBattle;
                     act.updateSplitSurfaceBounds();
                 }
             });
@@ -224,11 +238,18 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
                 overlayWidth = Math.round(overlayHeight * (4.0f / 3.0f));
             }
             int pad = Math.max(12, Math.min(totalWidth, totalHeight) / 60);
-            applyRelativeBounds(inlineBottomSurfaceView, overlayWidth, overlayHeight, pad, pad);
+            int leftMargin = pad;
+            int topMargin = pad;
+            if (inlineBattleMode) {
+                int bottomClearance = Math.max(pad, Math.round(totalHeight * 0.088f));
+                leftMargin = Math.max(pad, totalWidth - overlayWidth - pad);
+                topMargin = Math.max(pad, totalHeight - overlayHeight - bottomClearance);
+            }
+            applyRelativeBounds(inlineBottomSurfaceView, overlayWidth, overlayHeight, leftMargin, topMargin);
             if (inlineOverlayBezelView != null) {
                 float density = getResources().getDisplayMetrics().density;
                 int border = Math.max(2, Math.round(2.5f * density));
-                applyRelativeBounds(inlineOverlayBezelView, overlayWidth + border * 2, overlayHeight + border * 2, pad - border, pad - border);
+                applyRelativeBounds(inlineOverlayBezelView, overlayWidth + border * 2, overlayHeight + border * 2, leftMargin - border, topMargin - border);
                 if (inlineOverlayBezelView.getVisibility() != View.VISIBLE) {
                     inlineOverlayBezelView.setVisibility(View.VISIBLE);
                 }

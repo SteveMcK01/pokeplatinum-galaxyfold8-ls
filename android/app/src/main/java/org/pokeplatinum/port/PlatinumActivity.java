@@ -241,9 +241,8 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
             int leftMargin = pad;
             int topMargin = pad;
             if (inlineBattleMode) {
-                int bottomClearance = Math.max(pad, Math.round(totalHeight * 0.088f));
                 leftMargin = Math.max(pad, totalWidth - overlayWidth - pad);
-                topMargin = Math.max(pad, totalHeight - overlayHeight - bottomClearance);
+                topMargin = Math.max(pad, totalHeight - overlayHeight - pad);
             }
             applyRelativeBounds(inlineBottomSurfaceView, overlayWidth, overlayHeight, leftMargin, topMargin);
             if (inlineOverlayBezelView != null) {

@@ -544,7 +544,10 @@ void TouchControls_DrawOverlay(void) {
         staX0 = staX1 - baseW * 1.20f;
     }
 
-    const BottomLayout L = ComputeBottomLayout(disp.x, disp.y, scale * 0.88f, 0.69f);
+    const BottomLayout L = ComputeBottomLayout(disp.x, disp.y, scale * 0.88f, hideFaceButtonsInBattle ? 0.63f : 0.69f);
+    const float battleAR = L.faceBtnR * 0.66f;
+    const float battleACx = disp.x * 0.032f + battleAR * 1.10f;
+    const float battleACy = rowY1 - battleAR;
 
     bool pressed[VBTN_COUNT] = {};
 
@@ -574,9 +577,6 @@ void TouchControls_DrawOverlay(void) {
             if (pipOverlayMode) {
                 EvalBottomPoint(fx, fy, L, pressed, !hideFaceButtonsInBattle);
                 if (hideFaceButtonsInBattle) {
-                    const float battleACx = disp.x * 0.55f;
-                    const float battleACy = disp.y * 0.84f;
-                    const float battleAR = L.faceBtnR * 0.72f;
                     if (PointInCircle(fx, fy, battleACx, battleACy, battleAR * 1.25f)) {
                         pressed[VBTN_A] = true;
                     }
@@ -659,9 +659,6 @@ void TouchControls_DrawOverlay(void) {
             DrawCircleButton(dl, font, L.xCx, L.xCy, L.faceBtnR, "X", pressed[VBTN_X], alpha, IM_COL32(75, 145, 240, 255));
             DrawCircleButton(dl, font, L.yCx, L.yCy, L.faceBtnR, "Y", pressed[VBTN_Y], alpha, IM_COL32(70, 200, 120, 255));
         } else {
-            const float battleACx = disp.x * 0.55f;
-            const float battleACy = disp.y * 0.84f;
-            const float battleAR = L.faceBtnR * 0.72f;
             DrawCircleButton(dl, font, battleACx, battleACy, battleAR, "A", pressed[VBTN_A], alpha, IM_COL32(235, 75, 85, 255));
         }
     }

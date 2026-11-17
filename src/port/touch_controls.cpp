@@ -415,7 +415,7 @@ BOOL TouchControls_IsEnabled(void) {
 void TouchControls_DrawOverlay(void) {
     SIM_Config_prj_type *cfg = SIM_Config_prj_GetConfig();
     const bool allowFullExpand = (cfg->fullScreenCompanion != FALSE);
-    const bool primaryFull = allowFullExpand && (SIM::Settings::IsOpen() || SIM_Carts_UIActive());
+    const bool primaryFull = SIM_Carts_UIActive() || (allowFullExpand && SIM::Settings::IsOpen());
     const bool companionFull = allowFullExpand && !primaryFull && (SIM_Companion_IsFullScreen() != FALSE);
     const bool pipOverlayMode = !primaryFull && !companionFull && (cfg->topRightOverlay != FALSE);
     const bool pipMinimized = pipOverlayMode && (cfg->topRightOverlayMinimized != FALSE);
@@ -603,7 +603,7 @@ void TouchControls_DrawOverlay(void) {
 void TouchControls_DrawBottomOverlay(float width, float height) {
     SIM_Config_prj_type *cfg = SIM_Config_prj_GetConfig();
     const bool allowFullExpand = (cfg->fullScreenCompanion != FALSE);
-    const bool primaryFull = allowFullExpand && (SIM::Settings::IsOpen() || SIM_Carts_UIActive());
+    const bool primaryFull = SIM_Carts_UIActive() || (allowFullExpand && SIM::Settings::IsOpen());
     const bool companionFull = allowFullExpand && !primaryFull && (SIM_Companion_IsFullScreen() != FALSE);
     const bool pipOverlayMode = !primaryFull && !companionFull && (cfg->topRightOverlay != FALSE);
 
@@ -787,7 +787,7 @@ Java_org_pokeplatinum_port_SecondaryScreen_nativeUpdateSecondaryTouches(
 
     SIM_Config_prj_type *cfg = SIM_Config_prj_GetConfig();
     const bool allowFullExpand = (cfg->fullScreenCompanion != FALSE);
-    const bool primaryFull = allowFullExpand && (SIM::Settings::IsOpen() || SIM_Carts_UIActive());
+    const bool primaryFull = SIM_Carts_UIActive() || (allowFullExpand && SIM::Settings::IsOpen());
     const bool companionFull = allowFullExpand && !primaryFull && (SIM_Companion_IsFullScreen() != FALSE);
     const bool pipOverlayMode = !primaryFull && !companionFull && (cfg->topRightOverlay != FALSE);
     const bool bottomControlsActive = cfg->touchOverlay && !primaryFull && !companionFull && !pipOverlayMode;

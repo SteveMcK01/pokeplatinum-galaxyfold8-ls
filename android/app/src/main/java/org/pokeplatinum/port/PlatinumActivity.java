@@ -55,7 +55,7 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
     private SurfaceView inlineBottomSurfaceView;
     private View inlineOverlayBezelView;
     private boolean inlineSplitEnabled;
-    private int inlineLayoutMode = 0; // 0 = 50/50 split, 1 = full-screen companion, 2 = full-screen primary (settings)
+    private int inlineLayoutMode = 2; // 0 = 50/50 split, 1 = full-screen companion, 2 = full-screen primary (settings/picker)
 
     @Override
     protected String[] getLibraries() {

@@ -1,0 +1,86 @@
+--- a/include/simulator/sim.h
++++ b/include/simulator/sim.h
+@@ -155,6 +155,8 @@
+ // Polygons drawn while it is non-zero are moved toward the camera for the depth test only: nothing at their lowest point
+ // on screen, `top` (fx32, view units) at their highest. For the overworld's sprites. Default: 0
+ void SIM_SetSpriteDepthBias(fx32 top);
++// 0 = none, 1 = clip bottom 35% (submerged sprite), 2 = clip top 35% (upside-down reflection)
++void SIM_SetSpriteSubmergeClip(int mode);
+ // Layers (SIM_SetWidescreenBgEdgeExtend) whose sides mirror the 256-pixel picture instead of continuing its edge columns
+ void SIM_SetWidescreenBgEdgeMirror(u8 bgLayers);
+ 
+--- a/libraries/sim/src/g3_handler.cpp
++++ b/libraries/sim/src/g3_handler.cpp
+@@ -1614,6 +1614,13 @@
+     s_spriteDepthBiasTop = top;
+ }
+ 
++static int s_spriteSubmergeClipMode = 0;
++
++extern "C" void SIM_SetSpriteSubmergeClip(int mode)
++{
++    s_spriteSubmergeClipMode = mode;
++}
++
+ void G3SIM_SubmitPolygon(G3SIM_FxVtx_t * fxVerts, int numVerts) {
+     G3SIM_ClipVtx_t clip[G3SIM_CLIP_MAX_VERTS];
+     G3SIM_Vertex_t polyVerts[G3SIM_CLIP_MAX_VERTS];
+@@ -1634,6 +1641,58 @@
+         clip[i].a = curVtx->a;
+     }
+ 
++    if (s_spriteSubmergeClipMode != 0 && numVerts >= 3) {
++        double lo = 1e9, hi = -1e9;
++        bool validW = true;
++        for (int i = 0; i < numVerts; i++) {
++            if (clip[i].pos[3] <= 0) { validW = false; break; }
++            double ny = (double)clip[i].pos[1] / (double)clip[i].pos[3];
++            if (ny < lo) lo = ny;
++            if (ny > hi) hi = ny;
++        }
++        if (validW && hi > lo) {
++            double cutY = (s_spriteSubmergeClipMode == 1)
++                ? (lo + (hi - lo) * 0.35)
++                : (hi - (hi - lo) * 0.35);
++            G3SIM_ClipVtx_t out[G3SIM_CLIP_MAX_VERTS];
++            int outCount = 0;
++            for (int i = 0; i < numVerts; i++) {
++                int j = (i + 1) % numVerts;
++                double yi = (double)clip[i].pos[1] / (double)clip[i].pos[3];
++                double yj = (double)clip[j].pos[1] / (double)clip[j].pos[3];
++                bool inI = (s_spriteSubmergeClipMode == 1) ? (yi >= cutY) : (yi <= cutY);
++                bool inJ = (s_spriteSubmergeClipMode == 1) ? (yj >= cutY) : (yj <= cutY);
++                if (inI) {
++                    out[outCount++] = clip[i];
++                }
++                if (inI != inJ) {
++                    // Solve (p1 + t*(q1 - p1)) / (p3 + t*(q3 - p3)) = cutY
++                    double p1 = (double)clip[i].pos[1], p3 = (double)clip[i].pos[3];
++                    double q1 = (double)clip[j].pos[1], q3 = (double)clip[j].pos[3];
++                    double denom = (q1 - p1) - cutY * (q3 - p3);
++                    double t = (denom != 0.0) ? ((cutY * p3 - p1) / denom) : 0.0;
++                    if (t < 0.0) t = 0.0;
++                    if (t > 1.0) t = 1.0;
++                    G3SIM_ClipVtx_t v;
++                    for (int k = 0; k < 4; k++) {
++                        v.pos[k] = (s32)(clip[i].pos[k] + t * (clip[j].pos[k] - clip[i].pos[k]));
++                    }
++                    v.s = (float)(clip[i].s + t * (clip[j].s - clip[i].s));
++                    v.t = (float)(clip[i].t + t * (clip[j].t - clip[i].t));
++                    v.r = (float)(clip[i].r + t * (clip[j].r - clip[i].r));
++                    v.g = (float)(clip[i].g + t * (clip[j].g - clip[i].g));
++                    v.b = (float)(clip[i].b + t * (clip[j].b - clip[i].b));
++                    v.a = (u8)(clip[i].a + t * (clip[j].a - clip[i].a));
++                    out[outCount++] = v;
++                }
++            }
++            if (outCount >= 3) {
++                numVerts = outCount;
++                for (int i = 0; i < numVerts; i++) clip[i] = out[i];
++            }
++        }
++    }
++
+     // Clipped in clip space: what is left has -w <= x, y, z <= w, so W >= 0 and the divide below stays on screen
+     numVerts = ClipVertices(clip, numVerts, TRUE);
+     if(numVerts < 3) {

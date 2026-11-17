@@ -71,6 +71,7 @@ typedef struct {
     float topRightOverlayScale;
     BOOL fullScreenCompanion;
     BOOL topRightOverlayMinimized;
+    BOOL topRightOverlayAutoFade;
 } SIM_Config_prj_type;
 
 void SIM_Config_prj_LoadDefaults(SIM_Config_prj_type * aConfig);

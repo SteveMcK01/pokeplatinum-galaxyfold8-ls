@@ -93,7 +93,7 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
         inlineBottomSurfaceView.setVisibility(View.GONE);
         inlineBottomSurfaceView.setZOrderMediaOverlay(true);
 
-        secondaryScreen.bindSurfaceView(inlineBottomSurfaceView);
+        secondaryScreen.bindSurfaceView(inlineBottomSurfaceView, this::onInlineBottomScreenTouched);
         mLayout.addView(inlineBottomSurfaceView, new RelativeLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 1));
 
@@ -144,8 +144,19 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
         });
     }
 
+    private static final long PIP_INACTIVITY_TIMEOUT_MS = 7000L;
+    private static final long PIP_FADE_OUT_DURATION_MS = 500L;
+    private static final long PIP_FADE_IN_DURATION_MS = 220L;
+    private static final float PIP_FADED_ALPHA = 0.30f;
+
     private float inlineOverlayWidthFraction = 0.36f;
     private boolean inlineBattleMode = false;
+    private boolean inlinePipAutoFadeEnabled = true;
+    private boolean inlinePipFaded = false;
+    private float currentPipAlpha = 1.0f;
+    private android.animation.ValueAnimator pipAlphaAnimator;
+    private final android.os.Handler pipFadeHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable pipFadeRunnable = () -> animatePipAlpha(PIP_FADED_ALPHA, PIP_FADE_OUT_DURATION_MS, true);
 
     @SuppressWarnings("unused")
     public static void setInlineOverlayWidthFraction(float fraction) {
@@ -184,6 +195,69 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
                     act.updateSplitSurfaceBounds();
                 }
             });
+        }
+    }
+
+    @SuppressWarnings("unused")
+    public static void setInlinePipAutoFade(boolean enabled) {
+        PlatinumActivity act = sInstance;
+        if (act != null) {
+            act.runOnUiThread(() -> {
+                if (act.inlinePipAutoFadeEnabled != enabled) {
+                    act.inlinePipAutoFadeEnabled = enabled;
+                    act.updatePipInactivityState(true);
+                }
+            });
+        }
+    }
+
+    private void onInlineBottomScreenTouched() {
+        updatePipInactivityState(true);
+    }
+
+    private void setPipAlphaImmediate(float alpha) {
+        currentPipAlpha = alpha;
+        if (inlineBottomSurfaceView != null) {
+            inlineBottomSurfaceView.setAlpha(alpha);
+        }
+        if (inlineOverlayBezelView != null) {
+            inlineOverlayBezelView.setAlpha(alpha);
+        }
+    }
+
+    private void animatePipAlpha(float targetAlpha, long durationMs, boolean fadedState) {
+        inlinePipFaded = fadedState;
+        if (pipAlphaAnimator != null) {
+            pipAlphaAnimator.cancel();
+            pipAlphaAnimator = null;
+        }
+        if (Math.abs(currentPipAlpha - targetAlpha) < 0.005f || durationMs <= 0L) {
+            setPipAlphaImmediate(targetAlpha);
+            return;
+        }
+        pipAlphaAnimator = android.animation.ValueAnimator.ofFloat(currentPipAlpha, targetAlpha);
+        pipAlphaAnimator.setDuration(durationMs);
+        pipAlphaAnimator.setInterpolator(new android.view.animation.DecelerateInterpolator());
+        pipAlphaAnimator.addUpdateListener(anim -> setPipAlphaImmediate((Float) anim.getAnimatedValue()));
+        pipAlphaAnimator.start();
+    }
+
+    private void updatePipInactivityState(boolean userActivity) {
+        pipFadeHandler.removeCallbacks(pipFadeRunnable);
+        boolean canFade = inlineSplitEnabled && inlineLayoutMode == 3 && !inlineBattleMode && inlinePipAutoFadeEnabled;
+        if (!canFade) {
+            if (inlinePipFaded || currentPipAlpha < 0.995f) {
+                animatePipAlpha(1.0f, PIP_FADE_IN_DURATION_MS, false);
+            }
+            return;
+        }
+        if (userActivity) {
+            if (inlinePipFaded) {
+                animatePipAlpha(1.0f, PIP_FADE_IN_DURATION_MS, false);
+            }
+            pipFadeHandler.postDelayed(pipFadeRunnable, PIP_INACTIVITY_TIMEOUT_MS);
+        } else if (!inlinePipFaded && (pipAlphaAnimator == null || !pipAlphaAnimator.isRunning())) {
+            pipFadeHandler.postDelayed(pipFadeRunnable, PIP_INACTIVITY_TIMEOUT_MS);
         }
     }
 
@@ -256,8 +330,10 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 inlineBottomSurfaceView.invalidateOutline();
             }
+            updatePipInactivityState(true);
             return;
         }
+        updatePipInactivityState(false);
 
         int topHeight = totalHeight / 2;
         int bottomHeight = totalHeight - topHeight;
@@ -355,6 +431,11 @@ public class PlatinumActivity extends SDLActivity implements SecondaryScreen.Inl
 
     @Override
     protected void onPause() {
+        pipFadeHandler.removeCallbacks(pipFadeRunnable);
+        if (pipAlphaAnimator != null) {
+            pipAlphaAnimator.cancel();
+            pipAlphaAnimator = null;
+        }
         if (secondaryScreen != null) {
             secondaryScreen.hide();
         }

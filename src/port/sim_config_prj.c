@@ -191,6 +191,9 @@ static int IniHandler(void* user, const char* section, const char* name,
     if(MATCH("TouchOverlay", "TopRightOverlayMinimized")) {
         config->topRightOverlayMinimized = StringToBool(value);
     }
+    if(MATCH("TouchOverlay", "TopRightOverlayAutoFade")) {
+        config->topRightOverlayAutoFade = StringToBool(value);
+    }
 
     return 1;
 }
@@ -282,6 +285,7 @@ void SIM_Config_prj_LoadDefaults(SIM_Config_prj_type * aConfig)
   aConfig->topRightOverlayScale = 0.36f;
   aConfig->fullScreenCompanion = TRUE;
   aConfig->topRightOverlayMinimized = FALSE;
+  aConfig->topRightOverlayAutoFade = TRUE;
 }
 
 // Loads the configuration file. If it does not exist, return false
@@ -368,6 +372,7 @@ void SIM_Config_prj_SaveConfigFile(SIM_Config_prj_type * aConfig)
     fprintf(configFile, "TopRightOverlayScale=%.2f\n", aConfig->topRightOverlayScale);
     fprintf(configFile, "FullScreenCompanion=%s\n", BoolToString(aConfig->fullScreenCompanion));
     fprintf(configFile, "TopRightOverlayMinimized=%s\n", BoolToString(aConfig->topRightOverlayMinimized));
+    fprintf(configFile, "TopRightOverlayAutoFade=%s\n", BoolToString(aConfig->topRightOverlayAutoFade));
 
     fclose(configFile);
 }

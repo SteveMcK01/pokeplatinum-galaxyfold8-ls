@@ -72,6 +72,10 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
 
     /** Binds a SurfaceView's lifecycle and touch events to libntr-display. */
     void bindSurfaceView(SurfaceView surfaceView) {
+        bindSurfaceView(surfaceView, null);
+    }
+
+    void bindSurfaceView(SurfaceView surfaceView, Runnable onTouchCallback) {
         surfaceView.getHolder().addCallback(new SurfaceHolder.Callback() {
             @Override
             public void surfaceCreated(SurfaceHolder holder) {
@@ -89,7 +93,7 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
                 notifySurfaceDestroyed();
             }
         });
-        surfaceView.setOnTouchListener(new SingleStylusTouchListener());
+        surfaceView.setOnTouchListener(new SingleStylusTouchListener(onTouchCallback));
     }
 
     private void notifySurfaceChanged(Surface surface) {
@@ -223,12 +227,20 @@ final class SecondaryScreen implements DisplayManager.DisplayListener {
 
     // Forward multi-touch pointers to the virtual controller overlay while keeping single-stylus DS touch
     private static final class SingleStylusTouchListener implements View.OnTouchListener {
+        private final Runnable onTouchCallback;
         private int touchPointerId = -1;
         private final float[] pointerXs = new float[10];
         private final float[] pointerYs = new float[10];
 
+        SingleStylusTouchListener(Runnable onTouchCallback) {
+            this.onTouchCallback = onTouchCallback;
+        }
+
         @Override
         public boolean onTouch(View view, MotionEvent event) {
+            if (onTouchCallback != null) {
+                onTouchCallback.run();
+            }
             int action = event.getActionMasked();
             if (action == MotionEvent.ACTION_DOWN) {
                 view.requestUnbufferedDispatch(event);

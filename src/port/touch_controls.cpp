@@ -75,6 +75,7 @@ static bool sPrevFFPressed = false;
 static int sLastAndroidLayoutMode = -1;
 static float sLastAndroidOverlayScale = -1.0f;
 static int sLastAndroidBattleMode = -1;
+static int sLastAndroidPipAutoFade = -1;
 
 static std::vector<TouchPt> sSecondaryTouches;
 static float sSecondaryViewW = 0.0f;
@@ -158,6 +159,35 @@ static void SyncAndroidBattleMode(bool inBattle) {
     env->DeleteLocalRef(cls);
 #else
     (void)inBattle;
+#endif
+}
+
+static void SyncAndroidPipAutoFade(bool enabled) {
+#ifdef __ANDROID__
+    const int val = enabled ? 1 : 0;
+    if (sLastAndroidPipAutoFade == val) {
+        return;
+    }
+    JNIEnv *env = static_cast<JNIEnv *>(SDL_AndroidGetJNIEnv());
+    if (!env) {
+        return;
+    }
+    jclass cls = env->FindClass("org/pokeplatinum/port/PlatinumActivity");
+    if (!cls) {
+        env->ExceptionClear();
+        return;
+    }
+    jmethodID mid = env->GetStaticMethodID(cls, "setInlinePipAutoFade", "(Z)V");
+    if (mid) {
+        env->CallStaticVoidMethod(cls, mid, enabled ? JNI_TRUE : JNI_FALSE);
+        sLastAndroidPipAutoFade = val;
+    }
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+    }
+    env->DeleteLocalRef(cls);
+#else
+    (void)enabled;
 #endif
 }
 
@@ -473,6 +503,7 @@ void TouchControls_DrawOverlay(void) {
 
     SyncAndroidOverlayScale(GetTopLeftWidthFraction(cfg));
     SyncAndroidBattleMode(inBattle);
+    SyncAndroidPipAutoFade(cfg->topRightOverlayAutoFade != FALSE);
     SyncAndroidLayoutMode(primaryFull ? 2 : (companionFull ? 1 : (pipOverlayMode ? (pipMinimized ? 4 : 3) : 0)));
 
     if (!cfg->touchOverlay || primaryFull || companionFull) {
@@ -786,6 +817,15 @@ void TouchControls_DrawDisplaySettings(void) {
             "Width of the corner lower-screen overlay as a percentage of the display.",
             &widthPct, 24, 52, 2, "%d%%", topLeft)) {
         cfg->topRightOverlayScale = (float)widthPct / 100.0f;
+        SIM_Config_prj_SaveConfigFile(cfg);
+    }
+
+    bool autoFade = cfg->topRightOverlayAutoFade != FALSE;
+    if (SIM::UI::Toggle(
+            "Auto-fade inactive PiP overlay",
+            "Smoothly fade the corner lower-screen overlay to semi-transparent after 7 seconds of inactivity outside battle.",
+            &autoFade, topLeft)) {
+        cfg->topRightOverlayAutoFade = autoFade ? TRUE : FALSE;
         SIM_Config_prj_SaveConfigFile(cfg);
     }
 

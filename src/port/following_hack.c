@@ -266,7 +266,7 @@ static void ExtendGraphicsTables(void)
 // A map object with local ID 0xFD that the hack keeps in the field system (+0xCC the object, +0xE0 on,
 // +0xE4 a request to check it, +0xE8 the animation of its ball): here a few static variables.
 
-#define FOLLOWER_LOCAL_ID 0xFD
+#define FOLLOWER_LOCAL_ID 0xF4
 #define FOLLOWER_MOVEMENT_WALK 0x44 // follows the player
 #define FOLLOWER_MOVEMENT_STAND 0x45 // stays where it is (events, bike, surf)
 #define FOLLOWER_SCRIPT 0x2904 // what talking to it runs
@@ -1442,7 +1442,8 @@ void FollowingHack_MapConnected(FieldSystem *fieldSystem)
 // hk_23CBF0C: a script's object: the follower for 0xFD
 MapObject *FollowingHack_ScriptObject(FieldSystem *fieldSystem, int localID)
 {
-    return sActive && localID == FOLLOWER_LOCAL_ID ? GetFollower() : NULL;
+    (void)fieldSystem;
+    return sActive && (localID == FOLLOWER_LOCAL_ID || localID == 0xFD) ? GetFollower() : NULL;
 }
 
 BOOL FollowingHack_IsFollower(const MapObject *mapObj)

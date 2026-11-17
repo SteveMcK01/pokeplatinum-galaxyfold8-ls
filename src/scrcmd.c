@@ -2136,7 +2136,7 @@ static MapObject *GetLocalMapObjByIndex(FieldSystem *fieldSystem, int localID)
     if (localID == LOCALID_FOLLOWER) {
         object = MapObjMan_GetLocalMapObjByMovementType(fieldSystem->mapObjMan, MOVEMENT_TYPE_FOLLOW_PLAYER);
 #ifdef SDK_PORT
-    } else if (localID == 0xFD && FollowingHack_IsActive()) {
+    } else if ((localID == 0xF4 || localID == 0xFD) && FollowingHack_IsActive()) {
         object = FollowingHack_ScriptObject(fieldSystem, localID);
 #endif
     } else if (localID == LOCALID_CAMERA) {

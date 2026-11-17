@@ -87,7 +87,7 @@ static void Report(FieldSystem *fieldSystem)
         used = Append(used, "player state %s%ld status %#lx move %ld; ", "", PlayerAvatar_GetPlayerState(fieldSystem->playerAvatar),
             player != NULL ? (long)MapObject_GetStatus(player) : -1, player != NULL ? (long)MapObject_GetMovementType(player) : -1);
     }
-    MapObject *follower = FollowingHack_ScriptObject(fieldSystem, 0xFD);
+    MapObject *follower = FollowingHack_ScriptObject(fieldSystem, 0xF4);
     if (follower != NULL) {
         used = Append(used, "follower status %s%#lx move %ld data %#lx", "", (long)MapObject_GetStatus(follower),
             (long)MapObject_GetMovementType(follower), (long)MapObject_GetDataAt(follower, 2));

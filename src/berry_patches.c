@@ -5,6 +5,9 @@
 
 #include "berry_data.h"
 #include "heap.h"
+#ifdef SDK_PORT
+#include "port/sim_config_prj.h"
+#endif
 #include "narc.h"
 
 #define BASE_HARVEST_STAGES    4
@@ -98,8 +101,22 @@ static int CalcBerryYield(BerryPatch *berryPatch, const BerryGrowthData *growthD
     return growthData[berryPatch->berryID - 1].baseYield * berryPatch->yieldRating;
 }
 
+static BOOL IsFastBerriesEnabled(void)
+{
+#ifdef SDK_PORT
+    SIM_Config_prj_type *cfg = SIM_Config_prj_GetConfig();
+    return (cfg != NULL && cfg->fastBerries) ? TRUE : FALSE;
+#else
+    return FALSE;
+#endif
+}
+
 static int CalcMinutesRemainingInStage(const BerryGrowthData *growthData, int berryID, enum MulchType mulchType)
 {
+    if (IsFastBerriesEnabled()) {
+        return 2;
+    }
+
     int minutesRemaining = growthData[berryID - 1].stageDuration * 60;
 
     if (mulchType == MULCH_TYPE_GROWTH) {
@@ -307,7 +324,13 @@ void BerryPatches_ElapseMinutes(BerryPatch *patches, const BerryGrowthData *grow
             continue;
         }
 
-        int maxPatchLifetime = CalcMinutesRemainingInStage(growthData, patch->berryID, patch->mulchType) * CalcTotalStageCount(patch);
+        const BOOL fastBerries = IsFastBerriesEnabled();
+        if (fastBerries && patch->growthStage != BERRY_GROWTH_STAGE_FRUIT && patch->stageMinutesRemaining > 2) {
+            patch->stageMinutesRemaining = 2;
+        }
+
+        int stageDurationForLifetime = fastBerries ? 60 : CalcMinutesRemainingInStage(growthData, patch->berryID, patch->mulchType);
+        int maxPatchLifetime = stageDurationForLifetime * CalcTotalStageCount(patch);
         if (minutesPassed >= maxPatchLifetime) {
             ZeroBerryPatch(patch);
             continue;
@@ -328,7 +351,11 @@ void BerryPatches_ElapseMinutes(BerryPatch *patches, const BerryGrowthData *grow
                 patch->stageMinutesRemaining = CalcMinutesRemainingInStage(growthData, patch->berryID, patch->mulchType);
 
                 if (patch->growthStage == BERRY_GROWTH_STAGE_FRUIT) {
-                    patch->stageMinutesRemaining *= GetHarvestTimeWithMulch(patch);
+                    if (fastBerries) {
+                        patch->stageMinutesRemaining = 60 * GetHarvestTimeWithMulch(patch);
+                    } else {
+                        patch->stageMinutesRemaining *= GetHarvestTimeWithMulch(patch);
+                    }
                 }
             }
         }

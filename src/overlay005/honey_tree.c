@@ -20,6 +20,9 @@
 #include "special_encounter.h"
 #include "terrain_collision_manager.h"
 #include "trainer_info.h"
+#ifdef SDK_PORT
+#include "port/sim_config_prj.h"
+#endif
 
 #include "res/field/props/models/prop_models.naix"
 
@@ -140,7 +143,12 @@ void HoneyTree_SlatherTree(FieldSystem *fieldSystem)
     PlayerHoneyTreeStates *treeDat = SpecialEncounter_GetPlayerHoneyTreeStates(SaveData_GetSpecialEncounters(fieldSystem->saveData));
     HoneyTree *tree = SpecialEncounter_GetHoneyTree(treeId, treeDat);
 
+#ifdef SDK_PORT
+    SIM_Config_prj_type *cfg = SIM_Config_prj_GetConfig();
+    tree->minutesRemaining = (cfg != NULL && cfg->instantHoneyTrees) ? (18 * 60) : (24 * 60);
+#else
     tree->minutesRemaining = (24 * 60); // slathering lasts for one day
+#endif
 
     TrainerInfo *trainer = SaveData_GetTrainerInfo(fieldSystem->saveData);
     BOOL munchlaxTree = IsMunchlaxTree(TrainerInfo_ID(trainer), treeId);
@@ -374,6 +382,12 @@ static u8 GetTreeIDFromMapHeaderID(const enum MapHeaderID mapHeaderID)
 
 static const BOOL SixHoursSinceSlathered(const int minutesLeft)
 {
+#ifdef SDK_PORT
+    SIM_Config_prj_type *cfg = SIM_Config_prj_GetConfig();
+    if (cfg != NULL && cfg->instantHoneyTrees && minutesLeft > 0) {
+        return TRUE;
+    }
+#endif
     if ((0 < minutesLeft) && (minutesLeft <= (18 * 60))) {
         return TRUE;
     } else {

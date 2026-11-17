@@ -42,6 +42,8 @@ typedef struct {
     BOOL infinitePP;    // the player's moves don't use PP
     BOOL alwaysEscape;  // running from wild Pokemon always works
     BOOL fastEggs;      // eggs hatch after a few steps
+    BOOL instantHoneyTrees; // slathered honey trees attract Pokemon immediately
+    BOOL fastBerries;   // planted berries mature in ~8 minutes
     BOOL anyTM;
     BOOL catchEmAll;
     BOOL tradeEvos;

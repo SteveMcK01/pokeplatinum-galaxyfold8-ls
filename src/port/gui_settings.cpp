@@ -760,6 +760,10 @@ void DrawCheats()
     ConfigToggle("No wild encounters", "Wild Pokemon don't appear in grass, caves or water.",
         &config->disableRandomEncounters);
     ConfigToggle("Eggs hatch in a few steps", "Eggs in your party hatch after a few steps.", &config->fastEggs);
+    ConfigToggle("Instant Honey Trees", "Slathered Honey Trees attract a Pokemon immediately instead of waiting 6 hours.",
+        &config->instantHoneyTrees);
+    ConfigToggle("Fast Berry growth", "Planted Berries mature in ~8 minutes and stay ripe on the tree until harvested.",
+        &config->fastBerries);
 
     Section("Battles");
     static const int kExpValues[] = { 100, 150, 200, 300, 500 };

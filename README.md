@@ -44,6 +44,7 @@ This repository contains **no ROM and no game assets**. On first launch, supply 
 - **Field Moves Without HMs:** Use Cut, Fly, Surf, Strength, Rock Smash, Waterfall, Rock Climb, and Defog directly from any compatible party Pokémon's menu without teaching the HM move (as long as the HM is in your bag and you have the required badge, with an optional toggle to bypass badge requirements).
 - **Universal TM/HM Compatibility:** Option allowing any Pokémon to learn any TM or HM.
 - **Hard Level Cap:** Prevents Pokémon from gaining EXP in battle once they reach the next Gym Leader's level cap.
+- **Gen 5 battles (Settings > Battles > Gen 5 battles):** Replaces the platinum battle engine with the one from Black/White 2, this includes the sprites & battle screen.
 - **Game Clock Adjustment:** Adjust the in-game clock offset directly in Settings for time-of-day encounters and evolutions without changing your device time.
 - **No Wild Encounters Cheat:** Disables random encounters in grass, caves, and water while leaving visible **Overworld Wild Pokémon** active.
 - **Build:** `make meson && ANDROID_NDK_HOME=/path/to/ndk ./tools/android/build_apk.sh`.

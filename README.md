@@ -24,7 +24,7 @@ This repository contains **no ROM and no game assets**. On first launch, supply 
 - **Overworld Wild Pokémon (`Settings > Gameplay > Overworld wild Pokemon`):** Visible wild Pokémon dynamically spawn and wander in tall grass, caves, and water using area encounter tables (including time-of-day spawns and shiny variants). Walk into one or press `A` to battle; water spawns have their lower third submerged and ground shadows hidden so they swim naturally, with configurable spawn density (`1` to `6`) in `Settings > Gameplay`.
 - **PC Anywhere:** Swap Pokémon in and out of your PC boxes and party from anywhere in the overworld without needing to visit a Pokémon Center.
 - **Gotta Catch 'Em All! Mode:** Adds missing Diamond/Pearl exclusives and unobtainable Sinnoh Dex Pokémon (Murkrow, Misdreavus, Glameow, Stunky, Trapinch, Clamperl, fossils, and more) directly to wild encounters and the Gear tracker.
-- **Infinite TMs & Universal TM/HM Compatibility:** Optional toggle to make TMs reusable like HMs without being consumed, plus an option allowing any Pokémon to learn any TM or HM.
+- **Infinite TMs:** Optional toggle to make TMs reusable like HMs without being consumed.
 - **Trade Evolutions Without Trading:** Evolves trade-only Pokémon automatically on level-up (Lv. 36+ for Kadabra, Haunter, Machoke, and Graveler; any level-up while holding the required item for item-trade evolutions).
 - **Full-Screen PiP Display Mode:** Adds a floating, rounded Picture-in-Picture (PiP) overlay for the bottom DS touch screen in the top-left corner with a cyan bezel, adjustable overlay scale, quick hide/show toggle, and full-screen main display support for unfolded foldables and phones.
 - **Pokémon-Themed UI:** Styled the Settings and Gear companion screens with a cohesive Pokémon-inspired theme.
@@ -42,6 +42,7 @@ This repository contains **no ROM and no game assets**. On first launch, supply 
   - **Rotom Forms (Secret Key):** Enter the locked room of the Team Galactic building in Eterna City.
   - *Note:* Each displays any remaining prerequisites first (such as entering the Hall of Fame and obtaining the National Pokédex for Darkrai, Shaymin, and Arceus). The game checks when you arrive at the location, so leave and re-enter if you are already there.
 - **Field Moves Without HMs:** Use Cut, Fly, Surf, Strength, Rock Smash, Waterfall, Rock Climb, and Defog directly from any compatible party Pokémon's menu without teaching the HM move (as long as the HM is in your bag and you have the required badge, with an optional toggle to bypass badge requirements).
+- **Universal TM/HM Compatibility:** Option allowing any Pokémon to learn any TM or HM.
 - **Hard Level Cap:** Prevents Pokémon from gaining EXP in battle once they reach the next Gym Leader's level cap.
 - **Game Clock Adjustment:** Adjust the in-game clock offset directly in Settings for time-of-day encounters and evolutions without changing your device time.
 - **No Wild Encounters Cheat:** Disables random encounters in grass, caves, and water while leaving visible **Overworld Wild Pokémon** active.

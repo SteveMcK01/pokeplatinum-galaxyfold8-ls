@@ -84,3 +84,20 @@
      // Clipped in clip space: what is left has -w <= x, y, z <= w, so W >= 0 and the divide below stays on screen
      numVerts = ClipVertices(clip, numVerts, TRUE);
      if(numVerts < 3) {
+@@ -1719,6 +1719,16 @@
+             }
+         }
+ 
++        if(s_spriteSubmergeClipMode == 2 && !s_SIM_useWBuffer) {
++            s64 d = FX32_ONE * 24;
++            s64 m22 = currentProjectionMatrix.nums[2][2];
++            s64 vwBiased = (s64)vw + d;
++            if(vwBiased > 0) {
++                s64 zClip = (s64)curVtx->pos[2] - ((m22 * d) >> FX32_SHIFT);
++                z = (s32)((((zClip * 0x4000) / vwBiased) + 0x3FFF) * 0x200);
++            }
++        }
++
+         if(s_SIM_useWBuffer) {
+                 z = wshifted;
+         }

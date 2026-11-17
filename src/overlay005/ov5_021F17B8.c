@@ -233,19 +233,24 @@ static void ov5_021F1978(OverworldAnimManager *param0, void *param1)
     }
 
     {
+        Billboard *v4 = ov5_021EB1A0(v0->unk_14.unk_0C);
         VecFx32 v3;
 
-        OverworldAnimManager_GetPosition(param0, &v3);
-        Billboard_SetPos(v0->unk_24, &v3);
-    }
-
 #ifdef SDK_PORT
-    v0->unk_24->submerged = OverworldWild_IsWaterSpawn(v1) ? 2 : 0;
+        if (OverworldWild_IsWaterSpawn(v1) && v4 != NULL) {
+            v3 = *Billboard_GetPos(v4);
+            v3.y += (FX32_ONE * 23) / 2;
+            v3.z -= (FX32_ONE * 77) / 4;
+            v0->unk_24->submerged = 2;
+        } else {
+            OverworldAnimManager_GetPosition(param0, &v3);
+            v0->unk_24->submerged = 0;
+        }
+#else
+        OverworldAnimManager_GetPosition(param0, &v3);
 #endif
-    Billboard_SetScale(v0->unk_24, &v0->unk_28);
-
-    {
-        Billboard *v4 = ov5_021EB1A0(v0->unk_14.unk_0C);
+        Billboard_SetPos(v0->unk_24, &v3);
+        Billboard_SetScale(v0->unk_24, &v0->unk_28);
 
         Billboard_SetAnimNum(v0->unk_24, Billboard_GetAnimNum(v4));
         Billboard_SetFrameNum(v0->unk_24, Billboard_GetFrameNum(v4));
@@ -285,12 +290,6 @@ static void ov5_021F1A24(UnkStruct_ov5_021F1A24 *param0, MapObject *param1, VecF
     } else {
         param2->y -= v3[param0->unk_10];
     }
-#ifdef SDK_PORT
-    if (OverworldWild_IsWaterSpawn(param1)) {
-        param2->y -= 11 * FX32_ONE;
-        param2->z -= 29 * FX32_ONE;
-    }
-#endif
 }
 
 static void ov5_021F1A8C(OverworldAnimManager *param0, UnkStruct_ov5_021F1A24 *param1)
@@ -316,6 +315,16 @@ static void ov5_021F1A8C(OverworldAnimManager *param0, UnkStruct_ov5_021F1A24 *p
     v3.modelRes = v1;
 
     OverworldAnimManager_GetPosition(param0, &v2);
+#ifdef SDK_PORT
+    if (OverworldWild_IsWaterSpawn(param1->unk_14.unk_0C)) {
+        const Billboard *v4 = ov5_021EB1A0(param1->unk_14.unk_0C);
+        if (v4 != NULL) {
+            v2 = *Billboard_GetPos(v4);
+            v2.y += (FX32_ONE * 23) / 2;
+            v2.z -= (FX32_ONE * 77) / 4;
+        }
+    }
+#endif
 
     param1->unk_24 = ov5_021DF7F8(param1->unk_14.unk_04, &v3, &v2);
     param1->unk_0C = 1;

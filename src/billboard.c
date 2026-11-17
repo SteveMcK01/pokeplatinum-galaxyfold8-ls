@@ -287,6 +287,9 @@ static void BillboardList_Draw(BillboardList *list)
 #ifdef SDK_PORT
             if (billboard->submerged) {
                 NNS_G3dGeFlushBuffer();
+                if (billboard->submerged == 2) {
+                    SIM_SetSpriteDepthBias(0);
+                }
                 SIM_SetSpriteSubmergeClip(billboard->submerged);
             }
 #endif
@@ -295,6 +298,9 @@ static void BillboardList_Draw(BillboardList *list)
             if (billboard->submerged) {
                 NNS_G3dGeFlushBuffer();
                 SIM_SetSpriteSubmergeClip(0);
+                if (billboard->submerged == 2) {
+                    SIM_SetSpriteDepthBias(BILLBOARD_DEPTH_NUDGE);
+                }
             }
 #endif
             ReleaseVRAMKeysAndModelSet(billboard);

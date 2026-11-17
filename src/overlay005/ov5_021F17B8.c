@@ -287,6 +287,11 @@ static void ov5_021F1A24(UnkStruct_ov5_021F1A24 *param0, MapObject *param1, VecF
     }
 #ifdef SDK_PORT
     if (OverworldWild_IsWaterSpawn(param1)) {
+        param2->y += 16 * FX32_ONE;
+    }
+#endif
+#ifdef SDK_PORT
+    if (OverworldWild_IsWaterSpawn(param1)) {
         param2->y += 5 * FX32_ONE;
     }
 #endif

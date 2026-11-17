@@ -757,7 +757,18 @@ void Gear_GetArea(GearArea *out)
         }
     }
 
-    AddWater(out, GEAR_ENC_SURF, &data->surfEncounters, sWaterRates);
+    if (data->surfEncounters.encounterRate != 0) {
+        CatchEmAllSlot surfSlots[MAX_WATER_ENCOUNTERS];
+        for (int i = 0; i < MAX_WATER_ENCOUNTERS; i++) {
+            surfSlots[i].species = data->surfEncounters.encounters[i].species;
+            surfSlots[i].minLevel = data->surfEncounters.encounters[i].minLevel;
+            surfSlots[i].maxLevel = data->surfEncounters.encounters[i].maxLevel;
+        }
+        CatchEmAll_ApplySurfSlots(out->mapHeaderID, surfSlots);
+        for (int i = 0; i < MAX_WATER_ENCOUNTERS; i++) {
+            AddEncounter(out, GEAR_ENC_SURF, surfSlots[i].species, surfSlots[i].minLevel, surfSlots[i].maxLevel, sWaterRates[i]);
+        }
+    }
     AddWater(out, GEAR_ENC_OLD_ROD, &data->oldRodEncounters, sWaterRates);
     AddWater(out, GEAR_ENC_GOOD_ROD, &data->goodRodEncounters, sRodRates);
     if (data->superRodEncounters.encounterRate != 0) {

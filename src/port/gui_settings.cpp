@@ -785,7 +785,7 @@ void DrawCheats()
     ConfigToggle("Any Pokemon learns any TM or HM", "Every Pokemon can be taught every TM and HM.", &config->anyTM);
     ConfigToggle("Infinite TMs", "TMs are reusable like HMs and do not get consumed when taught.", &config->reusableTMs);
     ConfigToggle("Gotta Catch 'Em All!",
-        "Adds missing Diamond/Pearl & unobtainable Sinnoh Dex Pokemon (Murkrow, Misdreavus, Glameow, Stunky, Trapinch, Clamperl, fossils, etc.) to wild encounters and the Gear tracker.",
+        "Adds missing Diamond/Pearl & unobtainable Sinnoh Dex Pokemon (Murkrow, Misdreavus, Glameow, Stunky, Trapinch, Clamperl, fossils, etc.) to wild encounters and the Gear tracker, plus Turtwig, Chimchar, and Piplup in their natural habitats after beating the Elite 4.",
         &config->catchEmAll);
     ConfigToggle("Trade evolutions without trading",
         "Evolves trade-only Pokemon on level-up: Lv. 36+ for Kadabra, Haunter, Machoke, and Graveler; any level-up while holding the required item (Metal Coat, Protector, Electirizer, Magmarizer, Up-Grade, Dubious Disc, Reaper Cloth, Dragon Scale, King's Rock, Deep Sea Tooth/Scale) for item trades.",

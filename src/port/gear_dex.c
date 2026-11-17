@@ -23,6 +23,8 @@
 #include "map_header_data.h"
 #include "narc.h"
 #include "pokemon.h"
+#include "savedata.h"
+#include "system_flags.h"
 #include "tutor_movesets.h"
 
 #include "res/pokemon/species_egg_moves.h"
@@ -113,15 +115,19 @@ static int ComparePlaceRecords(const void *a, const void *b)
 }
 
 static BOOL sIndexCatchEmAll = FALSE;
+static BOOL sIndexPostGame = FALSE;
 
 static void BuildIndex(void)
 {
     const BOOL catchEmAll = CatchEmAll_IsEnabled();
-    if (sIndexBuilt && sIndexCatchEmAll == catchEmAll) {
+    SaveData *saveData = SaveData_Ptr();
+    const BOOL postGame = saveData != NULL && SystemFlag_CheckGameCompleted(SaveData_GetVarsFlags(saveData));
+    if (sIndexBuilt && sIndexCatchEmAll == catchEmAll && sIndexPostGame == postGame) {
         return;
     }
     sIndexBuilt = TRUE;
     sIndexCatchEmAll = catchEmAll;
+    sIndexPostGame = postGame;
     sPlaceCount = 0;
 
     static WildEncounters data;
@@ -191,7 +197,19 @@ static void BuildIndex(void)
                 }
             }
         }
-        AddWaterPlaces(label, GEAR_ENC_SURF, &data.surfEncounters, sWaterRates);
+        if (data.surfEncounters.encounterRate != 0) {
+            CatchEmAllSlot surfSlots[MAX_WATER_ENCOUNTERS];
+            for (int i = 0; i < MAX_WATER_ENCOUNTERS; i++) {
+                surfSlots[i].species = data.surfEncounters.encounters[i].species;
+                surfSlots[i].minLevel = data.surfEncounters.encounters[i].minLevel;
+                surfSlots[i].maxLevel = data.surfEncounters.encounters[i].maxLevel;
+            }
+            CatchEmAll_ApplySurfSlots(header, surfSlots);
+            for (int i = 0; i < MAX_WATER_ENCOUNTERS; i++) {
+                const u8 rates[GEAR_TIME_COUNT] = { sWaterRates[i], sWaterRates[i], sWaterRates[i] };
+                AddPlace((u16)surfSlots[i].species, label, GEAR_ENC_SURF, 0, surfSlots[i].minLevel, surfSlots[i].maxLevel, rates);
+            }
+        }
         AddWaterPlaces(label, GEAR_ENC_OLD_ROD, &data.oldRodEncounters, sWaterRates);
         AddWaterPlaces(label, GEAR_ENC_GOOD_ROD, &data.goodRodEncounters, sRodRates);
         if (data.superRodEncounters.encounterRate != 0) {

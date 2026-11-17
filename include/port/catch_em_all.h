@@ -14,6 +14,7 @@ typedef struct CatchEmAllSlot {
 
 BOOL CatchEmAll_IsEnabled(void);
 void CatchEmAll_ApplyGrassSlots(int mapHeaderID, CatchEmAllSlot *slots);
+void CatchEmAll_ApplySurfSlots(int mapHeaderID, CatchEmAllSlot *slots);
 void CatchEmAll_ApplySuperRodSlots(int mapHeaderID, CatchEmAllSlot *slots);
 
 #ifdef __cplusplus

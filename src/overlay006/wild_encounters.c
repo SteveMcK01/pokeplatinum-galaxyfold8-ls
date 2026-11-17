@@ -357,6 +357,7 @@ BOOL WildEncounters_TryWildEncounter(FieldSystem *fieldSystem)
             encounterTable[i].maxLevel = encounterData->surfEncounters.encounters[i].maxLevel;
             encounterTable[i].minLevel = encounterData->surfEncounters.encounters[i].minLevel;
         }
+        CatchEmAll_ApplySurfSlots(fieldSystem->location->mapHeaderID, (CatchEmAllSlot *)encounterTable);
 
         encounterSuccess = TryGenerateSurfEncounter(fieldSystem, firstPartyMon, battleParams, encounterTable, &encounterFieldParams);
     } else {
@@ -1599,6 +1600,7 @@ BOOL WildEncounters_TryRollOverworldSpecies(
             waterTable[i].maxLevel = encounterData->surfEncounters.encounters[i].maxLevel;
             waterTable[i].minLevel = encounterData->surfEncounters.encounters[i].minLevel;
         }
+        CatchEmAll_ApplySurfSlots(fieldSystem->location->mapHeaderID, (CatchEmAllSlot *)waterTable);
         u8 slot = GetWaterEncounterSlot();
         species = (u16)waterTable[slot].species;
         level = GetWildMonLevel(&waterTable[slot], &fieldParams);

@@ -3,11 +3,22 @@
 #include "constants/species.h"
 #include "generated/map_headers.h"
 #include "port/sim_config_prj.h"
+#include "savedata.h"
+#include "system_flags.h"
 
 BOOL CatchEmAll_IsEnabled(void)
 {
     const SIM_Config_prj_type *config = SIM_Config_prj_GetConfig();
     return config != NULL && config->catchEmAll;
+}
+
+static BOOL CatchEmAll_IsPostGame(void)
+{
+    SaveData *saveData = SaveData_Ptr();
+    if (saveData == NULL) {
+        return FALSE;
+    }
+    return SystemFlag_CheckGameCompleted(SaveData_GetVarsFlags(saveData));
 }
 
 void CatchEmAll_ApplyGrassSlots(int mapHeaderID, CatchEmAllSlot *slots)
@@ -16,8 +27,17 @@ void CatchEmAll_ApplyGrassSlots(int mapHeaderID, CatchEmAllSlot *slots)
         return;
     }
 
+    const BOOL postGame = CatchEmAll_IsPostGame();
+
     switch (mapHeaderID) {
     case MAP_HEADER_ETERNA_FOREST:
+        slots[4].species = SPECIES_MURKROW;
+        slots[5].species = SPECIES_MISDREAVUS;
+        if (postGame) {
+            slots[6].species = SPECIES_TURTWIG;
+            slots[7].species = SPECIES_TURTWIG;
+        }
+        break;
     case MAP_HEADER_ROUTE_209_LOST_TOWER_1F:
     case MAP_HEADER_ROUTE_209_LOST_TOWER_2F:
     case MAP_HEADER_ROUTE_209_LOST_TOWER_3F:
@@ -110,6 +130,30 @@ void CatchEmAll_ApplyGrassSlots(int mapHeaderID, CatchEmAllSlot *slots)
     case MAP_HEADER_LAKE_ACUITY:
         slots[6].species = SPECIES_URSARING;
         break;
+    case MAP_HEADER_ROUTE_227:
+    case MAP_HEADER_STARK_MOUNTAIN_OUTSIDE:
+        if (postGame) {
+            slots[6].species = SPECIES_CHIMCHAR;
+            slots[7].species = SPECIES_CHIMCHAR;
+        }
+        break;
+    case MAP_HEADER_ACUITY_LAKEFRONT:
+        if (postGame) {
+            slots[6].species = SPECIES_PIPLUP;
+            slots[7].species = SPECIES_PIPLUP;
+        }
+        break;
+    }
+}
+
+void CatchEmAll_ApplySurfSlots(int mapHeaderID, CatchEmAllSlot *slots)
+{
+    if (!CatchEmAll_IsEnabled() || slots == NULL) {
+        return;
+    }
+    if (mapHeaderID == MAP_HEADER_ROUTE_223 && CatchEmAll_IsPostGame()) {
+        slots[2].species = SPECIES_PIPLUP;
+        slots[3].species = SPECIES_PIPLUP;
     }
 }
 

@@ -23,7 +23,7 @@
 #include "port/gen5_battle.h"
 #endif
 
-#include "data/terrain/to_type.h"
+#include "constants/types.h"
 #include "constants/battle.h"
 #include "constants/moves.h"
 #include "generated/abilities.h"
@@ -694,7 +694,7 @@ static void DrawActionCard(ImDrawList *dl, ImFont *boldFont, float x0, float y0,
 }
 
 static int ComputeMoveEffectiveness(const GearMove &mv, const GearBattle &battle, int attackerIdx) {
-    if (mv.id == 0 || mv.category == MOVE_CLASS_STATUS) {
+    if (mv.id == 0 || mv.category == CLASS_STATUS) {
         return -1; // Status / non-damaging
     }
     // Find primary enemy defender

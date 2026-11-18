@@ -5,8 +5,15 @@
 #include "applications/poketch/area_radar/graphics.h"
 #include "applications/poketch/poketch_system.h"
 
+#include "constants/species.h"
+#include "constants/wild_encounters.h"
+
 #include "bg_window.h"
+#include "field/field_system.h"
 #include "heap.h"
+#include "map_header.h"
+#include "map_header_data.h"
+#include "port/debug_field.h"
 #include "port/gear_data.h"
 #include "sys_task.h"
 #include "sys_task_manager.h"
@@ -56,71 +63,127 @@ void PoketchAppStaticInit_AreaRadar(void)
 }
 #endif
 
-static int CountMatches(const GearArea *area, u8 filterMethod)
+static u16 MapMethodToIcon(u8 method)
 {
-    if (!area->valid || area->count == 0) {
-        return 0;
+    switch (method) {
+    case GEAR_ENC_GRASS:
+        return AREA_RADAR_ICON_GRASS;
+    case GEAR_ENC_SURF:
+        return AREA_RADAR_ICON_SURF;
+    case GEAR_ENC_OLD_ROD:
+    case GEAR_ENC_GOOD_ROD:
+    case GEAR_ENC_SUPER_ROD:
+        return AREA_RADAR_ICON_ROD;
+    case GEAR_ENC_RADAR:
+        return AREA_RADAR_ICON_RADAR;
+    case GEAR_ENC_SWARM:
+        return AREA_RADAR_ICON_SWARM;
+    case GEAR_ENC_GBA:
+        return AREA_RADAR_ICON_GBA;
+    default:
+        return AREA_RADAR_ICON_GRASS;
     }
-    if (filterMethod == 0xFF) {
-        return area->count;
-    }
-    int count = 0;
-    for (int i = 0; i < area->count; i++) {
-        if (area->entries[i].method == filterMethod) {
-            count++;
-        }
-    }
-    return count;
 }
 
-static void RecalcPaging(AreaRadarViewData *view)
+static void AddOrMergeEntry(AreaRadarViewData *view, u16 species, u16 iconMask, u8 minLevel, u8 maxLevel)
 {
-    int matches = CountMatches(&view->area, view->filterMethod);
-    if (matches == 0 && view->filterMethod != 0xFF) {
-        view->filterMethod = 0xFF;
-        matches = CountMatches(&view->area, view->filterMethod);
+    if (species == SPECIES_NONE || species == 0) {
+        return;
     }
-    int pages = (matches + ROWS_PER_PAGE - 1) / ROWS_PER_PAGE;
+
+    for (int i = 0; i < view->entryCount; i++) {
+        AreaRadarEntry *entry = &view->entries[i];
+        if (entry->species == species) {
+            entry->iconMask |= iconMask;
+            if (minLevel > 0 && (entry->minLevel == 0 || minLevel < entry->minLevel)) {
+                entry->minLevel = minLevel;
+            }
+            if (maxLevel > entry->maxLevel) {
+                entry->maxLevel = maxLevel;
+            }
+            return;
+        }
+    }
+
+    if (view->entryCount < AREA_RADAR_MAX_ENTRIES) {
+        AreaRadarEntry *entry = &view->entries[view->entryCount++];
+        entry->species = species;
+        entry->iconMask = iconMask;
+        entry->minLevel = minLevel;
+        entry->maxLevel = maxLevel;
+        entry->caught = Gear_SpeciesCaught(species) ? 1 : 0;
+        if (entry->caught) {
+            view->caughtCount++;
+        }
+    }
+}
+
+static void BuildViewData(AreaRadarViewData *view)
+{
+    u8 prevPage = view->page;
+    int prevMapID = view->mapHeaderID;
+
+    GearArea rawArea;
+    Gear_GetArea(&rawArea);
+
+    memset(view, 0, sizeof(*view));
+    view->valid = rawArea.valid;
+    view->mapHeaderID = rawArea.mapHeaderID;
+    snprintf(view->name, sizeof(view->name), "%s", rawArea.name);
+    view->timeOfDay = rawArea.timeOfDay;
+    view->radarChain = rawArea.radarChain;
+
+    // Collect all grass encounters across all times of day (General, Morning/Day, Night)
+    FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
+    if (view->valid && fieldSystem != NULL && MapHeader_HasWildEncounters(view->mapHeaderID)) {
+        const WildEncounters *data = MapHeaderData_GetWildEncounters(fieldSystem);
+        if (data != NULL && data->grassEncounters.encounterRate != 0) {
+            for (int i = 0; i < MAX_GRASS_ENCOUNTERS; i++) {
+                if (i == 2 || i == 3) {
+                    continue;
+                }
+                const GrassEncounter *enc = &data->grassEncounters.encounters[i];
+                AddOrMergeEntry(view, (u16)enc->species, AREA_RADAR_ICON_GRASS, enc->level, enc->level);
+            }
+            for (int k = 0; k < 2; k++) {
+                u8 lvl = data->grassEncounters.encounters[2 + k].level;
+                AddOrMergeEntry(view, (u16)data->grassEncounters.encounters[2 + k].species, AREA_RADAR_ICON_DAY, lvl, lvl);
+                AddOrMergeEntry(view, (u16)data->dayEncounters[k], AREA_RADAR_ICON_DAY, lvl, lvl);
+                AddOrMergeEntry(view, (u16)data->nightEncounters[k], AREA_RADAR_ICON_NIGHT, lvl, lvl);
+            }
+        }
+    }
+
+    // Merge live Gear_GetArea entries (CatchEmAll, Surf, Rods, Radar, Swarm, Dual-Slot, Daily)
+    for (int i = 0; i < rawArea.count; i++) {
+        const GearEncounter *enc = &rawArea.entries[i];
+        AddOrMergeEntry(view, enc->species, MapMethodToIcon(enc->method), enc->minLevel, enc->maxLevel);
+    }
+
+    // If a species is available in all-day grass, clear redundant time-of-day flags
+    for (int i = 0; i < view->entryCount; i++) {
+        if (view->entries[i].iconMask & AREA_RADAR_ICON_GRASS) {
+            view->entries[i].iconMask &= ~(AREA_RADAR_ICON_DAY | AREA_RADAR_ICON_NIGHT);
+        }
+    }
+
+    int pages = (view->entryCount + ROWS_PER_PAGE - 1) / ROWS_PER_PAGE;
     if (pages < 1) {
         pages = 1;
     }
     view->totalPages = (u8)pages;
-    if (view->page >= view->totalPages) {
+    if (view->mapHeaderID == prevMapID && prevPage < view->totalPages) {
+        view->page = prevPage;
+    } else {
         view->page = 0;
     }
 }
 
-static void AdvanceFilterOrPage(AreaRadarViewData *view)
+static void AdvancePage(AreaRadarViewData *view)
 {
-    if (!view->area.valid || view->area.count == 0) {
-        return;
+    if (view->totalPages > 1) {
+        view->page = (u8)((view->page + 1) % view->totalPages);
     }
-
-    // Advance within current filter first if multi-page
-    if (view->page + 1 < view->totalPages) {
-        view->page++;
-        return;
-    }
-
-    // Otherwise cycle through available methods: ALL -> method0 -> method1 -> ... -> ALL
-    view->page = 0;
-    if (view->filterMethod == 0xFF) {
-        view->filterMethod = view->area.entries[0].method;
-    } else {
-        BOOL foundCurrent = FALSE;
-        u8 nextMethod = 0xFF;
-        for (int i = 0; i < view->area.count; i++) {
-            u8 m = view->area.entries[i].method;
-            if (m == view->filterMethod) {
-                foundCurrent = TRUE;
-            } else if (foundCurrent) {
-                nextMethod = m;
-                break;
-            }
-        }
-        view->filterMethod = nextMethod;
-    }
-    RecalcPaging(view);
 }
 
 static BOOL New(void **appData, PoketchSystem *poketchSys, BgConfig *bgConfig, u32 appID)
@@ -143,10 +206,7 @@ static BOOL New(void **appData, PoketchSystem *poketchSys, BgConfig *bgConfig, u
 static BOOL Init(PoketchAreaRadar *appData, PoketchSystem *poketchSys, BgConfig *bgConfig, u32 appID)
 {
     memset(&appData->viewData, 0, sizeof(appData->viewData));
-    appData->viewData.filterMethod = 0xFF;
-    appData->viewData.page = 0;
-    Gear_GetArea(&appData->viewData.area);
-    RecalcPaging(&appData->viewData);
+    BuildViewData(&appData->viewData);
 
     if (PoketchAreaRadarGraphics_New(&appData->graphics, &appData->viewData, bgConfig)) {
         appData->state = STATE_LOAD_APP;
@@ -229,30 +289,29 @@ static BOOL State_UpdateApp(PoketchAreaRadar *appData)
         return FALSE;
     }
 
-    // Touch screen tap cycles page / encounter method filter
+    // Touch screen tap advances page when a route has > 7 species
     if (!PoketechSystem_IsRunningTask(appData->poketchSys)) {
         u32 x, y;
         if (TouchScreen_GetTapState(&x, &y) && INSIDE_POKETCH_SCREEN(x, y)) {
-            AdvanceFilterOrPage(&appData->viewData);
-            PoketchAreaRadarGraphics_StartTask(appData->graphics, AREA_RADAR_GRAPHICS_REFRESH);
+            if (appData->viewData.totalPages > 1) {
+                AdvancePage(&appData->viewData);
+                PoketchAreaRadarGraphics_StartTask(appData->graphics, AREA_RADAR_GRAPHICS_REFRESH);
+            }
             return FALSE;
         }
     }
 
-    // Periodically poll live area encounter data (map change, time of day, radar chain, swarms)
+    // Periodically poll live area encounter data and caught status
     if (++appData->pollTimer >= POLL_INTERVAL_FRAMES) {
         appData->pollTimer = 0;
-        GearArea latest;
-        Gear_GetArea(&latest);
+        AreaRadarViewData latest;
+        memset(&latest, 0, sizeof(latest));
+        latest.mapHeaderID = appData->viewData.mapHeaderID;
+        latest.page = appData->viewData.page;
+        BuildViewData(&latest);
 
-        if (memcmp(&latest, &appData->viewData.area, sizeof(GearArea)) != 0) {
-            BOOL mapChanged = (latest.mapHeaderID != appData->viewData.area.mapHeaderID);
-            appData->viewData.area = latest;
-            if (mapChanged) {
-                appData->viewData.filterMethod = 0xFF;
-                appData->viewData.page = 0;
-            }
-            RecalcPaging(&appData->viewData);
+        if (memcmp(&latest, &appData->viewData, sizeof(AreaRadarViewData)) != 0) {
+            appData->viewData = latest;
             PoketchAreaRadarGraphics_StartTask(appData->graphics, AREA_RADAR_GRAPHICS_REFRESH);
         }
     }

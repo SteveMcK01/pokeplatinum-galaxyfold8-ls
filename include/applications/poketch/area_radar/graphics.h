@@ -3,10 +3,10 @@
 
 #include "applications/poketch/poketch_task.h"
 #include "bg_window.h"
-#include "port/gear_data.h"
 #include "string_gf.h"
 
-#define AREA_RADAR_TASK_SLOTS 4
+#define AREA_RADAR_TASK_SLOTS  4
+#define AREA_RADAR_MAX_ENTRIES 32
 
 enum AreaRadarGraphicsTask {
     AREA_RADAR_GRAPHICS_INIT = 0,
@@ -14,11 +14,36 @@ enum AreaRadarGraphicsTask {
     AREA_RADAR_GRAPHICS_FREE,
 };
 
+enum AreaRadarIconFlag {
+    AREA_RADAR_ICON_GRASS = (1 << 0),
+    AREA_RADAR_ICON_DAY   = (1 << 1),
+    AREA_RADAR_ICON_NIGHT = (1 << 2),
+    AREA_RADAR_ICON_SURF  = (1 << 3),
+    AREA_RADAR_ICON_ROD   = (1 << 4),
+    AREA_RADAR_ICON_RADAR = (1 << 5),
+    AREA_RADAR_ICON_SWARM = (1 << 6),
+    AREA_RADAR_ICON_GBA   = (1 << 7),
+};
+
+typedef struct AreaRadarEntry {
+    u16 species;
+    u16 iconMask;
+    u8 minLevel;
+    u8 maxLevel;
+    u8 caught;
+} AreaRadarEntry;
+
 typedef struct AreaRadarViewData {
-    GearArea area;
-    u8 filterMethod; // 0xFF = All methods, otherwise GearEncounterMethod
+    BOOL valid;
+    int mapHeaderID;
+    char name[32];
+    int timeOfDay;
+    u16 radarChain;
+    u8 entryCount;
+    u8 caughtCount;
     u8 page;
     u8 totalPages;
+    AreaRadarEntry entries[AREA_RADAR_MAX_ENTRIES];
 } AreaRadarViewData;
 
 typedef struct AreaRadarGraphics {

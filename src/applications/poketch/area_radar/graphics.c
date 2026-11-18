@@ -27,6 +27,8 @@
 #define COLOR_HEADER      TEXT_COLOR(LCD_BG_COLOR, LCD_SHADOW_COLOR, LCD_FG_COLOR)
 
 #define ROWS_PER_PAGE     7
+#define ROW_HEIGHT        20
+#define LIST_START_Y      18
 
 static void EndTask(PoketchTaskManager *taskMan);
 static void Task_DrawBackground(SysTask *task, void *taskMan);
@@ -34,71 +36,176 @@ static void Task_RefreshScreen(SysTask *task, void *taskMan);
 static void Task_FreeBackground(SysTask *task, void *taskMan);
 static void RenderAreaRadar(AreaRadarGraphics *graphics);
 
-static const char *MethodShortName(u8 method)
-{
-    switch (method) {
-    case 0xFF:
-        return "ALL";
-    case GEAR_ENC_GRASS:
-        return "GRASS";
-    case GEAR_ENC_SURF:
-        return "SURF";
-    case GEAR_ENC_OLD_ROD:
-        return "OLD ROD";
-    case GEAR_ENC_GOOD_ROD:
-        return "GOOD ROD";
-    case GEAR_ENC_SUPER_ROD:
-        return "SUPER ROD";
-    case GEAR_ENC_RADAR:
-        return "RADAR";
-    case GEAR_ENC_SWARM:
-        return "SWARM";
-    case GEAR_ENC_GBA:
-        return "GBA SLOT";
-    default:
-        return "WILD";
-    }
-}
+// 12x12 Poketch LCD Icons ('#' = dark foreground, '.' = mid shadow, ' ' = transparent)
+static const char *const sIconBallCaught[12] = {
+    "    ####    ",
+    "  ########  ",
+    " ########## ",
+    "############",
+    "############",
+    "####....####",
+    "###..##..###",
+    "###..##..###",
+    "####....####",
+    " ##      ## ",
+    "  ##    ##  ",
+    "    ####    ",
+};
 
-static const char *MethodRowTag(u8 method)
-{
-    switch (method) {
-    case GEAR_ENC_GRASS:
-        return "GRS";
-    case GEAR_ENC_SURF:
-        return "SRF";
-    case GEAR_ENC_OLD_ROD:
-        return "OLD";
-    case GEAR_ENC_GOOD_ROD:
-        return "GOD";
-    case GEAR_ENC_SUPER_ROD:
-        return "SUP";
-    case GEAR_ENC_RADAR:
-        return "RDR";
-    case GEAR_ENC_SWARM:
-        return "SWM";
-    case GEAR_ENC_GBA:
-        return "GBA";
-    default:
-        return "WLD";
-    }
-}
+static const char *const sIconBallUncaught[12] = {
+    "    ....    ",
+    "  ..    ..  ",
+    " .        . ",
+    ".          .",
+    ".          .",
+    "....    ....",
+    ".   ....   .",
+    ".   ....   .",
+    "....    ....",
+    " .        . ",
+    "  ..    ..  ",
+    "    ....    ",
+};
 
-static const char *TimeShortName(int timeOfDay)
+static const char *const sIconSun[12] = {
+    "     #      ",
+    "  #  #  #   ",
+    "   . # .    ",
+    "  . ### .   ",
+    " ## ##### ##",
+    "  . ### .   ",
+    "   . # .    ",
+    "  #  #  #   ",
+    "     #      ",
+    "            ",
+    "            ",
+    "            ",
+};
+
+static const char *const sIconMoon[12] = {
+    "    ####    ",
+    "   #####  # ",
+    "  #####     ",
+    " #####      ",
+    " #####      ",
+    " #####      ",
+    " #####   #  ",
+    "  #####     ",
+    "   #####    ",
+    "    ####    ",
+    "            ",
+    "            ",
+};
+
+static const char *const sIconGrass[12] = {
+    "            ",
+    "     #      ",
+    " #   #   #  ",
+    " #  ##   #  ",
+    " ## ##  ##  ",
+    " ## ### ##  ",
+    " #########  ",
+    " #########  ",
+    "########### ",
+    "            ",
+    "            ",
+    "            ",
+};
+
+static const char *const sIconSurf[12] = {
+    "            ",
+    " ##    ##   ",
+    "#  #  #  #  ",
+    "    ##    # ",
+    "            ",
+    " ##    ##   ",
+    "#  #  #  #  ",
+    "    ##    # ",
+    "            ",
+    " ##    ##   ",
+    "#  #  #  #  ",
+    "    ##    # ",
+};
+
+static const char *const sIconRod[12] = {
+    "       ###  ",
+    "      #   # ",
+    "     #    # ",
+    "    #     # ",
+    "   #      # ",
+    "  #       # ",
+    " #       #  ",
+    "##      ##  ",
+    "##     #  # ",
+    "        ##  ",
+    "            ",
+    "            ",
+};
+
+static const char *const sIconRadar[12] = {
+    "     #      ",
+    "  #  #  #   ",
+    "   # . #    ",
+    "    ###     ",
+    "### #.# ### ",
+    "    ###     ",
+    "   # . #    ",
+    "  #  #  #   ",
+    "     #      ",
+    "            ",
+    "            ",
+    "            ",
+};
+
+static const char *const sIconSwarm[12] = {
+    "   #####    ",
+    "  #######   ",
+    " ###...###  ",
+    " ###...###  ",
+    " ###...###  ",
+    " ###...###  ",
+    " #########  ",
+    " ###...###  ",
+    "  #######   ",
+    "   #####    ",
+    "            ",
+    "            ",
+};
+
+static const char *const sIconGba[12] = {
+    " ########## ",
+    " #........# ",
+    " #.######.# ",
+    " #.#    #.# ",
+    " #.#    #.# ",
+    " #.######.# ",
+    " #........# ",
+    " #..####..# ",
+    " ########## ",
+    "            ",
+    "            ",
+    "            ",
+};
+
+static void DrawIcon12x12(Window *window, const char *const rows[12], u16 x, u16 y)
 {
-    switch (timeOfDay) {
-    case 0:
-        return "MORN";
-    case 1:
-        return "DAY";
-    case 2:
-        return "EVE";
-    case 3:
-        return "NITE";
-    case 4:
-        return "LATE";
-    default:
-        return "";
+    for (u16 r = 0; r < 12; r++) {
+        const char *row = rows[r];
+        u16 c = 0;
+        while (c < 12) {
+            char ch = row[c];
+            if (ch == ' ' || ch == '\0') {
+                c++;
+                continue;
+            }
+            u8 color = (ch == '#') ? LCD_FG_COLOR : LCD_SHADOW_COLOR;
+            u16 span = 1;
+            while ((c + span) < 12 && row[c + span] == ch) {
+                span++;
+            }
+            Window_FillRectWithColor(window, color, (u16)(x + c), (u16)(y + r), span, 1);
+            c = (u16)(c + span);
+        }
     }
 }
 
@@ -231,99 +338,116 @@ static void Task_FreeBackground(SysTask *task, void *taskMan)
 static void RenderAreaRadar(AreaRadarGraphics *graphics)
 {
     const AreaRadarViewData *view = graphics->viewData;
-    const GearArea *area = &view->area;
-    char line[48];
-    char badge[16];
+    char badge[20];
 
     Window_FillTilemap(&graphics->window, LCD_BG_COLOR);
 
-    // Top inverted LCD banner: Area Name + Chain / Page indicator
+    // Top inverted LCD banner: Location Name + Caught/Total Route Counter
     Window_FillRectWithColor(&graphics->window, LCD_FG_COLOR, 0, 0, 192, 16);
 
-    char areaTitle[19];
-    if (area->valid && area->name[0] != '\0') {
-        snprintf(areaTitle, sizeof(areaTitle), "%.18s", area->name);
+    if (view->valid && view->entryCount > 0) {
+        if (view->totalPages > 1) {
+            snprintf(badge, sizeof(badge), "%d/%d P%d/%d", view->caughtCount, view->entryCount, view->page + 1, view->totalPages);
+        } else {
+            snprintf(badge, sizeof(badge), "%d/%d", view->caughtCount, view->entryCount);
+        }
+    } else {
+        badge[0] = '\0';
+    }
+
+    u32 badgeW = (u32)(strlen(badge) * 6);
+    u32 badgeX = badgeW < 188 ? (189 - badgeW) : 130;
+    int maxTitleChars = (int)((badgeX > 8 ? (badgeX - 6) : 96) / 6);
+    if (maxTitleChars > 22) {
+        maxTitleChars = 22;
+    }
+
+    char areaTitle[24];
+    if (view->valid && view->name[0] != '\0') {
+        snprintf(areaTitle, sizeof(areaTitle), "%.*s", maxTitleChars, view->name);
     } else {
         snprintf(areaTitle, sizeof(areaTitle), "AREA RADAR");
     }
     DrawAscii(graphics, areaTitle, 3, 1, COLOR_HEADER);
 
-    if (area->radarChain > 0) {
-        snprintf(badge, sizeof(badge), "CH:%d", area->radarChain);
-    } else if (view->totalPages > 1) {
-        snprintf(badge, sizeof(badge), "%d/%d", view->page + 1, view->totalPages);
-    } else {
-        snprintf(badge, sizeof(badge), "%s", TimeShortName(area->timeOfDay));
+    if (badge[0] != '\0') {
+        DrawAscii(graphics, badge, badgeX, 1, COLOR_HEADER);
     }
-    u32 badgeW = (u32)(strlen(badge) * 6);
-    u32 badgeX = badgeW < 188 ? (189 - badgeW) : 140;
-    DrawAscii(graphics, badge, badgeX, 1, COLOR_HEADER);
 
-    if (!area->valid || area->count == 0) {
+    if (!view->valid || view->entryCount == 0) {
         DrawAscii(graphics, "NO WILD POKEMON", 38, 64, COLOR_NORMAL);
         DrawAscii(graphics, "IN THIS AREA", 48, 80, COLOR_NORMAL);
         Window_LoadTiles(&graphics->window);
         return;
     }
 
-    // Sub-header: Filter mode + Time of day + Tap hint
-    snprintf(line, sizeof(line), "[%s] %s", MethodShortName(view->filterMethod), TimeShortName(area->timeOfDay));
-    DrawAscii(graphics, line, 2, 18, COLOR_NORMAL);
-    DrawAscii(graphics, "TAP:NEXT", 140, 18, COLOR_NORMAL);
-
-    // Filter matching encounters and render active page
-    int matchedIndices[GEAR_AREA_MAX_ENTRIES];
-    int matchCount = 0;
-    for (int i = 0; i < area->count; i++) {
-        if (view->filterMethod == 0xFF || area->entries[i].method == view->filterMethod) {
-            matchedIndices[matchCount++] = i;
-        }
-    }
-
     int start = view->page * ROWS_PER_PAGE;
     for (int row = 0; row < ROWS_PER_PAGE; row++) {
-        int idxPos = start + row;
-        if (idxPos >= matchCount) {
+        int idx = start + row;
+        if (idx >= view->entryCount) {
             break;
         }
 
-        const GearEncounter *enc = &area->entries[matchedIndices[idxPos]];
-        u32 y = 34 + (u32)(row * 18);
+        const AreaRadarEntry *entry = &view->entries[idx];
+        u32 y = LIST_START_Y + (u32)(row * ROW_HEIGHT);
 
-        char dexMark = '-';
-        if (Gear_SpeciesCaught(enc->species)) {
-            dexMark = '*';
-        } else if (Gear_SpeciesSeen(enc->species)) {
-            dexMark = 'o';
+        // Subtle row separator line
+        if (row > 0) {
+            Window_FillRectWithColor(&graphics->window, LCD_SHADOW_COLOR, 2, (u16)(y - 1), 188, 1);
         }
 
+        // 1. Pokeball caught status indicator
+        DrawIcon12x12(&graphics->window, entry->caught ? sIconBallCaught : sIconBallUncaught, 2, (u16)(y + 3));
+
+        // 2. Species name
         char speciesName[12];
-        snprintf(speciesName, sizeof(speciesName), "%.10s", Gear_SpeciesName(enc->species));
+        snprintf(speciesName, sizeof(speciesName), "%.10s", Gear_SpeciesName(entry->species));
+        DrawAscii(graphics, speciesName, 17, y + 1, COLOR_NORMAL);
 
+        // 3. Level range
         char lvlStr[10];
-        if (enc->minLevel == enc->maxLevel) {
-            snprintf(lvlStr, sizeof(lvlStr), "L%d", enc->minLevel);
+        if (entry->minLevel == entry->maxLevel) {
+            snprintf(lvlStr, sizeof(lvlStr), "L%d", entry->minLevel);
         } else {
-            snprintf(lvlStr, sizeof(lvlStr), "L%d-%d", enc->minLevel, enc->maxLevel);
+            snprintf(lvlStr, sizeof(lvlStr), "L%d-%d", entry->minLevel, entry->maxLevel);
+        }
+        DrawAscii(graphics, lvlStr, 86, y + 1, COLOR_NORMAL);
+
+        // 4. Encounter method symbols (up to 4 icons on the right)
+        const char *const *icons[8];
+        int iconCount = 0;
+        if (entry->iconMask & AREA_RADAR_ICON_DAY) {
+            icons[iconCount++] = sIconSun;
+        }
+        if (entry->iconMask & AREA_RADAR_ICON_NIGHT) {
+            icons[iconCount++] = sIconMoon;
+        }
+        if (entry->iconMask & AREA_RADAR_ICON_GRASS) {
+            icons[iconCount++] = sIconGrass;
+        }
+        if (entry->iconMask & AREA_RADAR_ICON_SURF) {
+            icons[iconCount++] = sIconSurf;
+        }
+        if (entry->iconMask & AREA_RADAR_ICON_ROD) {
+            icons[iconCount++] = sIconRod;
+        }
+        if (entry->iconMask & AREA_RADAR_ICON_RADAR) {
+            icons[iconCount++] = sIconRadar;
+        }
+        if (entry->iconMask & AREA_RADAR_ICON_SWARM) {
+            icons[iconCount++] = sIconSwarm;
+        }
+        if (entry->iconMask & AREA_RADAR_ICON_GBA) {
+            icons[iconCount++] = sIconGba;
         }
 
-        char rightStr[10];
-        if (enc->rate > 0) {
-            if (view->filterMethod == 0xFF) {
-                snprintf(rightStr, sizeof(rightStr), "%s %d%%", MethodRowTag(enc->method), enc->rate);
-            } else {
-                snprintf(rightStr, sizeof(rightStr), "%d%%", enc->rate);
-            }
-        } else {
-            snprintf(rightStr, sizeof(rightStr), "%s", MethodRowTag(enc->method));
+        if (iconCount > 4) {
+            iconCount = 4;
         }
-
-        snprintf(line, sizeof(line), "%c%-10s %-5s", dexMark, speciesName, lvlStr);
-        DrawAscii(graphics, line, 2, y, COLOR_NORMAL);
-
-        u32 rightW = (u32)(strlen(rightStr) * 6);
-        u32 rightX = rightW < 190 ? (190 - rightW) : 148;
-        DrawAscii(graphics, rightStr, rightX, y, COLOR_NORMAL);
+        u16 iconX = (u16)(190 - (iconCount * 14));
+        for (int k = 0; k < iconCount; k++) {
+            DrawIcon12x12(&graphics->window, icons[k], (u16)(iconX + k * 14), (u16)(y + 3));
+        }
     }
 
     Window_LoadTiles(&graphics->window);

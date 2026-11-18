@@ -1372,14 +1372,14 @@ BOOL BattleSubscreen_PortGetMenu(BattleSubscreenPortMenu *out)
     const BattleMenuConfig *config = &sBattleMenuConfigs[btlSubscreen->activeMenuConfigIndex];
 
     out->menuConfig = btlSubscreen->activeMenuConfigIndex;
-    out->polled = gSystem.vblankCounter - sPortPollTick <= 4;
+    out->polled = TRUE;
     out->ready = out->polled && !btlSubscreen->isPanelSliding && btlSubscreen->menuTransitionTask == NULL;
     out->cursorButton = PortCursorButton(btlSubscreen);
     out->buttonCount = PortButtonCount(config);
     out->data = btlSubscreen->activeMenuData;
     out->hasCancelButton = btlSubscreen->isWaitingForPartner;
 
-    if (out->menuConfig == 11) {
+    if (out->menuConfig == 12) {
         u8 flags[MAX_BATTLERS];
         u8 battlersByType[6];
 
@@ -2713,6 +2713,7 @@ static void BattleSubscreen_Cleanup(BattleSubscreen *btlSubscreen, BOOL freeSpri
     }
 
     if (resetBg == TRUE) {
+        btlSubscreen->activeMenuConfigIndex = -1;
         SysTask_ExecuteAfterVBlank(SysTask_ResetSubscreenBg, btlSubscreen, 10);
     }
 }

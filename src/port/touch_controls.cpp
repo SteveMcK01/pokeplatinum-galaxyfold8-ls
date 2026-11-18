@@ -23,6 +23,7 @@
 #include "port/gen5_battle.h"
 #endif
 
+#include "data/terrain/to_type.h"
 #include "constants/battle.h"
 #include "constants/moves.h"
 #include "generated/abilities.h"

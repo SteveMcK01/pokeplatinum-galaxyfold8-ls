@@ -9,6 +9,7 @@
 #include "constants/narc.h"
 #include "constants/species.h"
 #include "generated/genders.h"
+#include "generated/items.h"
 
 #include "item.h"
 #include "narc.h"

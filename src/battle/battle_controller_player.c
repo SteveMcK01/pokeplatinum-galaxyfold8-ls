@@ -338,6 +338,26 @@ int BattleController_PortChoosingBattler(BattleSystem *battleSys)
     }
     return -1;
 }
+BOOL BattleController_PortUseBall(BattleSystem *battleSys, u16 item)
+{
+    BattleContext *battleCtx = BattleSystem_GetBattleContext(battleSys);
+    if (battleCtx == NULL) {
+        return FALSE;
+    }
+    int battler = BattleController_PortChoosingBattler(battleSys);
+    if (battler < 0 || battleCtx->curCommandState[battler] != COMMAND_SELECTION_SELECT) {
+        return FALSE;
+    }
+    BattleItemUse used;
+    memset(&used, 0, sizeof(used));
+    used.item = item;
+    used.category = ITEM_BATTLE_CATEGORY_POKE_BALLS;
+    battleCtx->battlerActions[battler][BATTLE_ACTION_PICK_COMMAND] = BATTLE_CONTROL_ITEM;
+    memcpy(&battleCtx->battlerActions[battler][BATTLE_ACTION_USE_ITEM], &used, sizeof(used));
+    battleCtx->curCommandState[battler] = COMMAND_SELECTION_WAIT;
+    return TRUE;
+}
+
 #endif
 
 static void BattleControllerPlayer_CommandSelectionInput(BattleSystem *battleSys, BattleContext *battleCtx)

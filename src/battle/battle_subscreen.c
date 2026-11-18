@@ -1404,6 +1404,17 @@ void BattleSubscreen_PortPress(int button)
     sPortPress = button;
     sPortPressConfig = sPortSubscreen->activeMenuConfigIndex;
 }
+void BattleSubscreen_PortClearMenu(void)
+{
+    BattleSubscreen *subscreen = sPortSubscreen;
+    if (subscreen == NULL) {
+        return;
+    }
+    subscreen->hasPendingButton = FALSE;
+    subscreen->menuConfig = 0;
+    subscreen->ready = FALSE;
+}
+
 #endif
 
 int BattleSystem_MenuInput(BattleSubscreen *btlSubscreen)
@@ -4123,16 +4134,3 @@ u8 BattleSubscreen_IsWaitingForPartner(BattleSubscreen *btlSubscreen)
 {
     return btlSubscreen->isWaitingForPartner;
 }
-
-#ifdef SDK_PORT
-void BattleSubscreen_PortClearMenu(void)
-{
-    BattleSubscreen *subscreen = sPortSubscreen;
-    if (subscreen == NULL) {
-        return;
-    }
-    subscreen->hasPendingButton = FALSE;
-    subscreen->menuConfig = 0;
-    subscreen->ready = FALSE;
-}
-#endif

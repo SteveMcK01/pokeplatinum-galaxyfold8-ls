@@ -1323,7 +1323,7 @@ int Gear_BattleWeather(void)
     if (mask & FIELD_CONDITION_SANDSTORM) {
         return 3;
     }
-    if (mask & FIELD_CONDITION_HAIL) {
+    if (mask & FIELD_CONDITION_HAILING) {
         return 4;
     }
     if (mask & FIELD_CONDITION_DEEP_FOG) {
@@ -1354,40 +1354,27 @@ int Gear_GetBattlePokeBalls(BattleOverlayBallEntry *out, int maxOut, BOOL *canTh
         if (qty > 0) {
             out[count].item = item;
             out[count].count = qty;
-            out[count].name[0] = '\0';
-            GetText(TEXT_BANK_ITEM_NAMES, item, out[count].name, sizeof(out[count].name));
+            snprintf(out[count].name, sizeof(out[count].name), "%s", Gear_ItemName(item));
             count++;
         }
     }
     return count;
 }
 
+BOOL BattleController_PortUseBall(BattleSystem *battleSys, u16 item);
+
 BOOL Gear_UseBattlePokeBall(u16 item)
 {
     if (!CanThrowBattlePokeBall()) {
         return FALSE;
     }
-    BattleContext *battleCtx = BattleSystem_GetBattleContext(sBattleSys);
     Bag *bag = BattleSystem_GetBag(sBattleSys);
-    if (battleCtx == NULL || bag == NULL) {
+    if (bag == NULL || Bag_GetItemQuantity(bag, item, HEAP_ID_BATTLE) == 0) {
         return FALSE;
     }
-    int battler = BattleController_PortChoosingBattler(sBattleSys);
-    if (battler < 0 || battleCtx->curCommandState[battler] != COMMAND_SELECTION_SELECT) {
+    if (!BattleController_PortUseBall(sBattleSys, item)) {
         return FALSE;
     }
-    if (Bag_GetItemQuantity(bag, item, HEAP_ID_BATTLE) == 0) {
-        return FALSE;
-    }
-
-    BattleItemUse used;
-    memset(&used, 0, sizeof(used));
-    used.item = item;
-    used.category = ITEM_BATTLE_CATEGORY_POKE_BALLS;
-
-    battleCtx->battlerActions[battler][BATTLE_ACTION_PICK_COMMAND] = BATTLE_CONTROL_ITEM;
-    memcpy(&battleCtx->battlerActions[battler][BATTLE_ACTION_USE_ITEM], &used, sizeof(used));
-    battleCtx->curCommandState[battler] = COMMAND_SELECTION_WAIT;
     BattleSubscreen_PortClearMenu();
     return TRUE;
 }

@@ -11,7 +11,7 @@
 #include "bg_window.h"
 #include "font.h"
 #include "heap.h"
-#include "port/charcode_convert.h"
+#include "../../../port/charcode_convert.h"
 #include "port/gear_data.h"
 #include "string_gf.h"
 #include "sys_task_manager.h"

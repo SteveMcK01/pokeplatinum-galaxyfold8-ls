@@ -106,6 +106,7 @@ static void (*PoketchOverlayLoadFunctions[])(void) = {
     PoketchAppStaticInit_MatchupChecker,
     PoketchAppStaticInit_Stopwatch,
     PoketchAppStaticInit_AlarmClock,
+    PoketchAppStaticInit_AreaRadar,
 };
 #endif
 
@@ -160,6 +161,7 @@ void PoketchSystem_Create(FieldSystem *fieldSystem, PoketchSystem **poketchSys, 
         new_system->fieldSystem = fieldSystem;
         new_system->saveData = saveData;
         new_system->poketch = SaveData_GetPoketch(saveData);
+        Poketch_RegisterApp(new_system->poketch, POKETCH_APPID_AREARADAR);
         new_system->bgl = bgl;
         new_system->oamManager = oamManager;
 

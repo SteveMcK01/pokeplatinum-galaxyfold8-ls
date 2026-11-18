@@ -30,6 +30,7 @@ typedef struct AreaRadarEntry {
     u16 iconMask;
     u8 minLevel;
     u8 maxLevel;
+    u8 rate;
     u8 caught;
 } AreaRadarEntry;
 

@@ -1,5 +1,6 @@
 #include <nitro.h>
 #include <nitro/sinit.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "applications/poketch/area_radar/graphics.h"
@@ -85,7 +86,7 @@ static u16 MapMethodToIcon(u8 method)
     }
 }
 
-static void AddOrMergeEntry(AreaRadarViewData *view, u16 species, u16 iconMask, u8 minLevel, u8 maxLevel)
+static void AddOrMergeEntry(AreaRadarViewData *view, u16 species, u16 iconMask, u8 minLevel, u8 maxLevel, u8 rate, BOOL isOffHourSlot, u8 *offHourFlags)
 {
     if (species == SPECIES_NONE || species == 0) {
         return;
@@ -101,39 +102,68 @@ static void AddOrMergeEntry(AreaRadarViewData *view, u16 species, u16 iconMask, 
             if (maxLevel > entry->maxLevel) {
                 entry->maxLevel = maxLevel;
             }
+            if (isOffHourSlot) {
+                if (offHourFlags[i]) {
+                    u16 sum = (u16)(entry->rate + rate);
+                    entry->rate = (u8)(sum > 100 ? 100 : sum);
+                }
+            } else if (rate > entry->rate) {
+                entry->rate = rate;
+            }
             return;
         }
     }
 
     if (view->entryCount < AREA_RADAR_MAX_ENTRIES) {
-        AreaRadarEntry *entry = &view->entries[view->entryCount++];
+        int idx = view->entryCount++;
+        AreaRadarEntry *entry = &view->entries[idx];
         entry->species = species;
         entry->iconMask = iconMask;
         entry->minLevel = minLevel;
         entry->maxLevel = maxLevel;
+        entry->rate = rate;
         entry->caught = Gear_SpeciesCaught(species) ? 1 : 0;
+        offHourFlags[idx] = isOffHourSlot ? 1 : 0;
         if (entry->caught) {
             view->caughtCount++;
         }
     }
 }
 
+static int CompareRadarEntries(const void *a, const void *b)
+{
+    const AreaRadarEntry *ea = (const AreaRadarEntry *)a;
+    const AreaRadarEntry *eb = (const AreaRadarEntry *)b;
+    if (ea->rate != eb->rate) {
+        return (int)eb->rate - (int)ea->rate;
+    }
+    return (int)ea->species - (int)eb->species;
+}
+
 static void BuildViewData(AreaRadarViewData *view)
 {
     u8 prevPage = view->page;
     int prevMapID = view->mapHeaderID;
+    u8 offHourFlags[AREA_RADAR_MAX_ENTRIES];
 
     GearArea rawArea;
     Gear_GetArea(&rawArea);
 
     memset(view, 0, sizeof(*view));
+    memset(offHourFlags, 0, sizeof(offHourFlags));
     view->valid = rawArea.valid;
     view->mapHeaderID = rawArea.mapHeaderID;
     snprintf(view->name, sizeof(view->name), "%s", rawArea.name);
     view->timeOfDay = rawArea.timeOfDay;
     view->radarChain = rawArea.radarChain;
 
-    // Collect all grass encounters across all times of day (General, Morning/Day, Night)
+    // 1. Add live Gear_GetArea entries first (already summed per method, with exact live rates)
+    for (int i = 0; i < rawArea.count; i++) {
+        const GearEncounter *enc = &rawArea.entries[i];
+        AddOrMergeEntry(view, enc->species, MapMethodToIcon(enc->method), enc->minLevel, enc->maxLevel, enc->rate, FALSE, offHourFlags);
+    }
+
+    // 2. Merge all grass encounters across all times of day (General, Morning/Day, Night)
     FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
     if (view->valid && fieldSystem != NULL && MapHeader_HasWildEncounters(view->mapHeaderID)) {
         const WildEncounters *data = MapHeaderData_GetWildEncounters(fieldSystem);
@@ -143,21 +173,15 @@ static void BuildViewData(AreaRadarViewData *view)
                     continue;
                 }
                 const GrassEncounter *enc = &data->grassEncounters.encounters[i];
-                AddOrMergeEntry(view, (u16)enc->species, AREA_RADAR_ICON_GRASS, enc->level, enc->level);
+                AddOrMergeEntry(view, (u16)enc->species, AREA_RADAR_ICON_GRASS, enc->level, enc->level, 0, FALSE, offHourFlags);
             }
             for (int k = 0; k < 2; k++) {
                 u8 lvl = data->grassEncounters.encounters[2 + k].level;
-                AddOrMergeEntry(view, (u16)data->grassEncounters.encounters[2 + k].species, AREA_RADAR_ICON_DAY, lvl, lvl);
-                AddOrMergeEntry(view, (u16)data->dayEncounters[k], AREA_RADAR_ICON_DAY, lvl, lvl);
-                AddOrMergeEntry(view, (u16)data->nightEncounters[k], AREA_RADAR_ICON_NIGHT, lvl, lvl);
+                AddOrMergeEntry(view, (u16)data->grassEncounters.encounters[2 + k].species, AREA_RADAR_ICON_DAY, lvl, lvl, 10, TRUE, offHourFlags);
+                AddOrMergeEntry(view, (u16)data->dayEncounters[k], AREA_RADAR_ICON_DAY, lvl, lvl, 10, TRUE, offHourFlags);
+                AddOrMergeEntry(view, (u16)data->nightEncounters[k], AREA_RADAR_ICON_NIGHT, lvl, lvl, 10, TRUE, offHourFlags);
             }
         }
-    }
-
-    // Merge live Gear_GetArea entries (CatchEmAll, Surf, Rods, Radar, Swarm, Dual-Slot, Daily)
-    for (int i = 0; i < rawArea.count; i++) {
-        const GearEncounter *enc = &rawArea.entries[i];
-        AddOrMergeEntry(view, enc->species, MapMethodToIcon(enc->method), enc->minLevel, enc->maxLevel);
     }
 
     // If a species is available in all-day grass, clear redundant time-of-day flags
@@ -165,6 +189,10 @@ static void BuildViewData(AreaRadarViewData *view)
         if (view->entries[i].iconMask & AREA_RADAR_ICON_GRASS) {
             view->entries[i].iconMask &= ~(AREA_RADAR_ICON_DAY | AREA_RADAR_ICON_NIGHT);
         }
+    }
+
+    if (view->entryCount > 1) {
+        qsort(view->entries, view->entryCount, sizeof(AreaRadarEntry), CompareRadarEntries);
     }
 
     int pages = (view->entryCount + ROWS_PER_PAGE - 1) / ROWS_PER_PAGE;

@@ -401,19 +401,26 @@ static void RenderAreaRadar(AreaRadarGraphics *graphics)
 
         // 2. Species name
         char speciesName[12];
-        snprintf(speciesName, sizeof(speciesName), "%.10s", Gear_SpeciesName(entry->species));
-        DrawAscii(graphics, speciesName, 17, y + 1, COLOR_NORMAL);
+        snprintf(speciesName, sizeof(speciesName), "%.9s", Gear_SpeciesName(entry->species));
+        DrawAscii(graphics, speciesName, 16, y + 1, COLOR_NORMAL);
 
-        // 3. Level range
+        // 3. Spawn rate percentage next to name
+        if (entry->rate > 0) {
+            char rateStr[8];
+            snprintf(rateStr, sizeof(rateStr), "%d%%", entry->rate);
+            DrawAscii(graphics, rateStr, 78, y + 1, COLOR_NORMAL);
+        }
+
+        // 4. Level range
         char lvlStr[10];
         if (entry->minLevel == entry->maxLevel) {
             snprintf(lvlStr, sizeof(lvlStr), "L%d", entry->minLevel);
         } else {
             snprintf(lvlStr, sizeof(lvlStr), "L%d-%d", entry->minLevel, entry->maxLevel);
         }
-        DrawAscii(graphics, lvlStr, 86, y + 1, COLOR_NORMAL);
+        DrawAscii(graphics, lvlStr, 105, y + 1, COLOR_NORMAL);
 
-        // 4. Encounter method symbols (up to 4 icons on the right)
+        // 5. Encounter method symbols (up to 4 icons on the right)
         const char *const *icons[8];
         int iconCount = 0;
         if (entry->iconMask & AREA_RADAR_ICON_DAY) {
@@ -444,9 +451,9 @@ static void RenderAreaRadar(AreaRadarGraphics *graphics)
         if (iconCount > 4) {
             iconCount = 4;
         }
-        u16 iconX = (u16)(190 - (iconCount * 14));
+        u16 iconX = (u16)(190 - (iconCount * 13));
         for (int k = 0; k < iconCount; k++) {
-            DrawIcon12x12(&graphics->window, icons[k], (u16)(iconX + k * 14), (u16)(y + 3));
+            DrawIcon12x12(&graphics->window, icons[k], (u16)(iconX + k * 13), (u16)(y + 3));
         }
     }
 

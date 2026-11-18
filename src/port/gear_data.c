@@ -13,6 +13,7 @@
 #include "constants/heap.h"
 #include "constants/narc.h"
 #include "constants/species.h"
+#include "generated/map_headers.h"
 #include "constants/string.h"
 #include "constants/versions.h"
 #include "constants/wild_encounters.h"
@@ -34,6 +35,8 @@
 #include "battle/battle_system.h"
 #include "battle_sub_menus/battle_party.h"
 #include "field/field_system.h"
+#include "overlay006/great_marsh_daily_encounters.h"
+#include "overlay006/swarm.h"
 #include "overlay006/wild_encounters.h"
 #include "port/catch_em_all.h"
 #include "port/debug_field.h"
@@ -49,6 +52,7 @@
 #include "map_header_data.h"
 #include "message.h"
 #include "move_table.h"
+#include "narc.h"
 #include "party.h"
 #include "play_time.h"
 #include "pokedex.h"
@@ -59,8 +63,10 @@
 #include "save_player.h"
 #include "savedata.h"
 #include "savedata_misc.h"
+#include "special_encounter.h"
 #include "string_gf.h"
 #include "system.h"
+#include "system_flags.h"
 #include "system_vars.h"
 #include "trainer_data.h"
 #include "trainer_info.h"
@@ -719,6 +725,7 @@ void Gear_GetArea(GearArea *out)
     }
 
     if (data->grassEncounters.encounterRate != 0) {
+        const BOOL nationalDexObtained = Pokedex_IsNationalDexObtained(SaveData_GetPokedex(fieldSystem->saveData));
         CatchEmAllSlot grassSlots[MAX_GRASS_ENCOUNTERS];
         for (int i = 0; i < MAX_GRASS_ENCOUNTERS; i++) {
             const GrassEncounter *enc = &data->grassEncounters.encounters[i];
@@ -734,15 +741,67 @@ void Gear_GetArea(GearArea *out)
             grassSlots[i].minLevel = enc->level;
             grassSlots[i].maxLevel = enc->level;
         }
+
+        // Active daily Swarm replaces slots 0 and 1 (20% each)
+        SpecialEncounter *specialEncounter = SaveData_GetSpecialEncounters(fieldSystem->saveData);
+        if (specialEncounter != NULL && SpecialEncounter_IsSwarmEnabled(specialEncounter)) {
+            u32 swarmId = SpecialEncounter_GetDailyMon(specialEncounter, DAILY_SWARM);
+            if ((u32)out->mapHeaderID == Swarm_GetMapId(swarmId)) {
+                grassSlots[0].species = data->swarmEncounters[0];
+                grassSlots[1].species = data->swarmEncounters[1];
+            }
+        }
+
+        // Active daily Trophy Garden encounters replace slots 6 and 7 (5% each)
+        if (nationalDexObtained && MapHeader_IsTrophyGarden(out->mapHeaderID)) {
+            u16 index1 = TROPHY_GARDEN_SLOT_NONE;
+            u16 index2 = TROPHY_GARDEN_SLOT_NONE;
+            SpecialEncounter_GetTrophyGardenMons(fieldSystem->saveData, &index1, &index2);
+            u32 size = 0;
+            int *trophyGardenData = NARC_PortReadMember(NARC_INDEX_ARC__ENCDATA_EX, 8, &size);
+            if (trophyGardenData != NULL) {
+                int count = (int)(size / sizeof(int));
+                if (index1 != TROPHY_GARDEN_SLOT_NONE && index1 < count) {
+                    grassSlots[6].species = trophyGardenData[index1];
+                }
+                if (index2 != TROPHY_GARDEN_SLOT_NONE && index2 < count) {
+                    grassSlots[7].species = trophyGardenData[index2];
+                }
+                free(trophyGardenData);
+            }
+        }
+
+        // GBA dual-slot replaces slots 8 and 9 (4% each) before CatchEmAll overrides
+        if (dualSlot != NULL) {
+            grassSlots[8].species = dualSlot[0];
+            grassSlots[9].species = dualSlot[1];
+        }
+
         CatchEmAll_ApplyGrassSlots(out->mapHeaderID, grassSlots);
 
+        // Active Safari Game Great Marsh daily encounters replace slots 6 and 7 (5% each)
+        if (specialEncounter != NULL
+            && out->mapHeaderID >= MAP_HEADER_GREAT_MARSH_1
+            && out->mapHeaderID <= MAP_HEADER_GREAT_MARSH_6
+            && SystemFlag_CheckSafariGameActive(SaveData_GetVarsFlags(fieldSystem->saveData))) {
+            int slot6 = grassSlots[6].species;
+            int slot7 = grassSlots[7].species;
+            ReplaceGreatMarshDailyEncounters(
+                SpecialEncounter_GetDailyMon(specialEncounter, DAILY_MARSH),
+                nationalDexObtained,
+                out->mapHeaderID,
+                &slot6,
+                &slot7);
+            grassSlots[6].species = slot6;
+            grassSlots[7].species = slot7;
+        }
+
         for (int i = 0; i < MAX_GRASS_ENCOUNTERS; i++) {
-            const GrassEncounter *enc = &data->grassEncounters.encounters[i];
-            if (dualSlot != NULL && (i == 8 || i == 9)) {
-                AddEncounter(out, GEAR_ENC_GBA, dualSlot[i - 8], enc->level, enc->level, sGrassRates[i]);
-                continue;
+            u8 method = GEAR_ENC_GRASS;
+            if (dualSlot != NULL && (i == 8 || i == 9) && grassSlots[i].species == dualSlot[i - 8]) {
+                method = GEAR_ENC_GBA;
             }
-            AddEncounter(out, GEAR_ENC_GRASS, grassSlots[i].species, grassSlots[i].minLevel, grassSlots[i].maxLevel, sGrassRates[i]);
+            AddEncounter(out, method, grassSlots[i].species, grassSlots[i].minLevel, grassSlots[i].maxLevel, sGrassRates[i]);
         }
 
         // Poke Radar and swarms replace pairs of 10% / 20% slots; their levels follow

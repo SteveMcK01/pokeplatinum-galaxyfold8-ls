@@ -4123,3 +4123,16 @@ u8 BattleSubscreen_IsWaitingForPartner(BattleSubscreen *btlSubscreen)
 {
     return btlSubscreen->isWaitingForPartner;
 }
+
+#ifdef SDK_PORT
+void BattleSubscreen_PortClearMenu(void)
+{
+    BattleSubscreen *subscreen = sPortSubscreen;
+    if (subscreen == NULL) {
+        return;
+    }
+    subscreen->hasPendingButton = FALSE;
+    subscreen->menuConfig = 0;
+    subscreen->ready = FALSE;
+}
+#endif

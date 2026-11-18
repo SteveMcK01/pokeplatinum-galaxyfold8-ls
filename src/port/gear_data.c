@@ -46,6 +46,9 @@
 #include "port/save_editor.h"
 #include "port/sim_config_prj.h"
 
+#include "generated/items.h"
+#include "bag.h"
+#include "item.h"
 #include "charcode_convert.h"
 #include "location.h"
 #include "map_header.h"
@@ -1245,5 +1248,146 @@ BOOL Gear_GetBattle(GearBattle *out)
             }
         }
     }
+    return TRUE;
+}
+
+typedef struct BattleOverlayBallEntry {
+    u16 item;
+    u16 count;
+    char name[32];
+} BattleOverlayBallEntry;
+
+void BattleSubscreen_PortClearMenu(void);
+
+static const u16 sBattleOverlayBallItems[] = {
+    ITEM_POKE_BALL,
+    ITEM_GREAT_BALL,
+    ITEM_ULTRA_BALL,
+    ITEM_MASTER_BALL,
+    ITEM_NET_BALL,
+    ITEM_DIVE_BALL,
+    ITEM_NEST_BALL,
+    ITEM_REPEAT_BALL,
+    ITEM_TIMER_BALL,
+    ITEM_LUXURY_BALL,
+    ITEM_PREMIER_BALL,
+    ITEM_DUSK_BALL,
+    ITEM_HEAL_BALL,
+    ITEM_QUICK_BALL,
+    ITEM_CHERISH_BALL,
+};
+
+static BOOL CanThrowBattlePokeBall(void)
+{
+    if (sBattleSys == NULL) {
+        return FALSE;
+    }
+    BattleContext *battleCtx = BattleSystem_GetBattleContext(sBattleSys);
+    if (battleCtx == NULL) {
+        return FALSE;
+    }
+    u32 battleType = BattleSystem_GetBattleType(sBattleSys);
+    if (battleType & (BATTLE_TYPE_TRAINER | BATTLE_TYPE_SAFARI | BATTLE_TYPE_PAL_PARK
+                      | BATTLE_TYPE_FRONTIER | BATTLE_TYPE_LINK | BATTLE_TYPE_CATCH_TUTORIAL)) {
+        return FALSE;
+    }
+    int maxBattlers = BattleSystem_GetMaxBattlers(sBattleSys);
+    int aliveEnemies = 0;
+    for (int i = 0; i < maxBattlers; i++) {
+        if (BattleSystem_GetBattlerSide(sBattleSys, i) != BATTLE_SIDE_PLAYER) {
+            const BattleMon *mon = &battleCtx->battleMons[i];
+            if (mon->species != SPECIES_NONE && !mon->isEgg && mon->curHP > 0) {
+                aliveEnemies++;
+            }
+        }
+    }
+    return aliveEnemies == 1;
+}
+
+int Gear_BattleWeather(void)
+{
+    if (sBattleSys == NULL) {
+        return 0;
+    }
+    BattleContext *battleCtx = BattleSystem_GetBattleContext(sBattleSys);
+    if (battleCtx == NULL) {
+        return 0;
+    }
+    u32 mask = battleCtx->fieldConditionsMask;
+    if (mask & FIELD_CONDITION_SUNNY) {
+        return 1;
+    }
+    if (mask & FIELD_CONDITION_RAINING) {
+        return 2;
+    }
+    if (mask & FIELD_CONDITION_SANDSTORM) {
+        return 3;
+    }
+    if (mask & FIELD_CONDITION_HAIL) {
+        return 4;
+    }
+    if (mask & FIELD_CONDITION_DEEP_FOG) {
+        return 5;
+    }
+    return 0;
+}
+
+int Gear_GetBattlePokeBalls(BattleOverlayBallEntry *out, int maxOut, BOOL *canThrowOut)
+{
+    if (canThrowOut != NULL) {
+        *canThrowOut = FALSE;
+    }
+    if (out == NULL || maxOut <= 0 || !CanThrowBattlePokeBall()) {
+        return 0;
+    }
+    Bag *bag = BattleSystem_GetBag(sBattleSys);
+    if (bag == NULL) {
+        return 0;
+    }
+    if (canThrowOut != NULL) {
+        *canThrowOut = TRUE;
+    }
+    int count = 0;
+    for (int i = 0; i < (int)NELEMS(sBattleOverlayBallItems) && count < maxOut; i++) {
+        u16 item = sBattleOverlayBallItems[i];
+        u16 qty = Bag_GetItemQuantity(bag, item, HEAP_ID_BATTLE);
+        if (qty > 0) {
+            out[count].item = item;
+            out[count].count = qty;
+            out[count].name[0] = '\0';
+            GetText(TEXT_BANK_ITEM_NAMES, item, out[count].name, sizeof(out[count].name));
+            count++;
+        }
+    }
+    return count;
+}
+
+BOOL Gear_UseBattlePokeBall(u16 item)
+{
+    if (!CanThrowBattlePokeBall()) {
+        return FALSE;
+    }
+    BattleContext *battleCtx = BattleSystem_GetBattleContext(sBattleSys);
+    Bag *bag = BattleSystem_GetBag(sBattleSys);
+    if (battleCtx == NULL || bag == NULL) {
+        return FALSE;
+    }
+    int battler = BattleController_PortChoosingBattler(sBattleSys);
+    if (battler < 0 || battleCtx->curCommandState[battler] != COMMAND_SELECTION_SELECT) {
+        return FALSE;
+    }
+    if (Bag_GetItemQuantity(bag, item, HEAP_ID_BATTLE) == 0) {
+        return FALSE;
+    }
+
+    BattleItemUse used;
+    memset(&used, 0, sizeof(used));
+    used.item = item;
+    used.category = ITEM_BATTLE_CATEGORY_POKE_BALLS;
+
+    battleCtx->battlerActions[battler][BATTLE_ACTION_PICK_COMMAND] = BATTLE_CONTROL_ITEM;
+    memcpy(&battleCtx->battlerActions[battler][BATTLE_ACTION_USE_ITEM], &used, sizeof(used));
+    battleCtx->curCommandState[battler] = COMMAND_SELECTION_WAIT;
+    BattleSubscreen_PortClearMenu();
     return TRUE;
 }

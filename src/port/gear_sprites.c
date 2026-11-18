@@ -10,6 +10,7 @@
 #include "constants/species.h"
 #include "generated/genders.h"
 
+#include "item.h"
 #include "narc.h"
 #include "pokemon.h"
 #include "pokemon_icon.h"
@@ -245,6 +246,35 @@ BOOL GearSprites_Front(u16 species, u8 gender, u8 form, BOOL shiny, BOOL isEgg, 
         }
         ToRGBA(chars.pixels, TRUE, SPRITE_SHEET_WIDTH, GEAR_FRONT_SIZE, GEAR_FRONT_SIZE, palette, rgba);
         ok = TRUE;
+    }
+    free(charFile);
+    free(palFile);
+    return ok;
+}
+
+BOOL GearSprites_ItemIcon(u16 item, u32 *rgba)
+{
+    if (rgba == NULL || item == 0 || item > NUM_ITEMS) {
+        return FALSE;
+    }
+
+    int iconID = (int)Item_FileID(item, ITEM_FILE_TYPE_ICON);
+    int palID = (int)Item_FileID(item, ITEM_FILE_TYPE_PALETTE);
+    u32 charSize = 0;
+    u8 *charFile = NARC_PortReadMember(NARC_INDEX_ITEMTOOL__ITEMDATA__ITEM_ICON, iconID, &charSize);
+    u32 palSize = 0;
+    u8 *palFile = NARC_PortReadMember(NARC_INDEX_ITEMTOOL__ITEMDATA__ITEM_ICON, palID, &palSize);
+
+    BOOL ok = FALSE;
+    CharacterFile chars;
+    u32 palette[16];
+    if (charFile != NULL && palFile != NULL && ReadCharacters(charFile, charSize, &chars)
+        && ReadPalette(palFile, palSize, 0, 16, palette)) {
+        int srcW = (chars.tilesWide != 0xFFFF && chars.tilesWide > 0) ? (chars.tilesWide * 8) : 24;
+        if (srcW >= 24 && chars.size >= (u32)(srcW * 24 / 2)) {
+            ToRGBA(chars.pixels, chars.bitmap, srcW, 24, 24, palette, rgba);
+            ok = TRUE;
+        }
     }
     free(charFile);
     free(palFile);

@@ -407,10 +407,6 @@ BOOL WildEncounters_TryFishingEncounter(FieldSystem *fieldSystem, enum Encounter
         return FALSE;
     }
 
-    if (LCRNG_RandMod(100) >= encounterRate) {
-        return FALSE;
-    }
-
     BOOL safariGameActive = SystemFlag_CheckSafariGameActive(SaveData_GetVarsFlags(fieldSystem->saveData));
 
     CreateWildSingleBattle(fieldSystem, safariGameActive, battleParams);

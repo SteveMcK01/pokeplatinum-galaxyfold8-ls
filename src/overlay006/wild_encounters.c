@@ -1152,11 +1152,14 @@ static BOOL TryGenerateWildMon(Pokemon *firstPartyMon, const int fishingRodType,
         GF_ASSERT(FALSE);
     }
 
-    if (FirstMonAbilityPreventsEncounter(encounterFieldParams, firstPartyMon, level)) {
+    SIM_Config_prj_type *portConfig = SIM_Config_prj_GetConfig();
+    BOOL ignoreFishingBlocks = (encounterType == ENCOUNTER_TYPE_FISHING && portConfig != NULL && portConfig->alwaysBiteFishing);
+
+    if (!ignoreFishingBlocks && FirstMonAbilityPreventsEncounter(encounterFieldParams, firstPartyMon, level)) {
         return FALSE;
     }
 
-    if (RepelPreventsEncounter(level, encounterFieldParams) == TRUE) {
+    if (!ignoreFishingBlocks && RepelPreventsEncounter(level, encounterFieldParams) == TRUE) {
         return FALSE;
     }
 

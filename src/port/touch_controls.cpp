@@ -23,7 +23,7 @@
 #include "port/gen5_battle.h"
 #endif
 
-#include "constants/types.h"
+#include "generated/pokemon_types.h"
 #include "constants/battle.h"
 #include "constants/moves.h"
 #include "generated/abilities.h"
@@ -42,6 +42,7 @@ BOOL GearSprites_ItemIcon(u16 item, u32 *rgba);
 int Gear_BattleWeather(void);
 int Gear_GetBattlePokeBalls(BattleOverlayBallEntry *out, int maxOut, BOOL *canThrowOut);
 BOOL Gear_UseBattlePokeBall(u16 item);
+void Gear_MoveName(u16 move, char *out, int maxLen);
 }
 
 namespace {
@@ -945,7 +946,9 @@ static void DrawFullScreenBattleOverlay(ImDrawList *dl, const ImVec2 &disp, floa
             const float subFont = std::max(10.5f, rowH * 0.22f);
 
             // Top-Left: Move Name
-            DrawShadowText(dl, boldFont, nameFont, ImVec2(x0 + padX, y0 + padY), IM_COL32(255, 255, 255, 255), mv.name);
+            char moveName[32];
+            Gear_MoveName(mv.id, moveName, sizeof(moveName));
+            DrawShadowText(dl, boldFont, nameFont, ImVec2(x0 + padX, y0 + padY), IM_COL32(255, 255, 255, 255), moveName);
 
             // Top-Right: PP Counter
             char ppBuf[20];

@@ -400,6 +400,13 @@ BOOL WildEncounters_TryFishingEncounter(FieldSystem *fieldSystem, enum Encounter
     InitEncounterFieldParams(fieldSystem, firstPartyMon, NULL, &encounterFieldParams);
     encounterRate = ModifyEncounterRateWithFieldParams(TRUE, encounterRate, &encounterFieldParams, FieldOverworldState_GetWeather(SaveData_GetFieldOverworldState(fieldSystem->saveData)), firstPartyMon);
 
+    SIM_Config_prj_type *portConfig = SIM_Config_prj_GetConfig();
+    BOOL alwaysBite = (portConfig != NULL && portConfig->alwaysBiteFishing);
+
+    if (!alwaysBite && LCRNG_RandMod(100) >= encounterRate) {
+        return FALSE;
+    }
+
     if (LCRNG_RandMod(100) >= encounterRate) {
         return FALSE;
     }

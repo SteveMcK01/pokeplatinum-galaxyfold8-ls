@@ -115,6 +115,9 @@ static int IniHandler(void* user, const char* section, const char* name,
     if(MATCH("Cheats", "AlwaysEscape")) {
         config->alwaysEscape = StringToBool(value);
     }
+    if(MATCH("Cheats", "AlwaysBiteFishing")) {
+        config->alwaysBiteFishing = StringToBool(value);
+    }
     if(MATCH("Cheats", "FastEggs")) {
         config->fastEggs = StringToBool(value);
     }
@@ -350,6 +353,7 @@ void SIM_Config_prj_SaveConfigFile(SIM_Config_prj_type * aConfig)
     fprintf(configFile, "AlwaysCatch=%s\n", BoolToString(aConfig->alwaysCatch));
     fprintf(configFile, "InfinitePP=%s\n", BoolToString(aConfig->infinitePP));
     fprintf(configFile, "AlwaysEscape=%s\n", BoolToString(aConfig->alwaysEscape));
+    fprintf(configFile, "AlwaysBiteFishing=%s\n", BoolToString(aConfig->alwaysBiteFishing));
     fprintf(configFile, "FastEggs=%s\n", BoolToString(aConfig->fastEggs));
     fprintf(configFile, "InstantHoneyTrees=%s\n", BoolToString(aConfig->instantHoneyTrees));
     fprintf(configFile, "FastBerries=%s\n", BoolToString(aConfig->fastBerries));

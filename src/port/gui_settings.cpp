@@ -766,6 +766,7 @@ void DrawCheats()
         &config->fastBerries);
     ConfigToggle("Portable PC Box", "Access your PC Boxes directly from the Start Menu (disabled in Distortion World, Safari Zone, Pal Park, etc.).",
         &config->portablePC);
+    ConfigToggle("Always bite when fishing", "Eliminates \"Not even a nibble...\" when using any fishing rod.", &config->alwaysBiteFishing);
 
     Section("Battles");
     static const int kExpValues[] = { 100, 150, 200, 300, 500 };

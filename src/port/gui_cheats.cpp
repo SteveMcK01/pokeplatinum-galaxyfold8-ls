@@ -23,6 +23,7 @@ void CheatsMain(bool * openState) {
     ConfigCheckBox("Walk Through Walls", (bool*)&myConfig->walkThroughWalls, configChanged);
     ConfigCheckBox("Disable Random Encounters", (bool*)&myConfig->disableRandomEncounters, configChanged);
     ConfigCheckBox("Run from Trainer Battles", (bool*)&myConfig->runFromTrainerBattles, configChanged);
+    ConfigCheckBox("Always Bite When Fishing", (bool*)&myConfig->alwaysBiteFishing, configChanged);
 
 
 

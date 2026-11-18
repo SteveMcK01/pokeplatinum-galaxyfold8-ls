@@ -330,7 +330,7 @@ const char *Gear_PoketchAppName(int app)
         "Digital Watch", "Calculator", "Memo Pad", "Pedometer", "Pokemon List", "Friendship Checker",
         "Dowsing Machine", "Berry Searcher", "Day-Care Checker", "Pokemon History", "Counter", "Analog Watch",
         "Marking Map", "Link Searcher", "Coin Toss", "Move Tester", "Calendar", "Dot Artist", "Roulette",
-        "Trainer Counter", "Kitchen Timer", "Color Changer", "Matchup Checker", "Stopwatch", "Alarm Clock",
+        "Trainer Counter", "Kitchen Timer", "Color Changer", "Matchup Checker", "Stopwatch", "Alarm Clock", "Area Radar",
     };
     return app >= 0 && app < (int)NELEMS(kNames) ? kNames[app] : "";
 }

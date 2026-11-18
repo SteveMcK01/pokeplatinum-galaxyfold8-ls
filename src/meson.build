@@ -700,6 +700,8 @@ pokeplatinum_c = files(
     'applications/poketch/matchup_checker/graphics.c',
     'applications/poketch/alarm_clock/main.c',
     'applications/poketch/alarm_clock/graphics.c',
+    'applications/poketch/area_radar/main.c',
+    'applications/poketch/area_radar/graphics.c',
     'applications/poketch/kitchen_timer/main.c',
     'applications/poketch/kitchen_timer/graphics.c',
     'applications/poketch/marking_map/main.c',

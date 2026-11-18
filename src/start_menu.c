@@ -1321,7 +1321,11 @@ static BOOL StartMenu_OpenPC(FieldTask *fieldTask)
 {
     FieldSystem *fieldSystem = FieldTask_GetFieldSystem(fieldTask);
     StartMenu *menu = FieldTask_GetEnv(fieldTask);
-    menu->taskData = sub_0203D88C(fieldSystem, PC_MODE_MOVE_MONS);
+    PokemonStorageSession *session = Heap_Alloc(HEAP_ID_FIELD2, sizeof(PokemonStorageSession));
+    session->saveData = fieldSystem->saveData;
+    session->boxMode = PC_MODE_MOVE_MONS;
+    menu->taskData = session;
+    FieldSystem_OpenPokemonStorage(fieldSystem, session);
     menu->callback = StartMenu_ExitPC;
     FieldSystem_SaveStateIfCommunicationOff(fieldSystem);
     return FALSE;

@@ -1036,27 +1036,27 @@ BOOL Gear_GetBattleMenu(GearBattleMenu *out)
     BattleSystem_SetBattlersByType(sBattleSys, battlersByType);
 
     switch (menu.menuConfig) {
+    case 0:
     case 1:
     case 2:
     case 3:
-    case 4:
-    case 7:
-    case 8:
         out->kind = GEAR_MENU_ACTION;
         out->battler = menu.data.actionData.battler;
         out->safari = (battleType & (BATTLE_TYPE_SAFARI | BATTLE_TYPE_PAL_PARK)) != 0;
         out->cancel = menu.hasCancelButton;
         break;
+    case 4:
     case 5:
     case 6:
+    case 7:
         out->kind = GEAR_MENU_FIRST;
         out->battler = menu.data.actionData.battler;
         break;
+    case 8:
     case 9:
-    case 10:
         out->kind = GEAR_MENU_PAL_PARK;
         break;
-    case 11:
+    case 10:
         out->kind = GEAR_MENU_MOVES;
         if (menu.data.moveData.battlerType < 6) {
             out->battler = battlersByType[menu.data.moveData.battlerType];
@@ -1066,7 +1066,7 @@ BOOL Gear_GetBattleMenu(GearBattleMenu *out)
                 menu.data.moveData.maxPP[m]);
         }
         break;
-    case 12:
+    case 11:
         out->kind = GEAR_MENU_TARGETS;
         if (menu.data.targetSelectData.battlerType < 6) {
             out->battler = battlersByType[menu.data.targetSelectData.battlerType];
@@ -1076,26 +1076,26 @@ BOOL Gear_GetBattleMenu(GearBattleMenu *out)
             out->targetBattler[i] = menu.targetBattler[i];
         }
         break;
+    case 12:
     case 13:
     case 14:
     case 15:
     case 16:
-    case 17:
         out->kind = GEAR_MENU_YES_NO;
         switch (menu.menuConfig) {
-        case 14:
+        case 13:
             snprintf(out->yes, sizeof(out->yes), "Forget a move");
             snprintf(out->no, sizeof(out->no), "Keep the old moves");
             break;
-        case 15:
+        case 14:
             snprintf(out->yes, sizeof(out->yes), "Give up on %s", Gear_MoveName(menu.data.giveUpMoveData.move));
             snprintf(out->no, sizeof(out->no), "Don't give up");
             break;
-        case 16:
+        case 15:
             snprintf(out->yes, sizeof(out->yes), "Use next Pokemon");
             snprintf(out->no, sizeof(out->no), "Run away");
             break;
-        case 17:
+        case 16:
             snprintf(out->yes, sizeof(out->yes), "Switch Pokemon");
             snprintf(out->no, sizeof(out->no), "Keep battling");
             break;
@@ -1105,7 +1105,7 @@ BOOL Gear_GetBattleMenu(GearBattleMenu *out)
             break;
         }
         break;
-    case 18:
+    case 17:
         out->kind = GEAR_MENU_STOP;
         break;
     default:

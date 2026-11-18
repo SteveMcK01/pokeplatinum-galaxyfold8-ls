@@ -1379,7 +1379,7 @@ BOOL BattleSubscreen_PortGetMenu(BattleSubscreenPortMenu *out)
     out->data = btlSubscreen->activeMenuData;
     out->hasCancelButton = btlSubscreen->isWaitingForPartner;
 
-    if (out->menuConfig == 12) {
+    if (out->menuConfig == 11) {
         u8 flags[MAX_BATTLERS];
         u8 battlersByType[6];
 

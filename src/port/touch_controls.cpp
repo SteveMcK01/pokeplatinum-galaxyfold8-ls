@@ -1257,16 +1257,21 @@ void TouchControls_DrawOverlay(void) {
     DrawIconPill(dl, ffX0, rowY0, ffX1, rowY1, PillIcon::FastFwd, ffActive, alpha, IM_COL32(245, 155, 50, 255));
     DrawPillButton(dl, boldFont, rX0, rowY0, rX1, rowY1, "R", pressed[VBTN_R], alpha);
 
+    GearBattleMenu activeBattleMenu;
+    const bool battleMenuVisible = battleOverlayActive && (Gear_GetBattleMenu(&activeBattleMenu) != FALSE) && activeBattleMenu.ready;
+
     if (pipOverlayMode) {
         ImFont *font = ImGui::GetFont();
-        DrawDpad(dl, L.dpadCx, L.dpadCy, L.dpadR,
-                 pressed[VBTN_UP], pressed[VBTN_DOWN], pressed[VBTN_LEFT], pressed[VBTN_RIGHT], alpha);
+        if (!battleOverlayActive) {
+            DrawDpad(dl, L.dpadCx, L.dpadCy, L.dpadR,
+                     pressed[VBTN_UP], pressed[VBTN_DOWN], pressed[VBTN_LEFT], pressed[VBTN_RIGHT], alpha);
+        }
         if (!hideFaceButtonsInBattle) {
             DrawCircleButton(dl, font, L.aCx, L.aCy, L.faceBtnR, "A", pressed[VBTN_A], alpha, IM_COL32(235, 75, 85, 255));
             DrawCircleButton(dl, font, L.bCx, L.bCy, L.faceBtnR, "B", pressed[VBTN_B], alpha, IM_COL32(235, 185, 55, 255));
             DrawCircleButton(dl, font, L.xCx, L.xCy, L.faceBtnR, "X", pressed[VBTN_X], alpha, IM_COL32(75, 145, 240, 255));
             DrawCircleButton(dl, font, L.yCx, L.yCy, L.faceBtnR, "Y", pressed[VBTN_Y], alpha, IM_COL32(70, 200, 120, 255));
-        } else {
+        } else if (!battleMenuVisible) {
             DrawCircleButton(dl, font, battleACx, battleACy, battleAR, "A", pressed[VBTN_A], alpha, IM_COL32(235, 75, 85, 255));
         }
     }

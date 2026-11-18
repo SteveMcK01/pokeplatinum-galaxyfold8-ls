@@ -1406,13 +1406,11 @@ void BattleSubscreen_PortPress(int button)
 }
 void BattleSubscreen_PortClearMenu(void)
 {
-    BattleSubscreen *subscreen = sPortSubscreen;
-    if (subscreen == NULL) {
-        return;
+    sPortPress = -1;
+    sPortPressConfig = -1;
+    if (sPortSubscreen != NULL) {
+        sPortSubscreen->activeMenuConfigIndex = -1;
     }
-    subscreen->hasPendingButton = FALSE;
-    subscreen->menuConfig = 0;
-    subscreen->ready = FALSE;
 }
 
 #endif

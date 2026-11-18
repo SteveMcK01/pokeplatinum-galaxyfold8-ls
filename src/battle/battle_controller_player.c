@@ -353,7 +353,7 @@ BOOL BattleController_PortUseBall(BattleSystem *battleSys, u16 item)
     used.item = item;
     used.category = ITEM_BATTLE_CATEGORY_POKE_BALLS;
     battleCtx->battlerActions[battler][BATTLE_ACTION_PICK_COMMAND] = BATTLE_CONTROL_ITEM;
-    memcpy(&battleCtx->battlerActions[battler][BATTLE_ACTION_USE_ITEM], &used, sizeof(used));
+    memcpy(&battleCtx->battlerActions[battler][BATTLE_ACTION_TEMP_VALUE], &used, sizeof(used));
     battleCtx->curCommandState[battler] = COMMAND_SELECTION_WAIT;
     return TRUE;
 }

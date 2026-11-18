@@ -255,7 +255,7 @@ BOOL GearSprites_Front(u16 species, u8 gender, u8 form, BOOL shiny, BOOL isEgg, 
 
 BOOL GearSprites_ItemIcon(u16 item, u32 *rgba)
 {
-    if (rgba == NULL || item == 0 || item > NUM_ITEMS) {
+    if (rgba == NULL || item == 0 || item > MAX_ITEMS) {
         return FALSE;
     }
 

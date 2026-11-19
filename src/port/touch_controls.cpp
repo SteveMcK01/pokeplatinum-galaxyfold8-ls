@@ -1025,17 +1025,49 @@ static void DrawFullScreenBattleOverlay(ImDrawList *dl, const ImVec2 &disp, floa
             const float y1 = y0 + rowH;
             const bool ok = menu.targetOk[t] != 0;
             const int bIdx = menu.targetBattler[t];
-            const char *tName = (ok && hasBattle && bIdx >= 0 && bIdx < GEAR_BATTLERS_MAX && battle.battlers[bIdx].present)
+            const bool monPresent = hasBattle && bIdx >= 0 && bIdx < GEAR_BATTLERS_MAX && battle.battlers[bIdx].present;
+            const bool isFoe = (row == 0);
+            const char *tName = monPresent
                 ? battle.battlers[bIdx].nickname
                 : (ok ? "TARGET" : "-");
-            DrawActionCard(dl, boldFont, x0, y0, x1, y1, tName,
-                           ok ? IM_COL32(62, 138, 212, 235) : IM_COL32(42, 46, 54, 175),
-                           ok ? IM_COL32(34, 86, 152, 235) : IM_COL32(28, 32, 38, 175), false);
+            const ImU32 topCol = ok
+                ? (isFoe ? IM_COL32(212, 64, 64, 235) : IM_COL32(52, 168, 96, 235))
+                : IM_COL32(42, 46, 54, 175);
+            const ImU32 botCol = ok
+                ? (isFoe ? IM_COL32(150, 32, 32, 235) : IM_COL32(28, 118, 62, 235))
+                : IM_COL32(28, 32, 38, 175);
+            DrawActionCard(dl, boldFont, x0, y0, x1, y1, tName, topCol, botCol, false);
             if (ok && tapJustBegan && PointInRect(tapX, tapY, x0, y0, x1, y1)) {
                 Gear_PressBattleButton(t + 1);
                 return;
             }
         }
+        return;
+    }
+
+    if (menu.kind == GEAR_MENU_YES_NO) {
+        const float colW = (panelX1 - panelX0 - gap) * 0.5f;
+        const float c0x0 = panelX0, c0x1 = panelX0 + colW;
+        const float c1x0 = c0x1 + gap, c1x1 = panelX1;
+        const char *yesLbl = menu.yes[0] ? menu.yes : "YES";
+        const char *noLbl = menu.no[0] ? menu.no : "NO";
+
+        DrawActionCard(dl, boldFont, c0x0, panelY0, c0x1, panelY1, yesLbl,
+                       IM_COL32(52, 168, 76, 235), IM_COL32(28, 118, 48, 235), false);
+        DrawActionCard(dl, boldFont, c1x0, panelY0, c1x1, panelY1, noLbl,
+                       IM_COL32(215, 58, 58, 235), IM_COL32(150, 28, 28, 235), false);
+
+        if (tapJustBegan) {
+            if (PointInRect(tapX, tapY, c0x0, panelY0, c0x1, panelY1)) {
+                Gear_PressBattleButton(0);
+                return;
+            }
+            if (PointInRect(tapX, tapY, c1x0, panelY0, c1x1, panelY1)) {
+                Gear_PressBattleButton(1);
+                return;
+            }
+        }
+        return;
     }
 }
 

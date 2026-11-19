@@ -59,7 +59,7 @@
          input = BtlvInput_CheckInput(scd->input, &sCommandButtons, sCommandStops);
          if (input != TOUCH_RECT_NONE) {
              scd->result = sCommandResults[input];
-@@ -1359,3 +1376,159 @@
+@@ -1359,3 +1376,160 @@
  void BtlvScd_StartTypeIconAnim(BtlvScd *scd, int index) {
      BtlvInput_StartTypeIconAnim(scd->input, index);
  }
@@ -149,9 +149,10 @@
 +                    anyOk = 1;
 +                }
 +            } else {
++                u8 slotPos = ViewPosToBattlePos(scd->mainModule, sTargetButtonViewPos[kBw2Btn[t]]);
 +                for (u8 j = 0; j < scd->targets.count; j++) {
-+                    if (scd->targets.pos[j] == targetPos) {
-+                        BattleMon *tmon = PokeCon_GetPosMonInner(scd->pokeCon, targetPos);
++                    if (scd->targets.pos[j] == slotPos) {
++                        BattleMon *tmon = PokeCon_GetPosMonInner(scd->pokeCon, slotPos);
 +                        if (tmon != NULL && GetBattleMonStat(tmon, BATTLEMON_HP) > 0) {
 +                            outTargetOk[t] = 1;
 +                            anyOk = 1;

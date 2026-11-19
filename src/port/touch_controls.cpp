@@ -724,7 +724,6 @@ static int ComputeMoveEffectiveness(const GearMove &mv, const GearBattle &battle
 static void DrawFullScreenBattleOverlay(ImDrawList *dl, const ImVec2 &disp, float scale,
                                         bool tapJustBegan, float tapX, float tapY) {
     ImFont *boldFont = SIM::UI::BoldFont();
-    ImFont *regFont = ImGui::GetFont();
 
     // 1. Gen V Weather Indicator
     const int weather = Gear_BattleWeather();
@@ -751,46 +750,55 @@ static void DrawFullScreenBattleOverlay(ImDrawList *dl, const ImVec2 &disp, floa
 
             const BattleOverlayBallEntry &curBall = balls[sSelectedBallIdx];
             const float spriteSz = std::max(32.0f, disp.y * 0.056f * scale);
-            const float arrowW = spriteSz * 0.72f;
-            const float boxW = spriteSz + arrowW * 2.0f + 16.0f;
-            const float boxH = spriteSz + 26.0f;
-            // Positioned right above the player HP box (matching mockup)
-            const float cx = disp.x * 0.625f;
-            const float cy = disp.y * 0.505f;
+            const float arrowW = spriteSz * 0.58f;
+            const float boxW = spriteSz + arrowW * 2.0f + 8.0f;
+            const float boxH = spriteSz + 8.0f;
+            // Positioned to the left of the player's name / HP / EXP status frame
+            const float cx = disp.x * 0.478f;
+            const float cy = disp.y * 0.650f;
             const float x0 = cx - boxW * 0.5f;
             const float y0 = cy - boxH * 0.5f;
             const float x1 = x0 + boxW;
             const float y1 = y0 + boxH;
 
-            dl->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), IM_COL32(18, 22, 30, 195), 10.0f);
-            dl->AddRect(ImVec2(x0, y0), ImVec2(x1, y1), IM_COL32(235, 240, 250, 180), 10.0f, 0, 1.5f);
-
-            const float leftX0 = x0 + 4.0f;
+            const float leftX0 = x0;
             const float leftX1 = leftX0 + arrowW;
-            const float rightX1 = x1 - 4.0f;
+            const float rightX1 = x1;
             const float rightX0 = rightX1 - arrowW;
-            const float midX0 = leftX1 + 4.0f;
-            const float midX1 = rightX0 - 4.0f;
-            const float iconCy = y0 + 6.0f + spriteSz * 0.5f;
+            const float midX0 = leftX1 + 2.0f;
+            const float midX1 = rightX0 - 2.0f;
+            const float iconCy = cy;
 
-            // Left / Right Triangle Arrows
-            const float triSz = arrowW * 0.34f;
+            // Left / Right Triangle Arrows (with drop shadow for visibility without background box)
+            const float triSz = arrowW * 0.38f;
             const float lMidX = (leftX0 + leftX1) * 0.5f;
             const float rMidX = (rightX0 + rightX1) * 0.5f;
+            const ImU32 arrowCol = IM_COL32(255, 255, 255, ballCount > 1 ? 250 : 95);
+            const ImU32 arrowShadow = IM_COL32(0, 0, 0, ballCount > 1 ? 195 : 75);
+            dl->AddTriangleFilled(
+                ImVec2(lMidX - triSz * 0.6f + 1.5f, iconCy + 1.5f),
+                ImVec2(lMidX + triSz * 0.5f + 1.5f, iconCy - triSz + 1.5f),
+                ImVec2(lMidX + triSz * 0.5f + 1.5f, iconCy + triSz + 1.5f),
+                arrowShadow);
             dl->AddTriangleFilled(
                 ImVec2(lMidX - triSz * 0.6f, iconCy),
                 ImVec2(lMidX + triSz * 0.5f, iconCy - triSz),
                 ImVec2(lMidX + triSz * 0.5f, iconCy + triSz),
-                IM_COL32(255, 255, 255, ballCount > 1 ? 245 : 90));
+                arrowCol);
+            dl->AddTriangleFilled(
+                ImVec2(rMidX + triSz * 0.6f + 1.5f, iconCy + 1.5f),
+                ImVec2(rMidX - triSz * 0.5f + 1.5f, iconCy - triSz + 1.5f),
+                ImVec2(rMidX - triSz * 0.5f + 1.5f, iconCy + triSz + 1.5f),
+                arrowShadow);
             dl->AddTriangleFilled(
                 ImVec2(rMidX + triSz * 0.6f, iconCy),
                 ImVec2(rMidX - triSz * 0.5f, iconCy - triSz),
                 ImVec2(rMidX - triSz * 0.5f, iconCy + triSz),
-                IM_COL32(255, 255, 255, ballCount > 1 ? 245 : 90));
+                arrowCol);
 
             // 24x24 Native NARC Poke Ball Sprite
             const float imgX0 = (midX0 + midX1 - spriteSz) * 0.5f;
-            const float imgY0 = y0 + 5.0f;
+            const float imgY0 = cy - spriteSz * 0.5f;
             unsigned int tex = GetBallTexture(curBall.item);
             if (tex != 0) {
                 dl->AddImage((ImTextureID)(uintptr_t)tex, ImVec2(imgX0, imgY0), ImVec2(imgX0 + spriteSz, imgY0 + spriteSz));
@@ -798,17 +806,12 @@ static void DrawFullScreenBattleOverlay(ImDrawList *dl, const ImVec2 &disp, floa
                 dl->AddCircleFilled(ImVec2((midX0 + midX1) * 0.5f, iconCy), spriteSz * 0.4f, IM_COL32(225, 55, 55, 240));
             }
 
-            // Quantity badge (xNN) + Quick Throw hint
+            // Quantity badge (xNN)
             char qtyBuf[16];
             std::snprintf(qtyBuf, sizeof(qtyBuf), "x%u", (unsigned)curBall.count);
-            const float qFont = std::max(12.0f, disp.y * 0.019f);
+            const float qFont = std::max(12.5f, disp.y * 0.020f);
             const ImVec2 qSz = boldFont->CalcTextSizeA(qFont, FLT_MAX, 0.0f, qtyBuf);
-            DrawShadowText(dl, boldFont, qFont, ImVec2(midX1 - qSz.x + 2.0f, y0 + 3.0f), IM_COL32(255, 235, 110, 255), qtyBuf);
-
-            const float hFont = std::max(10.5f, disp.y * 0.015f);
-            const char *hint = curBall.name[0] ? curBall.name : "TAP TO THROW";
-            const ImVec2 hSz = regFont->CalcTextSizeA(hFont, FLT_MAX, 0.0f, hint);
-            DrawShadowText(dl, regFont, hFont, ImVec2(cx - hSz.x * 0.5f, y1 - hSz.y - 3.0f), IM_COL32(220, 230, 245, 235), hint);
+            DrawShadowText(dl, boldFont, qFont, ImVec2(midX1 - qSz.x + 2.0f, imgY0 - 2.0f), IM_COL32(255, 235, 110, 255), qtyBuf);
 
             if (tapJustBegan) {
                 if (ballCount > 1 && PointInRect(tapX, tapY, leftX0, y0, leftX1, y1)) {
@@ -1244,6 +1247,15 @@ void TouchControls_DrawOverlay(void) {
     ImDrawList *dl = ImGui::GetForegroundDrawList();
     ImFont *boldFont = SIM::UI::BoldFont();
 
+    const bool bottomRowTouched = pressed[VBTN_L] || pressed[VBTN_PIP] || pressed[VBTN_SWITCH] ||
+                                  pressed[VBTN_SELECT] || pressed[VBTN_START] || pressed[VBTN_FF] ||
+                                  pressed[VBTN_R];
+
+    // Draw battle action cards BEFORE the bottom row utility buttons so Start/FF/Switch sit on top
+    if (battleOverlayActive) {
+        DrawFullScreenBattleOverlay(dl, disp, scale, tapJustBegan && !bottomRowTouched, firstTouchX, firstTouchY);
+    }
+
     const bool screenHidden = pipOverlayMode && (cfg->topRightOverlayMinimized != FALSE);
     const bool switchActive = pressed[VBTN_SWITCH] || (SIM_Companion_IsFullScreen() != FALSE);
     const bool ffActive = pressed[VBTN_FF] || (SIM_IsFastForwarding() != FALSE);
@@ -1259,7 +1271,6 @@ void TouchControls_DrawOverlay(void) {
     DrawIconPill(dl, ffX0, rowY0, ffX1, rowY1, PillIcon::FastFwd, ffActive, alpha, IM_COL32(245, 155, 50, 255));
     DrawPillButton(dl, boldFont, rX0, rowY0, rX1, rowY1, "R", pressed[VBTN_R], alpha);
 
-
     if (pipOverlayMode) {
         ImFont *font = ImGui::GetFont();
         if (!battleOverlayActive) {
@@ -1274,10 +1285,6 @@ void TouchControls_DrawOverlay(void) {
         } else if (!battleMenuVisible) {
             DrawCircleButton(dl, font, battleACx, battleACy, battleAR, "A", pressed[VBTN_A], alpha, IM_COL32(235, 75, 85, 255));
         }
-    }
-
-    if (battleOverlayActive) {
-        DrawFullScreenBattleOverlay(dl, disp, scale, tapJustBegan, firstTouchX, firstTouchY);
     }
 }
 

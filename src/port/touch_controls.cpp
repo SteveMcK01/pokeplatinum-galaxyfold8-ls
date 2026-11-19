@@ -210,6 +210,8 @@ static void SyncAndroidPipAutoFade(bool enabled) {
 #endif
 }
 
+    GearBattleMenu activeBattleMenu;
+    const bool battleMenuVisible = battleOverlayActive && (Gear_GetBattleMenu(&activeBattleMenu) != FALSE) && activeBattleMenu.ready;
 static void SyncAndroidOverlayScale(float widthFraction) {
 #ifdef __ANDROID__
     if (std::fabs(sLastAndroidOverlayScale - widthFraction) < 0.005f) {
@@ -1256,8 +1258,6 @@ void TouchControls_DrawOverlay(void) {
     DrawIconPill(dl, ffX0, rowY0, ffX1, rowY1, PillIcon::FastFwd, ffActive, alpha, IM_COL32(245, 155, 50, 255));
     DrawPillButton(dl, boldFont, rX0, rowY0, rX1, rowY1, "R", pressed[VBTN_R], alpha);
 
-    GearBattleMenu activeBattleMenu;
-    const bool battleMenuVisible = battleOverlayActive && (Gear_GetBattleMenu(&activeBattleMenu) != FALSE) && activeBattleMenu.ready;
 
     if (pipOverlayMode) {
         ImFont *font = ImGui::GetFont();

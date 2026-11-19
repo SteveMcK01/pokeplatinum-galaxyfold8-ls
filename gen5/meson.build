@@ -45,7 +45,6 @@ gen5_sources = [
     'src/ov167/btl_server.c',
     'src/ov167/btl_server_cmd.c',
     'src/ov167/btl_string.c',
-    'src/ov167/btlv_scu.c',
     'src/ov167/handler_common.c',
     'src/ov167/item_handlers.c',
     'src/ov167/poke_type_pair.c',
@@ -226,6 +225,7 @@ gen5_sources = [
 # pokebw2's files with the port's changes (patches/), each compiled from a patched copy
 gen5_patched = [
     'src/gfl/arc_tool.c',             # An assembly function in C
+    'src/ov167/btlv_scu.c',
     'src/ov167/btlv_core.c',          # The command selection's event, for the test scripts (runtime.c)
     'src/gfl/arc_util.c',             # Multi-cell files in the 64-bit layout (src/g2d.c)
     'src/gfl/heap.c',                 # A heap deleted with blocks left: listed, not the debugger's exit

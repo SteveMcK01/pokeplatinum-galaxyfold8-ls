@@ -469,7 +469,7 @@ BOOL Gen5_PortNeedsDsScreen(void);
 BOOL Gen5_PortQueryBattleMenu(int *outKind, int *outBattler, int *outCancel, int *outNoUsableMove,
                               u16 outMoveIds[4], u8 outMovePp[4], u8 outMoveMaxPp[4],
                               int outTargetOk[4], int outTargetBattler[4]);
-BOOL Gen5_PortQueryBattleState(int *outDoubles, int *outWeather,
+BOOL Gen5_PortQueryBattleState(int *outDoubles, int *outWeather, int *outCanCatch,
                                int present[4], int enemy[4], unsigned species[4], unsigned form[4],
                                unsigned level[4], int hp[4], int maxHp[4], unsigned status[4],
                                unsigned type1[4], unsigned type2[4], unsigned short nicknames[4][11]);
@@ -580,7 +580,7 @@ int Gen5_GetBattleState(Gen5BattleState *out)
     if (!sRunning) {
         return FALSE;
     }
-    int doubles = 0, weather = 0;
+    int doubles = 0, weather = 0, canCatch = 0;
     int present[4] = { 0 }, enemy[4] = { 0 };
     unsigned species[4] = { 0 }, form[4] = { 0 }, level[4] = { 0 }, status[4] = { 0 };
     unsigned type1[4] = { 0 }, type2[4] = { 0 };
@@ -589,12 +589,13 @@ int Gen5_GetBattleState(Gen5BattleState *out)
     for (int i = 0; i < 4; i++) {
         nicknames[i][0] = 0xFFFF;
     }
-    if (!Gen5_PortQueryBattleState(&doubles, &weather, present, enemy, species, form,
+    if (!Gen5_PortQueryBattleState(&doubles, &weather, &canCatch, present, enemy, species, form,
                                    level, hp, maxHp, status, type1, type2, nicknames)) {
         return FALSE;
     }
     out->active = 1;
     out->doubles = doubles;
+    out->canCatch = canCatch;
     out->weather = weather;
     for (int i = 0; i < 4; i++) {
         out->battlers[i].present = present[i];
@@ -929,4 +930,20 @@ BOOL Gen5_PortCatchRefused(u32 personality)
 void Gen5_PortCatchRefusedText(StrBuf *strbuf)
 {
     GFL_StrBufLoadString(strbuf, sNuzlocke.text);
+}
+
+void Gen5_PortQueuePokeBall(u16 item);
+int Gen5_GetItemCount(unsigned short item) {
+    if (!sRunning || sBag == NULL || item == 0) return 0;
+    return (int)BagSave_GetItemCountByID(sBag, item, HEAPID_PORT_BATTLE);
+}
+
+int Gen5_UseBattlePokeBall(unsigned short item) {
+    Gen5BattleState st;
+    if (!sRunning || sBag == NULL || item == 0) return FALSE;
+
+    if (!Gen5_GetBattleState(&st) || !st.active || !st.canCatch) return FALSE;
+    if (BagSave_GetItemCountByID(sBag, item, HEAPID_PORT_BATTLE) == 0) return FALSE;
+    Gen5_PortQueuePokeBall(item);
+    return TRUE;
 }

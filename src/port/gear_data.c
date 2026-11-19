@@ -1331,6 +1331,9 @@ static const u16 sBattleOverlayBallItems[] = {
 
 static BOOL CanThrowBattlePokeBall(void)
 {
+#ifdef GEN5_BATTLES
+    if (Gen5Battle_IsShown()) { Gen5BattleState st; return Gen5_GetBattleState(&st) && st.active && st.canCatch; }
+#endif
     if (sBattleSys == NULL) {
         return FALSE;
     }
@@ -1395,6 +1398,9 @@ int Gear_GetBattlePokeBalls(BattleOverlayBallEntry *out, int maxOut, BOOL *canTh
     if (out == NULL || maxOut <= 0 || !CanThrowBattlePokeBall()) {
         return 0;
     }
+#ifdef GEN5_BATTLES
+    if (Gen5Battle_IsShown()) { if (canThrowOut) *canThrowOut = TRUE; int c = 0; for (int i = 0; i < (int)NELEMS(sBattleOverlayBallItems) && c < maxOut; i++) { u16 it = sBattleOverlayBallItems[i]; int q = Gen5_GetItemCount(it); if (q > 0) { out[c].item = it; out[c].count = (u16)q; snprintf(out[c].name, sizeof(out[c].name), "%s", Gear_ItemName(it)); c++; } } return c; }
+#endif
     Bag *bag = BattleSystem_GetBag(sBattleSys);
     if (bag == NULL) {
         return 0;
@@ -1423,6 +1429,9 @@ BOOL Gear_UseBattlePokeBall(u16 item)
     if (!CanThrowBattlePokeBall()) {
         return FALSE;
     }
+#ifdef GEN5_BATTLES
+    if (Gen5Battle_IsShown()) return Gen5_UseBattlePokeBall(item) != 0;
+#endif
     Bag *bag = BattleSystem_GetBag(sBattleSys);
     if (bag == NULL || Bag_GetItemQuantity(bag, item, HEAP_ID_BATTLE) == 0) {
         return FALSE;

@@ -1,0 +1,11 @@
+--- a/src/ov167/btlv_scu.c
++++ b/src/ov167/btlv_scu.c
+@@ -427,7 +427,7 @@
+     scu->abilityCharOffset = BtlvScu_LoadArcCharsDynamic(scu, 11, 0x1e3, 3);
+     loadBGScrToVramByNarcNoReserveNegAlign(ARCID_BTLV, 0x1e5, 2, 0, 0, FALSE, scu->heapId);
+     loadBGScrToVramByNarcNoReserveNegAlign(ARCID_BTLV, 0x1e6, 3, 0, 0, FALSE, scu->heapId);
+-    scu->msgWin = BmpWin_CreateDynamic(1, 1, 19, 30, 4, 0, 0);
++    scu->msgWin = BmpWin_CreateDynamic(1, 1, 19, 13, 4, 0, 0);
+     scu->msgBitmap = BmpWin_GetBitmap(scu->msgWin);
+     BmpWin_FlushMap(scu->msgWin);
+     if (GetStudioMode(scu->mainModule) != BTL_STUDIO_MODE_PLAYBACK) {

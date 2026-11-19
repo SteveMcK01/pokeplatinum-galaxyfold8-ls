@@ -1,29 +1,30 @@
-diff --git a/src/ov169/btlv_scd.c b/src/ov169/btlv_scd.c
-index 276953f06..42534abe0 100644
 --- a/src/ov169/btlv_scd.c
 +++ b/src/ov169/btlv_scd.c
-@@ -539,6 +539,11 @@ BtlvScd *BtlvScd_Create(BtlvCore *core, BtlMainModule *mainModule, BtlPokeCon *p
+@@ -539,6 +539,13 @@
      return scd;
  }
  
 +// The port: active battle subscreen state for the ImGui battle overlay (gen5/src/runtime.c)
 +static BtlvScd *sPortActiveScd = NULL;
 +static BOOL sPortSubAppOpen = FALSE;
++static u16 sPortPendingBallItem = 0;
++void Gen5_PortQueuePokeBall(u16 item) { sPortPendingBallItem = item; }
 +BOOL BtlvInput_PortNoUsableMove(const BtlvInput *work);
 +
  void BtlvScd_CreateInput(BtlvScd *scd) {
      GameData *gameData = GetGameData(scd->mainModule);
      u32 rule = BtlSetup_GetBattleStyle(scd->mainModule);
-@@ -550,6 +555,8 @@ void BtlvScd_CreateInput(BtlvScd *scd) {
+@@ -550,6 +557,9 @@
      scd->input = BtlvInput_CreateForBattle(gameData, rule, battleType, paletteFade, scd->font, &scd->keyCursorFlag,
                                             scd->scdState, multiMode, studioMode, scd->typeCount, scd->typeMask,
                                             scd->noCancel, scd->heapId);
 +    sPortActiveScd = scd;
 +    sPortSubAppOpen = FALSE;
++    sPortPendingBallItem = 0;
      GFL_BGSysSetBGEnabledB(0x10, TRUE);
      BtlvScd_Nop(scd);
  }
-@@ -559,6 +566,7 @@ void BtlvScd_StartFadeOut(BtlvScd *scd, u32 mode) {
+@@ -559,6 +569,7 @@
      scd->fadeTo = -16;
      scd->fadeStep = -1;
      BtlvInput_StartPaletteFade(scd->input, mode);
@@ -31,7 +32,7 @@ index 276953f06..42534abe0 100644
  }
  
  void BtlvScd_StartFadeIn(BtlvScd *scd) {
-@@ -566,6 +574,7 @@ void BtlvScd_StartFadeIn(BtlvScd *scd) {
+@@ -566,6 +577,7 @@
      scd->fadeTo = 0;
      scd->fadeStep = 1;
      BtlvInput_StartFadeInWithGraphics(scd->input);
@@ -39,7 +40,7 @@ index 276953f06..42534abe0 100644
  }
  
  BOOL BtlvScd_IsFadeDone(BtlvScd *scd) {
-@@ -605,6 +614,10 @@ BOOL BtlvScd_IsIdle(BtlvScd *scd) {
+@@ -605,6 +617,10 @@
  }
  
  void BtlvScd_Delete(BtlvScd *scd) {
@@ -50,7 +51,15 @@ index 276953f06..42534abe0 100644
      GameData_SetBattleKeyCursorFlag(GetGameData(scd->mainModule), scd->keyCursorFlag);
      PrintQueue_Free(scd->printQueue);
      GFL_StrBufFree(scd->strbuf);
-@@ -1359,3 +1372,158 @@ u32 BtlvScd_GetTypeMask(BtlvScd *scd) {
+@@ -882,6 +898,7 @@
+ 
+     switch (*seq) {
+     case COMMAND_SEQ_SELECT:
++        if (sPortPendingBallItem) { u16 b = sPortPendingBallItem; sPortPendingBallItem = 0; scd->result = BTLV_COMMAND_BAG; BattleAction_SetItemParam(scd->action, b, 0, 0); BtlvInput_SetScreen(scd->input, BTLV_INPUT_SCREEN_STANDBY, NULL); BtlvEffect_GaugeAction(8); BtlvEffect_StopIdleEffect(); (*seq)++; break; }
+         input = BtlvInput_CheckInput(scd->input, &sCommandButtons, sCommandStops);
+         if (input != TOUCH_RECT_NONE) {
+             scd->result = sCommandResults[input];
+@@ -1359,3 +1376,159 @@
  void BtlvScd_StartTypeIconAnim(BtlvScd *scd, int index) {
      BtlvInput_StartTypeIconAnim(scd->input, index);
  }
@@ -164,7 +173,7 @@ index 276953f06..42534abe0 100644
 +    return FALSE;
 +}
 +
-+BOOL Gen5_PortQueryBattleState(int *outDoubles, int *outWeather,
++BOOL Gen5_PortQueryBattleState(int *outDoubles, int *outWeather, int *outCanCatch,
 +                               int present[4], int enemy[4], unsigned species[4], unsigned form[4],
 +                               unsigned level[4], int hp[4], int maxHp[4], unsigned status[4],
 +                               unsigned type1[4], unsigned type2[4], unsigned short nicknames[4][11]) {
@@ -207,5 +216,6 @@ index 276953f06..42534abe0 100644
 +            PokeParty_GetParam(pkm, PKM_PARAM_NICKNAME_RAW, nicknames[i]);
 +        }
 +    }
++    { int ae = 0; for (int i = 0; i < 4; i++) if (present[i] && enemy[i] && hp[i] > 0) ae++; *outCanCatch = (BtlSetup_GetBattleType(scd->mainModule) == BTL_TYPE_WILD && ae == 1) ? 1 : 0; }
 +    return TRUE;
 +}

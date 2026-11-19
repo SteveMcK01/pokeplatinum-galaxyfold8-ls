@@ -159,6 +159,7 @@ typedef struct Gen5Battle {
     int isTrainer;
     Gen5Trainer trainer;
     int doubles;
+    int canCatch;
     int hasTrainer2;
     Gen5Trainer trainer2;
     int hasPartner;
@@ -252,6 +253,8 @@ int Gen5_GetBattleMenu(Gen5BattleMenu *out);
 void Gen5_PressBattleButton(int gearMenuKind, int button);
 int Gen5_GetBattleState(Gen5BattleState *out);
 int Gen5_BattleNeedsDsScreen(void);
+int Gen5_GetItemCount(unsigned short item);
+int Gen5_UseBattlePokeBall(unsigned short item);
 
 int Gen5_BattleFrame(void);
 

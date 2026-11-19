@@ -1059,11 +1059,16 @@ void TouchControls_DrawOverlay(void) {
     SyncAndroidOverlayScale(GetTopLeftWidthFraction(cfg));
     SyncAndroidBattleMode(inBattle);
     SyncAndroidPipAutoFade(cfg->topRightOverlayAutoFade != FALSE);
+    static int sMenuHold = 0;
+    if (!inBattle || needsDsScreen || !pipOverlayMode) sMenuHold = 0;
+    else if (battleMenuVisible) sMenuHold = 20;
+    else if (sMenuHold > 0) sMenuHold--;
+    const bool hidePip = battleMenuVisible || (sMenuHold > 0);
     const int androidLayoutMode = primaryFull
         ? 2
         : ((companionFull || (pipOverlayMode && needsDsScreen))
             ? 1
-            : (pipOverlayMode ? ((pipMinimized || battleMenuVisible) ? 4 : 3) : 0));
+            : (pipOverlayMode ? ((pipMinimized || hidePip) ? 4 : 3) : 0));
     SyncAndroidLayoutMode(androidLayoutMode);
 
     if (!cfg->touchOverlay || primaryFull || companionFull) {

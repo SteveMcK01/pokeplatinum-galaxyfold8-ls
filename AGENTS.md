@@ -8,6 +8,11 @@
 
 ## Last Worked On
 
+- **Gen 5 Effectiveness Type Offset, Core Yes/No Prompts & Move-Forget Screen:**
+  - Offset BW2 `PokeType` IDs `>= 9` (`Fire`..`Dark`) by `+1` in `Gen5_GetBattleState` (`gen5/src/runtime.c`) to match Platinum's `TYPE_MYSTERY = 9`.
+  - Checked `BTLV_INPUT_SCREEN_YES_NO` before `scd->numProcs == 0` in `Gen5_PortQueryBattleMenu` (`gen5/patches/src/ov169/btlv_scd.c.patch`) so `BtlvCore_ShowYesNo` prompts render `YES`/`NO` cards.
+  - Called `Gen5_PortSetSubAppOpen(TRUE)` in `BtlvCore_StartForgetMoveSelect` (`gen5/patches/src/ov167/btlv_core.c.patch`) to open the DS bottom screen for move-forget selection.
+
 - **Gen 5 Battle Target Highlighting & Yes/No Touch Overlay (`c270bd3b6`):**
   - Updated `gen5/patches/src/ov169/btlv_scd.c.patch` (`Gen5_PortQueryBattleMenu`) so spread/group/self/side moves (`scd->targets.selectCount == 0`, where `BtlvScd_GetTargetPos` outputs `BTL_POS_NONE`) resolve each slot's battle position via `ViewPosToBattlePos(scd->mainModule, sTargetButtonViewPos[kBw2Btn[t]])` and highlight every affected living battler instead of falling back to only slot `0`.
   - Updated `src/port/touch_controls.cpp` (`DrawFullScreenBattleOverlay`) to color-code `GEAR_MENU_TARGETS` cards (red for foes on `row == 0`, green for allies/self on `row == 1`) and added a two-card `GEAR_MENU_YES_NO` renderer (`menu.yes` -> `Gear_PressBattleButton(0)` at `(128, 56)`, `menu.no` -> `Gear_PressBattleButton(1)` at `(128, 104)`).

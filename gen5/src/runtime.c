@@ -606,8 +606,8 @@ int Gen5_GetBattleState(Gen5BattleState *out)
         out->battlers[i].hp = hp[i];
         out->battlers[i].maxHp = maxHp[i];
         out->battlers[i].status = status[i];
-        out->battlers[i].type1 = type1[i];
-        out->battlers[i].type2 = type2[i];
+        out->battlers[i].type1 = type1[i] >= 9 ? type1[i] + 1 : type1[i];
+        out->battlers[i].type2 = type2[i] >= 9 ? type2[i] + 1 : type2[i];
         memcpy(out->battlers[i].nickname, nicknames[i], sizeof(nicknames[i]));
     }
     return TRUE;

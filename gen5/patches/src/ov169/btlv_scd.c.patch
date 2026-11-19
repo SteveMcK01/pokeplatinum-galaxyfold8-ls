@@ -90,14 +90,24 @@
 +    if (scd == NULL || scd->input == NULL || scd->forceQuit || sPortSubAppOpen) {
 +        return FALSE;
 +    }
-+    if (BtlvInput_IsBusy(scd->input) || scd->numProcs == 0) {
++    if (BtlvInput_IsBusy(scd->input)) {
++        return FALSE;
++    }
++    const u32 screen = BtlvInput_GetScreen(scd->input);
++    if (screen == BTLV_INPUT_SCREEN_YES_NO && scd->yesNoSeq == YES_NO_SEQ_SELECT) {
++        *outKind = 4;
++        *outBattler = -1;
++        *outCancel = 0;
++        *outNoUsableMove = 0;
++        return TRUE;
++    }
++    if (scd->numProcs == 0) {
 +        return FALSE;
 +    }
 +    const BtlvSubProc *proc = &scd->procs[scd->numProcs - 1];
 +    if (proc->init != NULL) {
 +        return FALSE;
 +    }
-+    const u32 screen = BtlvInput_GetScreen(scd->input);
 +    const u32 style = BtlSetup_GetBattleStyle(scd->mainModule);
 +    int battlerIdx = -1;
 +    if (scd->mon != NULL) {

@@ -160,6 +160,7 @@ typedef struct Gen5Battle {
     Gen5Trainer trainer;
     int doubles;
     int canCatch;
+    int canCatch;
     int hasTrainer2;
     Gen5Trainer trainer2;
     int hasPartner;

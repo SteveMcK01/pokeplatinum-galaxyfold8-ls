@@ -1,0 +1,211 @@
+diff --git a/src/ov169/btlv_scd.c b/src/ov169/btlv_scd.c
+index 276953f06..42534abe0 100644
+--- a/src/ov169/btlv_scd.c
++++ b/src/ov169/btlv_scd.c
+@@ -539,6 +539,11 @@ BtlvScd *BtlvScd_Create(BtlvCore *core, BtlMainModule *mainModule, BtlPokeCon *p
+     return scd;
+ }
+ 
++// The port: active battle subscreen state for the ImGui battle overlay (gen5/src/runtime.c)
++static BtlvScd *sPortActiveScd = NULL;
++static BOOL sPortSubAppOpen = FALSE;
++BOOL BtlvInput_PortNoUsableMove(const BtlvInput *work);
++
+ void BtlvScd_CreateInput(BtlvScd *scd) {
+     GameData *gameData = GetGameData(scd->mainModule);
+     u32 rule = BtlSetup_GetBattleStyle(scd->mainModule);
+@@ -550,6 +555,8 @@ void BtlvScd_CreateInput(BtlvScd *scd) {
+     scd->input = BtlvInput_CreateForBattle(gameData, rule, battleType, paletteFade, scd->font, &scd->keyCursorFlag,
+                                            scd->scdState, multiMode, studioMode, scd->typeCount, scd->typeMask,
+                                            scd->noCancel, scd->heapId);
++    sPortActiveScd = scd;
++    sPortSubAppOpen = FALSE;
+     GFL_BGSysSetBGEnabledB(0x10, TRUE);
+     BtlvScd_Nop(scd);
+ }
+@@ -559,6 +566,7 @@ void BtlvScd_StartFadeOut(BtlvScd *scd, u32 mode) {
+     scd->fadeTo = -16;
+     scd->fadeStep = -1;
+     BtlvInput_StartPaletteFade(scd->input, mode);
++    sPortSubAppOpen = TRUE;
+ }
+ 
+ void BtlvScd_StartFadeIn(BtlvScd *scd) {
+@@ -566,6 +574,7 @@ void BtlvScd_StartFadeIn(BtlvScd *scd) {
+     scd->fadeTo = 0;
+     scd->fadeStep = 1;
+     BtlvInput_StartFadeInWithGraphics(scd->input);
++    sPortSubAppOpen = FALSE;
+ }
+ 
+ BOOL BtlvScd_IsFadeDone(BtlvScd *scd) {
+@@ -605,6 +614,10 @@ BOOL BtlvScd_IsIdle(BtlvScd *scd) {
+ }
+ 
+ void BtlvScd_Delete(BtlvScd *scd) {
++    if (sPortActiveScd == scd) {
++        sPortActiveScd = NULL;
++        sPortSubAppOpen = FALSE;
++    }
+     GameData_SetBattleKeyCursorFlag(GetGameData(scd->mainModule), scd->keyCursorFlag);
+     PrintQueue_Free(scd->printQueue);
+     GFL_StrBufFree(scd->strbuf);
+@@ -1359,3 +1372,158 @@ u32 BtlvScd_GetTypeMask(BtlvScd *scd) {
+ void BtlvScd_StartTypeIconAnim(BtlvScd *scd, int index) {
+     BtlvInput_StartTypeIconAnim(scd->input, index);
+ }
++
++static int PortViewPosToBattlerIndex(u32 style, u8 viewPos) {
++    if (style == BTL_STYLE_SINGLE) {
++        if (viewPos == 0) return 0;
++        if (viewPos == 1) return 1;
++        return -1;
++    }
++    switch (viewPos) {
++    case 2: return 0; // Player Left
++    case 5: return 1; // Foe Left
++    case 4: return 2; // Player Right
++    case 3: return 3; // Foe Right
++    default: return -1;
++    }
++}
++
++BOOL Gen5_PortNeedsDsScreen(void) {
++    return sPortActiveScd != NULL && sPortSubAppOpen;
++}
++
++BOOL Gen5_PortQueryBattleMenu(int *outKind, int *outBattler, int *outCancel, int *outNoUsableMove,
++                              u16 outMoveIds[4], u8 outMovePp[4], u8 outMoveMaxPp[4],
++                              int outTargetOk[4], int outTargetBattler[4]) {
++    BtlvScd *scd = sPortActiveScd;
++    if (scd == NULL || scd->input == NULL || scd->forceQuit || sPortSubAppOpen) {
++        return FALSE;
++    }
++    if (BtlvInput_IsBusy(scd->input) || scd->numProcs == 0) {
++        return FALSE;
++    }
++    const BtlvSubProc *proc = &scd->procs[scd->numProcs - 1];
++    if (proc->init != NULL) {
++        return FALSE;
++    }
++    const u32 screen = BtlvInput_GetScreen(scd->input);
++    const u32 style = BtlSetup_GetBattleStyle(scd->mainModule);
++    int battlerIdx = -1;
++    if (scd->mon != NULL) {
++        u8 viewPos = BattlePosToViewPos(scd->mainModule, MonIDToBattlePos(scd->mainModule, scd->pokeCon, GetMonID(scd->mon)));
++        battlerIdx = PortViewPosToBattlerIndex(style, viewPos);
++    }
++    *outBattler = battlerIdx;
++    *outCancel = 0;
++    *outNoUsableMove = 0;
++
++    if (screen == BTLV_INPUT_SCREEN_COMMAND && proc->main == BtlvScd_CommandMain && proc->seq == COMMAND_SEQ_SELECT) {
++        *outKind = 1; // GEN5_MENU_ACTION
++        *outCancel = scd->slot != 0 ? 1 : 0;
++        return TRUE;
++    }
++    if (screen == BTLV_INPUT_SCREEN_MOVES && proc->main == BtlvScd_MoveMain && scd->mon != NULL) {
++        *outKind = 2; // GEN5_MENU_MOVES
++        if (BtlvInput_PortNoUsableMove(scd->input)) {
++            *outNoUsableMove = 1;
++            outMoveIds[0] = MOVE_STRUGGLE;
++            outMovePp[0] = 1;
++            outMoveMaxPp[0] = 1;
++            return TRUE;
++        }
++        const u16 count = GetBattleMonMoveCount(scd->mon);
++        for (u16 i = 0; i < count && i < 4; i++) {
++            u8 pp = 0, maxPP = 0;
++            outMoveIds[i] = BattleMon_GetMoveInfo(scd->mon, i, &pp, &maxPP);
++            outMovePp[i] = pp;
++            outMoveMaxPp[i] = maxPP;
++        }
++        return TRUE;
++    }
++    if (screen == BTLV_INPUT_SCREEN_TARGET && proc->main == BtlvScd_TargetMain && proc->seq == 0) {
++        *outKind = 3; // GEN5_MENU_TARGETS
++        static const u32 kBw2Btn[4] = { 3, 1, 0, 2 };
++        static const int kGearSlot[4] = { 1, 3, 0, 2 };
++        int anyOk = 0;
++        for (int t = 0; t < 4; t++) {
++            outTargetBattler[t] = kGearSlot[t];
++            u8 targetPos = BTL_POS_NONE;
++            if (!BtlvScd_GetTargetPos(&scd->targets, kBw2Btn[t], scd->mainModule, &targetPos)) {
++                continue;
++            }
++            if (scd->targets.selectCount != 0) {
++                BattleMon *tmon = PokeCon_GetPosMonInner(scd->pokeCon, targetPos);
++                if (tmon != NULL && GetBattleMonStat(tmon, BATTLEMON_HP) > 0) {
++                    outTargetOk[t] = 1;
++                    anyOk = 1;
++                }
++            } else {
++                for (u8 j = 0; j < scd->targets.count; j++) {
++                    if (scd->targets.pos[j] == targetPos) {
++                        BattleMon *tmon = PokeCon_GetPosMonInner(scd->pokeCon, targetPos);
++                        if (tmon != NULL && GetBattleMonStat(tmon, BATTLEMON_HP) > 0) {
++                            outTargetOk[t] = 1;
++                            anyOk = 1;
++                        }
++                        break;
++                    }
++                }
++            }
++        }
++        if (!anyOk && scd->targets.selectCount == 0) {
++            outTargetOk[0] = 1;
++        }
++        return TRUE;
++    }
++    if (screen == BTLV_INPUT_SCREEN_YES_NO && scd->yesNoSeq == YES_NO_SEQ_SELECT) {
++        *outKind = 4; // GEN5_MENU_YES_NO
++        return TRUE;
++    }
++    return FALSE;
++}
++
++BOOL Gen5_PortQueryBattleState(int *outDoubles, int *outWeather,
++                               int present[4], int enemy[4], unsigned species[4], unsigned form[4],
++                               unsigned level[4], int hp[4], int maxHp[4], unsigned status[4],
++                               unsigned type1[4], unsigned type2[4], unsigned short nicknames[4][11]) {
++    static const u8 kSingleViewPos[4] = { 0, 1, 0xFF, 0xFF };
++    static const u8 kDoubleViewPos[4] = { 2, 5, 4, 3 };
++    BtlvScd *scd = sPortActiveScd;
++    if (scd == NULL || scd->mainModule == NULL || scd->pokeCon == NULL) {
++        return FALSE;
++    }
++    const u32 style = BtlSetup_GetBattleStyle(scd->mainModule);
++    *outDoubles = (style != BTL_STYLE_SINGLE) ? 1 : 0;
++    *outWeather = (int)BattleClient_GetWeather(scd->client);
++    const u8 *viewPositions = (style == BTL_STYLE_SINGLE) ? kSingleViewPos : kDoubleViewPos;
++
++    for (int i = 0; i < 4; i++) {
++        if (viewPositions[i] == 0xFF) {
++            continue;
++        }
++        BattleMon *mon = PokeCon_GetPosMonInner(scd->pokeCon, ViewPosToBattlePos(scd->mainModule, viewPositions[i]));
++        if (mon == NULL || GetBattleMonSpecies(mon) == 0) {
++            continue;
++        }
++        const u32 curHp = GetBattleMonStat(mon, BATTLEMON_HP);
++        if (curHp == 0) {
++            continue;
++        }
++        present[i] = 1;
++        enemy[i] = (i == 1 || i == 3) ? 1 : 0;
++        species[i] = GetBattleMonSpecies(mon);
++        level[i] = GetBattleMonStat(mon, BATTLEMON_LEVEL);
++        hp[i] = (int)curHp;
++        maxHp[i] = (int)GetBattleMonStat(mon, BATTLEMON_HP + 1);
++        status[i] = GetBattleMonStatus(mon);
++        PokeTypePair types = GetPokeType(mon);
++        type1[i] = (types >> 8) & 0xFF;
++        type2[i] = types & 0xFF;
++        PartyPkm *pkm = BattleMon_GetViewSrcData(mon);
++        if (pkm != NULL) {
++            form[i] = PokeParty_GetParam(pkm, PKM_PARAM_FORM, NULL);
++            PokeParty_GetParam(pkm, PKM_PARAM_NICKNAME_RAW, nicknames[i]);
++        }
++    }
++    return TRUE;
++}

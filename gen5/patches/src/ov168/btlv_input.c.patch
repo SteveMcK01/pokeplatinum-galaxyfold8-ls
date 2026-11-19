@@ -1,6 +1,8 @@
+diff --git a/src/ov168/btlv_input.c b/src/ov168/btlv_input.c
+index 98fc03a5d..a0d84b3e3 100644
 --- a/src/ov168/btlv_input.c
 +++ b/src/ov168/btlv_input.c
-@@ -479,8 +479,8 @@
+@@ -479,8 +479,8 @@ static const s32 MOVE_NAME_POS[4][2] = { { 64, 10 }, { 192, 10 }, { 64, 58 }, {
  // the only function that reads the table: MWCC keeps the loop of a function that reads an aligned object entered at
  // its test (docs/matching.md). An alignment of 1, 2 or 4 gives the same code and layout, and the table's address
  // allows nothing above 4.
@@ -11,7 +13,7 @@
  };
  static const BtlvInputButtonSet MOVE_BUTTONS = { MOVE_TOUCH_RECTS, MOVE_BUTTON_FLAGS, MOVE_FLASH_ROWS };
  // The scroll of BG 4 for the button rise of each slot
-@@ -3217,15 +3217,15 @@
+@@ -3217,15 +3217,15 @@ static void BtlvInput_CreateStruggleActor(BtlvInput *work) {
      for (i = 0; i < 4; i++) {
          MI_CpuCopy16(
              &pixels[i * 0x1c0],
@@ -30,3 +32,12 @@
              0x40);
      }
  
+@@ -3769,3 +3769,8 @@ static void BtlvInput_PlayBeepSE(BtlvInput *work) {
+         GFL_SndSEPlay(SEQ_SE_BEEP);
+     }
+ }
++
++// The port: TRUE when the move screen only offers Struggle
++BOOL BtlvInput_PortNoUsableMove(const BtlvInput *work) {
++    return work != NULL && work->noUsableMove;
++}

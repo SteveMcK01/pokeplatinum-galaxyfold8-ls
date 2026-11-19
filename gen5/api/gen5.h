@@ -203,6 +203,56 @@ enum Gen5BattleEvent {
 
 unsigned Gen5_TakeEvents(void);
 
+// Battle menu bridge for the port's Android ImGui overlay (src/port/gear_data.c)
+enum Gen5MenuKind {
+    GEN5_MENU_NONE = 0,
+    GEN5_MENU_ACTION = 1,
+    GEN5_MENU_MOVES = 2,
+    GEN5_MENU_TARGETS = 3,
+    GEN5_MENU_YES_NO = 4,
+};
+
+typedef struct Gen5BattleMenu {
+    int kind; // enum Gen5MenuKind
+    int ready;
+    int battler; // 0..3 active battler slot
+    int cancel;  // later Pokemon on command screen can cancel
+    int noUsableMove;
+    unsigned short moveIds[4];
+    unsigned char movePp[4];
+    unsigned char moveMaxPp[4];
+    int targetOk[4];
+    int targetBattler[4];
+    char yes[16];
+    char no[16];
+} Gen5BattleMenu;
+
+typedef struct Gen5BattleBattler {
+    int present;
+    int enemy;
+    unsigned species;
+    unsigned form;
+    unsigned level;
+    int hp;
+    int maxHp;
+    unsigned status;
+    unsigned type1;
+    unsigned type2;
+    unsigned short nickname[GEN5_NAME_LENGTH]; // Unicode, 0xFFFF terminated
+} Gen5BattleBattler;
+
+typedef struct Gen5BattleState {
+    int active;
+    int doubles;
+    int weather;
+    Gen5BattleBattler battlers[4];
+} Gen5BattleState;
+
+int Gen5_GetBattleMenu(Gen5BattleMenu *out);
+void Gen5_PressBattleButton(int gearMenuKind, int button);
+int Gen5_GetBattleState(Gen5BattleState *out);
+int Gen5_BattleNeedsDsScreen(void);
+
 int Gen5_BattleFrame(void);
 
 // Widescreen (milestone 6): BW2's 3D drawn ratio times as wide as the DS's, unstretched (its camera and the Pokémon

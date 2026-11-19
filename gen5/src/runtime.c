@@ -460,8 +460,170 @@ static struct {
     u16 y;
 } sInput;
 
+static int sSynthTouchFrames = 0;
+static u16 sSynthTouchX = 0;
+static u16 sSynthTouchY = 0;
+static int sLastNoUsableMove = 0;
+
+BOOL Gen5_PortNeedsDsScreen(void);
+BOOL Gen5_PortQueryBattleMenu(int *outKind, int *outBattler, int *outCancel, int *outNoUsableMove,
+                              u16 outMoveIds[4], u8 outMovePp[4], u8 outMoveMaxPp[4],
+                              int outTargetOk[4], int outTargetBattler[4]);
+BOOL Gen5_PortQueryBattleState(int *outDoubles, int *outWeather,
+                               int present[4], int enemy[4], unsigned species[4], unsigned form[4],
+                               unsigned level[4], int hp[4], int maxHp[4], unsigned status[4],
+                               unsigned type1[4], unsigned type2[4], unsigned short nicknames[4][11]);
+
+int Gen5_BattleNeedsDsScreen(void)
+{
+    return sRunning && Gen5_PortNeedsDsScreen();
+}
+
+int Gen5_GetBattleMenu(Gen5BattleMenu *out)
+{
+    if (out == NULL) {
+        return FALSE;
+    }
+    memset(out, 0, sizeof(*out));
+    out->battler = -1;
+    for (int i = 0; i < 4; i++) {
+        out->targetBattler[i] = -1;
+    }
+    if (!sRunning) {
+        return FALSE;
+    }
+    int kind = 0, battler = -1, cancel = 0, noUsableMove = 0;
+    u16 moveIds[4] = { 0 };
+    u8 movePp[4] = { 0 };
+    u8 moveMaxPp[4] = { 0 };
+    int targetOk[4] = { 0 };
+    int targetBattler[4] = { -1, -1, -1, -1 };
+    if (!Gen5_PortQueryBattleMenu(&kind, &battler, &cancel, &noUsableMove,
+                                  moveIds, movePp, moveMaxPp, targetOk, targetBattler)) {
+        return FALSE;
+    }
+    out->kind = kind;
+    out->ready = 1;
+    out->battler = battler;
+    out->cancel = cancel;
+    out->noUsableMove = noUsableMove;
+    sLastNoUsableMove = noUsableMove;
+    for (int i = 0; i < 4; i++) {
+        out->moveIds[i] = moveIds[i];
+        out->movePp[i] = movePp[i];
+        out->moveMaxPp[i] = moveMaxPp[i];
+        out->targetOk[i] = targetOk[i];
+        out->targetBattler[i] = targetBattler[i];
+    }
+    snprintf(out->yes, sizeof(out->yes), "YES");
+    snprintf(out->no, sizeof(out->no), "NO");
+    return TRUE;
+}
+
+void Gen5_PressBattleButton(int gearMenuKind, int button)
+{
+    if (!sRunning) {
+        return;
+    }
+    int x = -1, y = -1;
+    switch (gearMenuKind) {
+    case 1: // GEAR_MENU_ACTION -> BW2 sCommandRects: 0=FIGHT, 1=BAG, 2=POKEMON, 3=RUN/BACK
+        if (button == 0) { x = 128; y = 84; }
+        else if (button == 1) { x = 216; y = 168; }
+        else if (button == 2) { x = 40; y = 168; }
+        else if (button == 3) { x = 128; y = 172; }
+        break;
+    case 2: // GEAR_MENU_MOVES -> BW2 MOVE_TOUCH_RECTS: 0..3=moves, 4=BACK
+        if (button == 0) {
+            x = 216; y = 168;
+        } else if (button >= 1 && button <= 4) {
+            if (sLastNoUsableMove) {
+                x = 128; y = 80;
+            } else {
+                static const u16 kMoveX[4] = { 64, 192, 64, 192 };
+                static const u16 kMoveY[4] = { 56, 56, 104, 104 };
+                x = kMoveX[button - 1];
+                y = kMoveY[button - 1];
+            }
+        }
+        break;
+    case 3: // GEAR_MENU_TARGETS -> BW2 sTargetRectsDouble: 0=BL, 1=TR, 2=BR, 3=TL, 4=BACK
+        if (button == 0) {
+            x = 216; y = 168;
+        } else if (button >= 1 && button <= 4) {
+            static const u16 kTgtX[4] = { 64, 192, 64, 192 };
+            static const u16 kTgtY[4] = { 60, 60, 108, 108 };
+            x = kTgtX[button - 1];
+            y = kTgtY[button - 1];
+        }
+        break;
+    case 4: // GEAR_MENU_YES_NO -> BW2 sYesNoRects: 0=YES, 1=NO
+        if (button == 0) { x = 128; y = 56; }
+        else if (button == 1) { x = 128; y = 104; }
+        break;
+    default:
+        break;
+    }
+    if (x >= 0 && y >= 0) {
+        sSynthTouchX = (u16)x;
+        sSynthTouchY = (u16)y;
+        sSynthTouchFrames = 2;
+    }
+}
+
+int Gen5_GetBattleState(Gen5BattleState *out)
+{
+    if (out == NULL) {
+        return FALSE;
+    }
+    memset(out, 0, sizeof(*out));
+    if (!sRunning) {
+        return FALSE;
+    }
+    int doubles = 0, weather = 0;
+    int present[4] = { 0 }, enemy[4] = { 0 };
+    unsigned species[4] = { 0 }, form[4] = { 0 }, level[4] = { 0 }, status[4] = { 0 };
+    unsigned type1[4] = { 0 }, type2[4] = { 0 };
+    int hp[4] = { 0 }, maxHp[4] = { 0 };
+    unsigned short nicknames[4][11];
+    for (int i = 0; i < 4; i++) {
+        nicknames[i][0] = 0xFFFF;
+    }
+    if (!Gen5_PortQueryBattleState(&doubles, &weather, present, enemy, species, form,
+                                   level, hp, maxHp, status, type1, type2, nicknames)) {
+        return FALSE;
+    }
+    out->active = 1;
+    out->doubles = doubles;
+    out->weather = weather;
+    for (int i = 0; i < 4; i++) {
+        out->battlers[i].present = present[i];
+        out->battlers[i].enemy = enemy[i];
+        out->battlers[i].species = species[i];
+        out->battlers[i].form = form[i];
+        out->battlers[i].level = level[i];
+        out->battlers[i].hp = hp[i];
+        out->battlers[i].maxHp = maxHp[i];
+        out->battlers[i].status = status[i];
+        out->battlers[i].type1 = type1[i];
+        out->battlers[i].type2 = type2[i];
+        memcpy(out->battlers[i].nickname, nicknames[i], sizeof(nicknames[i]));
+    }
+    return TRUE;
+}
+
 void Gen5_SetInput(unsigned keys, int touch, int x, int y)
 {
+    if (sSynthTouchFrames > 0) {
+        if (sSynthTouchFrames == 2) {
+            touch = 1;
+            x = sSynthTouchX;
+            y = sSynthTouchY;
+        } else {
+            touch = 0;
+        }
+        sSynthTouchFrames--;
+    }
     sInput.keys = (u16)keys;
     sInput.touch = touch;
     sInput.x = (u16)x;

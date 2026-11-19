@@ -273,7 +273,7 @@ BOOL GearSprites_ItemIcon(u16 item, u32 *rgba)
         && ReadPalette(palFile, palSize, 0, 16, palette)) {
         int srcW = (chars.tilesWide != 0xFFFF && chars.tilesWide > 0) ? (chars.tilesWide * 8) : 24;
         if (srcW >= 24 && chars.size >= (u32)(srcW * 24 / 2)) {
-            ToRGBA(chars.pixels, chars.bitmap, srcW, 24, 24, palette, rgba);
+            ToRGBA(chars.pixels, FALSE, srcW, 24, 24, palette, rgba);
             ok = TRUE;
         }
     }

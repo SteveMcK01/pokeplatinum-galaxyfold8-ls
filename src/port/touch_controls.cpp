@@ -830,8 +830,8 @@ static void DrawFullScreenBattleOverlay(ImDrawList *dl, const ImVec2 &disp, floa
     // 3. Bottom-Right Command / Move Card Panel (leaves bottom-left dialogue window open!)
     const float panelX0 = disp.x * 0.435f;
     const float panelX1 = disp.x * 0.988f;
-    const float panelY0 = disp.y * 0.755f;
-    const float panelY1 = disp.y * 0.935f;
+    const float panelY0 = disp.y * 0.772f;
+    const float panelY1 = disp.y * 0.962f;
     const float gap = std::max(6.0f, disp.x * 0.006f);
 
     if (menu.kind == GEAR_MENU_ACTION || menu.kind == GEAR_MENU_FIRST || menu.kind == GEAR_MENU_PAL_PARK) {
@@ -1059,11 +1059,7 @@ void TouchControls_DrawOverlay(void) {
     SyncAndroidOverlayScale(GetTopLeftWidthFraction(cfg));
     SyncAndroidBattleMode(inBattle);
     SyncAndroidPipAutoFade(cfg->topRightOverlayAutoFade != FALSE);
-    static int sMenuHold = 0;
-    if (!inBattle || needsDsScreen || !pipOverlayMode) sMenuHold = 0;
-    else if (battleMenuVisible) sMenuHold = 20;
-    else if (sMenuHold > 0) sMenuHold--;
-    const bool hidePip = battleMenuVisible || (sMenuHold > 0);
+    const bool hidePip = inBattle && !needsDsScreen;
     const int androidLayoutMode = primaryFull
         ? 2
         : ((companionFull || (pipOverlayMode && needsDsScreen))

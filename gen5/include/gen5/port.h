@@ -125,5 +125,6 @@ void Gen5_G3DReproject(void);
 u32 Gen5_PortCapExp(u16 species, u16 form, u32 current, u32 exp);
 BOOL Gen5_PortCritGuard(void);
 BOOL Gen5_PortCatchRefused(u32 personality);
+void Gen5_PortSetSubAppOpen(BOOL open);
 
 #endif // GEN5_PORT_H

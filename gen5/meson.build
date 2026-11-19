@@ -66,7 +66,6 @@ gen5_sources = [
     'src/ov169/btl_poke_select.c',
     'src/ov169/btl_pospoke.c',
     'src/ov169/btl_tables.c',
-    'src/ov169/btlv_scd.c',
     'src/ov169/condition_effects.c',
     'src/ov169/field_handlers.c',
     # The trainer AI (overlay 170)
@@ -246,6 +245,7 @@ gen5_patched = [
     'src/ov168/btlv_finger_cursor.c', # A pointer through an animation callback's u32
     'src/ov168/btlv_gauge.c',         # VRAM address arithmetic
     'src/ov168/btlv_input.c',         # VRAM address arithmetic
+    'src/ov169/btlv_scd.c',           # Active battle menu state for the port's battle overlay (runtime.c)
     'src/ov169/pos_handlers.c',       # A pointer as a BOOL
     'src/ov169/side_handlers.c',      # The handler's string back from its event variable
     'src/system/mcss_tool.c',         # A pointer through an animation callback's u32

@@ -465,18 +465,18 @@ static u16 sSynthTouchX = 0;
 static u16 sSynthTouchY = 0;
 static int sLastNoUsableMove = 0;
 
-BOOL bw2_Gen5_PortNeedsDsScreen(void);
-BOOL bw2_Gen5_PortQueryBattleMenu(int *outKind, int *outBattler, int *outCancel, int *outNoUsableMove,
+BOOL Gen5_PortNeedsDsScreen(void);
+BOOL Gen5_PortQueryBattleMenu(int *outKind, int *outBattler, int *outCancel, int *outNoUsableMove,
                               u16 outMoveIds[4], u8 outMovePp[4], u8 outMoveMaxPp[4],
                               int outTargetOk[4], int outTargetBattler[4]);
-BOOL bw2_Gen5_PortQueryBattleState(int *outDoubles, int *outWeather,
+BOOL Gen5_PortQueryBattleState(int *outDoubles, int *outWeather,
                                int present[4], int enemy[4], unsigned species[4], unsigned form[4],
                                unsigned level[4], int hp[4], int maxHp[4], unsigned status[4],
                                unsigned type1[4], unsigned type2[4], unsigned short nicknames[4][11]);
 
 int Gen5_BattleNeedsDsScreen(void)
 {
-    return sRunning && bw2_Gen5_PortNeedsDsScreen();
+    return sRunning && Gen5_PortNeedsDsScreen();
 }
 
 int Gen5_GetBattleMenu(Gen5BattleMenu *out)
@@ -498,7 +498,7 @@ int Gen5_GetBattleMenu(Gen5BattleMenu *out)
     u8 moveMaxPp[4] = { 0 };
     int targetOk[4] = { 0 };
     int targetBattler[4] = { -1, -1, -1, -1 };
-    if (!bw2_Gen5_PortQueryBattleMenu(&kind, &battler, &cancel, &noUsableMove,
+    if (!Gen5_PortQueryBattleMenu(&kind, &battler, &cancel, &noUsableMove,
                                   moveIds, movePp, moveMaxPp, targetOk, targetBattler)) {
         return FALSE;
     }
@@ -589,7 +589,7 @@ int Gen5_GetBattleState(Gen5BattleState *out)
     for (int i = 0; i < 4; i++) {
         nicknames[i][0] = 0xFFFF;
     }
-    if (!bw2_Gen5_PortQueryBattleState(&doubles, &weather, present, enemy, species, form,
+    if (!Gen5_PortQueryBattleState(&doubles, &weather, present, enemy, species, form,
                                    level, hp, maxHp, status, type1, type2, nicknames)) {
         return FALSE;
     }

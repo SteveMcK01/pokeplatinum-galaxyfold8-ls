@@ -210,8 +210,6 @@ static void SyncAndroidPipAutoFade(bool enabled) {
 #endif
 }
 
-    GearBattleMenu activeBattleMenu;
-    const bool battleMenuVisible = battleOverlayActive && (Gear_GetBattleMenu(&activeBattleMenu) != FALSE) && activeBattleMenu.ready;
 static void SyncAndroidOverlayScale(float widthFraction) {
 #ifdef __ANDROID__
     if (std::fabs(sLastAndroidOverlayScale - widthFraction) < 0.005f) {
@@ -1055,6 +1053,8 @@ void TouchControls_DrawOverlay(void) {
     const bool inBattle = IsBattleScreenActive();
     const bool needsDsScreen = inBattle && (Gear_BattleNeedsDsScreen() != FALSE);
     const bool battleOverlayActive = pipOverlayMode && inBattle && !needsDsScreen;
+    GearBattleMenu activeBattleMenu;
+    const bool battleMenuVisible = battleOverlayActive && (Gear_GetBattleMenu(&activeBattleMenu) != FALSE) && activeBattleMenu.ready;
     const bool hideFaceButtonsInBattle = pipOverlayMode && inBattle;
     SyncAndroidOverlayScale(GetTopLeftWidthFraction(cfg));
     SyncAndroidBattleMode(inBattle);

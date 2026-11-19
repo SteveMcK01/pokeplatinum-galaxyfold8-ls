@@ -749,13 +749,13 @@ static void DrawFullScreenBattleOverlay(ImDrawList *dl, const ImVec2 &disp, floa
             if (sSelectedBallIdx < 0) sSelectedBallIdx = ballCount - 1;
 
             const BattleOverlayBallEntry &curBall = balls[sSelectedBallIdx];
-            const float spriteSz = std::max(32.0f, disp.y * 0.056f * scale);
-            const float arrowW = spriteSz * 0.58f;
-            const float boxW = spriteSz + arrowW * 2.0f + 8.0f;
-            const float boxH = spriteSz + 8.0f;
-            // Positioned to the left of the player's name / HP / EXP status frame
-            const float cx = disp.x * 0.478f;
-            const float cy = disp.y * 0.650f;
+            const float spriteSz = std::max(48.0f, disp.y * 0.084f * scale);
+            const float arrowW = spriteSz * 0.62f;
+            const float boxW = spriteSz + arrowW * 2.0f + 10.0f;
+            const float boxH = spriteSz + 10.0f;
+            // Positioned snugly to the left of the player's name / HP / EXP status frame
+            const float cx = disp.x * 0.496f;
+            const float cy = disp.y * 0.652f;
             const float x0 = cx - boxW * 0.5f;
             const float y0 = cy - boxH * 0.5f;
             const float x1 = x0 + boxW;
@@ -765,12 +765,12 @@ static void DrawFullScreenBattleOverlay(ImDrawList *dl, const ImVec2 &disp, floa
             const float leftX1 = leftX0 + arrowW;
             const float rightX1 = x1;
             const float rightX0 = rightX1 - arrowW;
-            const float midX0 = leftX1 + 2.0f;
-            const float midX1 = rightX0 - 2.0f;
+            const float midX0 = leftX1 + 3.0f;
+            const float midX1 = rightX0 - 3.0f;
             const float iconCy = cy;
 
             // Left / Right Triangle Arrows (with drop shadow for visibility without background box)
-            const float triSz = arrowW * 0.38f;
+            const float triSz = arrowW * 0.44f;
             const float lMidX = (leftX0 + leftX1) * 0.5f;
             const float rMidX = (rightX0 + rightX1) * 0.5f;
             const ImU32 arrowCol = IM_COL32(255, 255, 255, ballCount > 1 ? 250 : 95);
@@ -809,7 +809,7 @@ static void DrawFullScreenBattleOverlay(ImDrawList *dl, const ImVec2 &disp, floa
             // Quantity badge (xNN)
             char qtyBuf[16];
             std::snprintf(qtyBuf, sizeof(qtyBuf), "x%u", (unsigned)curBall.count);
-            const float qFont = std::max(12.5f, disp.y * 0.020f);
+            const float qFont = std::max(15.0f, disp.y * 0.025f);
             const ImVec2 qSz = boldFont->CalcTextSizeA(qFont, FLT_MAX, 0.0f, qtyBuf);
             DrawShadowText(dl, boldFont, qFont, ImVec2(midX1 - qSz.x + 2.0f, imgY0 - 2.0f), IM_COL32(255, 235, 110, 255), qtyBuf);
 

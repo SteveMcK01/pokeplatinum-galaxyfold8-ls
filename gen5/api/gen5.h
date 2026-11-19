@@ -319,4 +319,3 @@ enum Gen5SummaryResult Gen5_SummaryEnd(Gen5Summary *summary);
 #endif
 
 #endif // GEN5_API_H
-//

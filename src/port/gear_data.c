@@ -1,5 +1,9 @@
 // Game data for the Gear companion. See include/port/gear_data.h
 #include "port/gear_data.h"
+#ifdef GEN5_BATTLES
+#include "gen5.h"
+#include "port/gen5_battle.h"
+#endif
 
 #include <nitro.h>
 #include <stdio.h>
@@ -929,6 +933,9 @@ void Gear_NoteBattleDsScreen(void)
 
 BOOL Gear_BattleNeedsDsScreen(void)
 {
+#ifdef GEN5_BATTLES
+    if (Gen5Battle_IsShown()) return Gen5_BattleNeedsDsScreen() != 0;
+#endif
     if (sBattleSys == NULL) {
         return FALSE;
     }
@@ -1018,6 +1025,26 @@ BOOL Gear_GetBattleMenu(GearBattleMenu *out)
         out->targetBattler[i] = -1;
     }
     sReportedMenuKind = GEAR_MENU_NONE;
+#ifdef GEN5_BATTLES
+    if (Gen5Battle_IsShown()) {
+        Gen5BattleMenu g5;
+        if (!Gen5_GetBattleMenu(&g5) || !g5.ready) return FALSE;
+        if (g5.kind == GEN5_MENU_ACTION) { out->kind = GEAR_MENU_ACTION; out->battler = g5.battler; out->cancel = g5.cancel != 0; }
+        else if (g5.kind == GEN5_MENU_MOVES) {
+            out->kind = GEAR_MENU_MOVES; out->battler = g5.battler;
+            for (int m = 0; m < 4; m++) FillMove(&out->moves[m], g5.moveIds[m], g5.movePp[m], g5.moveMaxPp[m]);
+        } else if (g5.kind == GEN5_MENU_TARGETS) {
+            out->kind = GEAR_MENU_TARGETS; out->battler = g5.battler;
+            for (int t = 0; t < 4; t++) { out->targetOk[t] = g5.targetOk[t] != 0; out->targetBattler[t] = g5.targetBattler[t]; }
+        } else if (g5.kind == GEN5_MENU_YES_NO) {
+            out->kind = GEAR_MENU_YES_NO;
+            snprintf(out->yes, sizeof(out->yes), "%s", g5.yes[0] ? g5.yes : "YES");
+            snprintf(out->no, sizeof(out->no), "%s", g5.no[0] ? g5.no : "NO");
+        } else return FALSE;
+        out->ready = TRUE; out->cursor = 0; sReportedMenuKind = out->kind;
+        return TRUE;
+    }
+#endif
     if (sBattleSys == NULL) {
         return FALSE;
     }
@@ -1120,6 +1147,13 @@ BOOL Gear_GetBattleMenu(GearBattleMenu *out)
 
 void Gear_PressBattleButton(int button)
 {
+#ifdef GEN5_BATTLES
+    if (Gen5Battle_IsShown()) {
+        int k = sReportedMenuKind == GEAR_MENU_ACTION ? 1 : sReportedMenuKind == GEAR_MENU_MOVES ? 2 : sReportedMenuKind == GEAR_MENU_TARGETS ? 3 : sReportedMenuKind == GEAR_MENU_YES_NO ? 4 : 0;
+        if (k) Gen5_PressBattleButton(k, button);
+        return;
+    }
+#endif
     if (sReportedMenuKind == GEAR_MENU_PARTY || sReportedMenuKind == GEAR_MENU_PARTY_MON) {
         BattleParty_PortPress(button);
     } else {
@@ -1137,6 +1171,24 @@ BOOL Gear_GetBattle(GearBattle *out)
 {
     memset(out, 0, sizeof(*out));
     out->choosing = -1;
+#ifdef GEN5_BATTLES
+    if (Gen5Battle_IsShown()) {
+        Gen5BattleState st;
+        if (!Gen5_GetBattleState(&st) || !st.active) return FALSE;
+        out->active = TRUE; out->doubles = st.doubles != 0;
+        for (int i = 0; i < 4 && i < GEAR_BATTLERS_MAX; i++) {
+            const Gen5BattleBattler *s = &st.battlers[i]; GearBattler *b = &out->battlers[i];
+            if (!s->present || s->species == SPECIES_NONE) continue;
+            b->present = TRUE; b->enemy = s->enemy != 0; b->playerControlled = !b->enemy;
+            b->species = s->species; b->form = s->form; b->level = s->level;
+            b->hp = s->hp; b->maxHp = s->maxHp; b->status = s->status; b->type1 = s->type1; b->type2 = s->type2;
+            charcode_t nick[MON_NAME_LEN + 1]; int n = 0;
+            while (n < MON_NAME_LEN && n < GEN5_NAME_LENGTH && s->nickname[n] != 0xFFFF && s->nickname[n] != 0) { nick[n] = (charcode_t)s->nickname[n]; n++; }
+            nick[n] = CHAR_EOS; MonDisplayName(nick, n > 0, s->species, b->nickname);
+        }
+        return TRUE;
+    }
+#endif
     if (sBattleSys == NULL) {
         return FALSE;
     }
@@ -1306,6 +1358,9 @@ static BOOL CanThrowBattlePokeBall(void)
 
 int Gear_BattleWeather(void)
 {
+#ifdef GEN5_BATTLES
+    if (Gen5Battle_IsShown()) { Gen5BattleState st; return (Gen5_GetBattleState(&st) && st.active && st.weather >= 1 && st.weather <= 4) ? st.weather : 0; }
+#endif
     if (sBattleSys == NULL) {
         return 0;
     }

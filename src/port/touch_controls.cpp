@@ -1054,7 +1054,6 @@ void TouchControls_DrawOverlay(void) {
     const bool needsDsScreen = inBattle && (Gear_BattleNeedsDsScreen() != FALSE);
     const bool battleOverlayActive = pipOverlayMode && inBattle && !needsDsScreen;
     const bool hideFaceButtonsInBattle = pipOverlayMode && inBattle;
-
     SyncAndroidOverlayScale(GetTopLeftWidthFraction(cfg));
     SyncAndroidBattleMode(inBattle);
     SyncAndroidPipAutoFade(cfg->topRightOverlayAutoFade != FALSE);
@@ -1062,7 +1061,7 @@ void TouchControls_DrawOverlay(void) {
         ? 2
         : ((companionFull || (pipOverlayMode && needsDsScreen))
             ? 1
-            : (pipOverlayMode ? ((pipMinimized || battleOverlayActive) ? 4 : 3) : 0));
+            : (pipOverlayMode ? ((pipMinimized || battleMenuVisible) ? 4 : 3) : 0));
     SyncAndroidLayoutMode(androidLayoutMode);
 
     if (!cfg->touchOverlay || primaryFull || companionFull) {

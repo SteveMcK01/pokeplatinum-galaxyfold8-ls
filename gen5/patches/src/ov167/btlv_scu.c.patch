@@ -9,3 +9,114 @@
      scu->msgBitmap = BmpWin_GetBitmap(scu->msgWin);
      BmpWin_FlushMap(scu->msgWin);
      if (GetStudioMode(scu->mainModule) != BTL_STUDIO_MODE_PLAYBACK) {
+@@ -1800,13 +1800,95 @@
+     }
+ }
+ 
++// Wraps a battle message to fit inside the 13-tile (104px) narrowed msgWin
++static const StrBuf *BtlvScu_WrapMsgStr(BtlvScu *scu, const StrBuf *src) {
++    const u16 *p;
++    u16 eom;
++    u16 cmdChar;
++    u32 lineW = 0;
++    u32 lineNum = 0;
++    const u32 maxW = 102;
++
++    if (src == NULL || scu->lineStrbuf == NULL || src == scu->lineStrbuf) {
++        return src;
++    }
++    p = GFL_StrBufGetStringPtr(src);
++    if (p == NULL) {
++        return src;
++    }
++    eom = GFL_StrBufGetTerminator();
++    cmdChar = GFL_StrCmdGetIdentChar();
++    GFL_StrBufClear(scu->lineStrbuf);
++
++    while (*p != eom) {
++        if (*p == 0xFFFE) {
++            GFL_StrBufAppend(scu->lineStrbuf, *p++);
++            lineW = 0;
++            lineNum++;
++            continue;
++        }
++        if (*p == cmdChar) {
++            const u16 *next = GFL_StrCmdSkipCommand(p);
++            if (GFL_StrCmdGetCommandCategory(p) == STRCMD_CATEGORY_STREAM) {
++                u32 idx = GFL_StrCmdGetCommandIndex(p);
++                if (idx == 0 || idx == 1) {
++                    lineW = 0;
++                    lineNum = 0;
++                }
++            }
++            while (p < next) {
++                GFL_StrBufAppend(scu->lineStrbuf, *p++);
++            }
++            continue;
++        }
++        if (*p == 0x0020) {
++            u32 spW = GFL_FontGetCharWidth(scu->font, 0x0020);
++            u32 wordW = 0;
++            const u16 *w = p + 1;
++            while (*w != eom && *w != 0xFFFE && *w != 0x0020 && *w != cmdChar) {
++                wordW += GFL_FontGetCharWidth(scu->font, *w++);
++            }
++            if (lineW > 0 && lineW + spW + wordW > maxW) {
++                if (lineNum >= 1) {
++                    GFL_StrCmdBuild(scu->lineStrbuf, STRCMD_CATEGORY_STREAM, 0, 0, NULL);
++                } else {
++                    GFL_StrBufAppend(scu->lineStrbuf, 0xFFFE);
++                }
++                lineW = 0;
++                lineNum++;
++                p++;
++                continue;
++            }
++            GFL_StrBufAppend(scu->lineStrbuf, *p++);
++            lineW += spW;
++            continue;
++        }
++        {
++            u32 cw = GFL_FontGetCharWidth(scu->font, *p);
++            if (lineW > 0 && lineW + cw > maxW) {
++                if (lineNum >= 1) {
++                    GFL_StrCmdBuild(scu->lineStrbuf, STRCMD_CATEGORY_STREAM, 0, 0, NULL);
++                } else {
++                    GFL_StrBufAppend(scu->lineStrbuf, 0xFFFE);
++                }
++                lineW = 0;
++                lineNum++;
++            }
++            GFL_StrBufAppend(scu->lineStrbuf, *p++);
++            lineW += cw;
++        }
++    }
++    return scu->lineStrbuf;
++}
++
+ // Prints a message at once
+ void BtlvScu_PrintMsgAtOnce(BtlvScu *scu, const StrBuf *strbuf) {
+     u16 color = BtlvScu_GetClearColor(scu, 12);
++    const StrBuf *wrapped = BtlvScu_WrapMsgStr(scu, strbuf);
+ 
+     GFL_BitmapFill(scu->msgBitmap, color);
+     GFL_TextRndUpdateColorIndexLUT(1, 9, color);
+-    GFL_TextRendererDrawToBitmap(scu->msgBitmap, 0, 0, strbuf, scu->font);
++    GFL_TextRendererDrawToBitmap(scu->msgBitmap, 0, 0, wrapped, scu->font);
+     BmpWin_FlushChar(scu->msgWin);
+     scu->msgSeq = 0;
+     scu->waitTimer = 0;
+@@ -1819,11 +1901,12 @@
+ // Starts streaming a message, which BtlvScu_WaitMsg runs
+ void BtlvScu_StartMsg(BtlvScu *scu, const StrBuf *strbuf, u16 wait, BtlvMsgCallback callback) {
+     u16 color = BtlvScu_GetClearColor(scu, 12);
++    const StrBuf *wrapped = BtlvScu_WrapMsgStr(scu, strbuf);
+ 
+     GFL_BitmapFill(scu->msgBitmap, color);
+     GFL_TextRndUpdateColorIndexLUT(1, 9, color);
+     scu->printStream =
+-        PrintStream_CreateWithCallback(scu->msgWin, 0, 0, strbuf, scu->font, GetTextWait(scu->mainModule),
++        PrintStream_CreateWithCallback(scu->msgWin, 0, 0, wrapped, scu->font, GetTextWait(scu->mainModule),
+                                        scu->tcbManager, 0, scu->heapId, color, callback);
+     PrintStream_Pause(scu->printStream);
+     scu->msgSeq = 0;

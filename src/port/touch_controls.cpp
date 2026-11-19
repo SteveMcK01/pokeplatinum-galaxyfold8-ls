@@ -828,7 +828,7 @@ static void DrawFullScreenBattleOverlay(ImDrawList *dl, const ImVec2 &disp, floa
     }
 
     // 3. Bottom-Right Command / Move Card Panel (leaves bottom-left dialogue window open!)
-    const float panelX0 = disp.x * 0.435f;
+    const float panelX0 = disp.x * 0.474f;
     const float panelX1 = disp.x * 0.988f;
     const float panelY0 = disp.y * 0.772f;
     const float panelY1 = disp.y * 0.962f;

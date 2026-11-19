@@ -43,3 +43,13 @@
      if (TrainerMsg_CheckExists(trainerId, msgId, core->heapId)) {
          TrainerMsg_Load(trainerId, msgId, core->strbuf, core->heapId);
          BtlvCore_StartMsgStr(core, core->strbuf, 0x50, NULL);
+@@ -1658,7 +1679,9 @@
+     return BtlvScd_PollYesNo(core->scd, answer);
+ }
+ 
++void Gen5_PortSetSubAppOpen(BOOL open);
+ void BtlvCore_StartForgetMoveSelect(BtlvCore *core, u8 partyIndex, u16 move) {
++    Gen5_PortSetSubAppOpen(TRUE);
+     BtlvCore_SetupPokeListParam(core, &core->ov287, BPLIST_MODE_FORGET_MOVE, partyIndex, move);
+     core->subSeq = 0;
+ }

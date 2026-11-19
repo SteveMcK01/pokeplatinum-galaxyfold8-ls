@@ -59,7 +59,7 @@
          input = BtlvInput_CheckInput(scd->input, &sCommandButtons, sCommandStops);
          if (input != TOUCH_RECT_NONE) {
              scd->result = sCommandResults[input];
-@@ -1359,3 +1376,160 @@
+@@ -1359,3 +1376,170 @@
  void BtlvScd_StartTypeIconAnim(BtlvScd *scd, int index) {
      BtlvInput_StartTypeIconAnim(scd->input, index);
  }

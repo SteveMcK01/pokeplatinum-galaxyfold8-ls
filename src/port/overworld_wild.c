@@ -11,6 +11,7 @@
 
 #include "constants/heap.h"
 #include "constants/pokemon.h"
+#include "constants/species.h"
 #include "generated/pokemon_data_params.h"
 
 #include "encounter.h"
@@ -433,11 +434,26 @@ static void TriggerSlotEncounter(FieldSystem *fieldSystem, int slotIdx)
     Encounter_NewVsWild(fieldSystem, dto);
 }
 
+static BOOL ShouldSubmergeWaterSpecies(u16 species, u8 form) {
+    if (species == SPECIES_GYARADOS || species == SPECIES_MANTINE || species == SPECIES_MANTYKE) {
+        return TRUE;
+    }
+    u32 type1 = SpeciesData_GetFormValue(species, form, SPECIES_DATA_TYPE_1);
+    u32 type2 = SpeciesData_GetFormValue(species, form, SPECIES_DATA_TYPE_2);
+    if (type1 == TYPE_FLYING || type2 == TYPE_FLYING) {
+        return FALSE;
+    }
+    return TRUE;
+}
+
 BOOL OverworldWild_IsWaterSpawn(const MapObject *obj) {
     if (obj == NULL) return FALSE;
     for (int i = 0; i < OVERWORLD_WILD_MAX_ACTIVE; i++) {
         if (sWildSlots[i].active && sWildSlots[i].mapObj == obj) {
-            return sWildSlots[i].isWaterSpawn;
+            if (!sWildSlots[i].isWaterSpawn) {
+                return FALSE;
+            }
+            return ShouldSubmergeWaterSpecies(sWildSlots[i].species, sWildSlots[i].form);
         }
     }
     return FALSE;

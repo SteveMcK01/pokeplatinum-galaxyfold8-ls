@@ -1,109 +1,154 @@
-// Backtraces for scripted test runs on desktop Linux (include/port/test_script.h): gdb can't run in the Docker
-// container under Rosetta, so a crash, or a run the harness stops at its time limit, prints the game thread's
-// backtrace as addresses from the executable's start, which tools/docker/desktop.sh turns into functions and lines.
+// Crash and hang backtraces for desktop test runs and Android builds (port/test_script.h).
 // C++ for POSIX's signal API: the game's C files build as C99.
 
 #include "port/test_script.h"
 
-#if defined(SDK_BUILD_LINUX) && !defined(SDK_BUILD_ANDROID)
+#if defined(__linux__)
 
-#include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-
+#include <dlfcn.h>
 #include <execinfo.h>
+#include <fcntl.h>
 #include <pthread.h>
 #include <signal.h>
-#include <ucontext.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
-// Where the linker put the executable's start (GNU ld's symbol)
-extern "C" char __executable_start;
+#if defined(__ANDROID__)
+#include <android/log.h>
+#else
+extern char __executable_start;
+#endif
 
-// The game's thread, which a hang's backtrace is of
 static pthread_t sGameThread;
+static volatile sig_atomic_t sExitExpected;
+static volatile sig_atomic_t sInstalled;
 
-static void PrintBacktrace(const char *what)
+void TestScript_ExitExpected(void)
 {
-    char line[96];
-    const uintptr_t base = (uintptr_t)&__executable_start;
-    int length = snprintf(line, sizeof(line), "[test] %s, base %#lx\n", what, (unsigned long)base);
+    sExitExpected = 1;
+}
+
+static uintptr_t ImageBase(void)
+{
+#if defined(__ANDROID__)
+    Dl_info info;
+    if (dladdr((const void *)&TestScript_InstallCrashHandlers, &info) != 0 && info.dli_fbase != nullptr) {
+        return (uintptr_t)info.dli_fbase;
+    }
+    return 0;
+#else
+    return (uintptr_t)&__executable_start;
+#endif
+}
+
+static void WriteCrashLine(int logFd, const char *line, int length)
+{
+    if (length <= 0) {
+        return;
+    }
     write(STDOUT_FILENO, line, length);
+    if (logFd >= 0) {
+        write(logFd, line, length);
+    }
+#if defined(__ANDROID__)
+    __android_log_print(ANDROID_LOG_FATAL, "PokePlatinumCrash", "%s", line);
+#endif
+}
+
+static void PrintBacktrace(const char *what, int logFd)
+{
+    const uintptr_t base = ImageBase();
+    char line[160];
+    int length = snprintf(line, sizeof(line), "[crash] %s, base %#lx\n", what, (unsigned long)base);
+    WriteCrashLine(logFd, line, length);
     void *frames[64];
     const int count = backtrace(frames, 64);
     for (int i = 0; i < count; i++) {
-        length = snprintf(line, sizeof(line), "[test] frame %#lx\n", (unsigned long)((uintptr_t)frames[i] - base));
-        write(STDOUT_FILENO, line, length);
+        Dl_info info;
+        if (dladdr(frames[i], &info) != 0 && info.dli_sname != nullptr) {
+            length = snprintf(line, sizeof(line), "[crash] frame #%02d %#lx (%s+%#lx)\n", i,
+                (unsigned long)((uintptr_t)frames[i] - base), info.dli_sname,
+                (unsigned long)((uintptr_t)frames[i] - (uintptr_t)info.dli_saddr));
+        } else {
+            length = snprintf(line, sizeof(line), "[crash] frame #%02d %#lx\n", i,
+                (unsigned long)((uintptr_t)frames[i] - base));
+        }
+        WriteCrashLine(logFd, line, length);
     }
 }
 
 static void OnCrash(int number, siginfo_t *info, void *context)
 {
-    char what[32];
-    snprintf(what, sizeof(what), "CRASH signal %d", number);
+    int logFd = -1;
+#if defined(__ANDROID__)
+    logFd = open("crash.log", O_WRONLY | O_CREAT | O_TRUNC, 0666);
+#endif
+    char what[48];
+    snprintf(what, sizeof(what), "CRASH signal %d (addr %p)", number, info != nullptr ? info->si_addr : nullptr);
 #if defined(__x86_64__)
-    // Where it crashed first: the unwinder can crash in a corrupt stack, and nothing is printed then
     {
         const ucontext_t *early = (const ucontext_t *)context;
-        char line[128];
+        const uintptr_t base = ImageBase();
+        char line[160];
         int length = snprintf(line, sizeof(line), "[test] CRASH signal %d at %#lx, base %#lx, address %p\n", number,
-                              (unsigned long)(early->uc_mcontext.gregs[REG_RIP] - (uintptr_t)&__executable_start),
-                              (unsigned long)(uintptr_t)&__executable_start, info->si_addr);
-        write(STDOUT_FILENO, line, length);
+                              (unsigned long)(early->uc_mcontext.gregs[REG_RIP] - base),
+                              (unsigned long)base, info != nullptr ? info->si_addr : nullptr);
+        WriteCrashLine(logFd, line, length);
     }
-#endif
-    PrintBacktrace(what);
-#if defined(__x86_64__)
-    // Where it crashed, and the return address on top of the stack: what's left of the backtrace when the crash is a
-    // call to a bad address, which the unwinder can't get past
-    const ucontext_t *ucontext = (const ucontext_t *)context;
-    const uintptr_t base = (uintptr_t)&__executable_start;
-    const uintptr_t pc = ucontext->uc_mcontext.gregs[REG_RIP];
-    const uintptr_t top = *(const uintptr_t *)ucontext->uc_mcontext.gregs[REG_RSP];
-    char line[128];
-    int length = snprintf(line, sizeof(line), "[test] crashed at %#lx (address %p); the stack's top %#lx\n",
-                          (unsigned long)pc, info->si_addr, (unsigned long)top);
-    write(STDOUT_FILENO, line, length);
-    length = snprintf(line, sizeof(line), "[test] frame %#lx\n[test] frame %#lx\n", (unsigned long)(pc - base),
-                      (unsigned long)(top - base));
-    write(STDOUT_FILENO, line, length);
+#elif defined(__aarch64__)
+    {
+        const ucontext_t *early = (const ucontext_t *)context;
+        const uintptr_t base = ImageBase();
+        char line[192];
+        int length = snprintf(line, sizeof(line), "[crash] CRASH signal %d pc=%#lx lr=%#lx base=%#lx addr=%p\n", number,
+                              (unsigned long)(early->uc_mcontext.pc - base),
+                              (unsigned long)(early->uc_mcontext.regs[30] - base),
+                              (unsigned long)base, info != nullptr ? info->si_addr : nullptr);
+        WriteCrashLine(logFd, line, length);
+    }
 #else
-    (void)info;
     (void)context;
 #endif
-    _exit(1);
+    PrintBacktrace(what, logFd);
+    if (logFd >= 0) {
+        fsync(logFd);
+        close(logFd);
+    }
+    _exit(128 + number);
 }
 
-// One sample of where the game is: the harness takes a few, then stops the run
+#if !defined(__ANDROID__)
 static void OnHang(int number)
 {
     if (!pthread_equal(pthread_self(), sGameThread)) {
         pthread_kill(sGameThread, number);
         return;
     }
-    PrintBacktrace("HANG");
+    PrintBacktrace("HANG", -1);
+    _exit(128 + number);
 }
 
-static bool sExitExpected;
-
-void TestScript_ExitExpected(void)
-{
-    sExitExpected = true;
-}
-
-// Who quits: a run that ends without the script saying so shows where from
 static void OnExit(void)
 {
     if (!sExitExpected) {
-        PrintBacktrace("EXIT");
+        PrintBacktrace("EXIT", -1);
     }
 }
+#endif
 
 void TestScript_InstallCrashHandlers(void)
 {
+    if (sInstalled) {
+        return;
+    }
+    sInstalled = 1;
     sGameThread = pthread_self();
+#if !defined(__ANDROID__)
     atexit(OnExit);
-    // On a stack of their own, so that a stack overflow's backtrace can be taken
+#endif
     static char signalStack[1 << 16];
     stack_t stack = {};
     stack.ss_sp = signalStack;
@@ -111,10 +156,12 @@ void TestScript_InstallCrashHandlers(void)
     sigaltstack(&stack, nullptr);
 
     struct sigaction action = {};
+#if !defined(__ANDROID__)
     action.sa_flags = SA_ONSTACK | SA_RESTART;
     action.sa_handler = OnHang;
     sigaction(SIGQUIT, &action, nullptr);
-    action.sa_flags |= SA_SIGINFO;
+#endif
+    action.sa_flags = SA_ONSTACK | SA_RESTART | SA_SIGINFO;
     action.sa_sigaction = OnCrash;
     const int crashes[] = { SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT };
     for (int number : crashes) {
@@ -125,6 +172,10 @@ void TestScript_InstallCrashHandlers(void)
 #else
 
 void TestScript_ExitExpected(void)
+{
+}
+
+void TestScript_InstallCrashHandlers(void)
 {
 }
 

@@ -365,7 +365,10 @@ static BOOL MovementAnimation_End(MoveAnimData *data)
 enum MovementAction MovementAction_TurnActionTowardsDir(int targetDir, enum MovementAction movementAction)
 {
     int dir;
-    GF_ASSERT(targetDir < MAX_DIR);
+    GF_ASSERT(targetDir >= 0 && targetDir < MAX_DIR);
+    if (targetDir < 0 || targetDir >= MAX_DIR) {
+        return movementAction;
+    }
     const int *const *movementActionCodes = gMovementActionCodes;
 
     while (*movementActionCodes) {
@@ -442,6 +445,15 @@ BOOL sub_020658DC(MapObject *mapObj)
 
 static BOOL MapObject_DoMovementActionStep(MapObject *mapObj, enum MovementAction movementAction, int movementStep)
 {
+#ifdef SDK_PORT
+    if ((int)movementAction < 0 || (int)movementAction >= MOVEMENT_ACTION_COUNT_PORT
+        || gMovementActionFuncs[movementAction] == NULL
+        || gMovementActionFuncs[movementAction][movementStep] == NULL) {
+        printf("MapObject: unimplemented movement action %d (step %d) on localID %d\n",
+            (int)movementAction, movementStep, mapObj != NULL ? MapObject_GetLocalID(mapObj) : -1);
+        return MovementAction_End(mapObj);
+    }
+#endif
     return gMovementActionFuncs[movementAction][movementStep](mapObj);
 }
 

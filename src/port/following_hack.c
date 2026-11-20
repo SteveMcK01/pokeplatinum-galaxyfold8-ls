@@ -1089,6 +1089,14 @@ static BOOL FollowerOnWarp(MapObject *mapObj)
 // hk_23CA4D0
 static int FollowerMovement_Wait(MapObject *mapObj, FollowerMovement *data)
 {
+    if (MapObject_CheckStatusFlag(mapObj, MAP_OBJ_STATUS_4)) {
+        if (sub_020658DC(mapObj) == TRUE) {
+            sub_02062D10(mapObj);
+            sub_02062D80(mapObj, 0);
+        }
+        return FALSE;
+    }
+
     sub_02062D10(mapObj);
     MapObject_SetEndMovementOff(mapObj);
 
@@ -1215,6 +1223,14 @@ static void FollowerWalk_Update(MapObject *mapObj)
 // Movement 0x45 (hk_23CA8C8): out of sight while the player rides or surfs
 static int FollowerStand_Wait(MapObject *mapObj, FollowerMovement *data)
 {
+    if (MapObject_CheckStatusFlag(mapObj, MAP_OBJ_STATUS_4)) {
+        if (sub_020658DC(mapObj) == TRUE) {
+            sub_02062D10(mapObj);
+            sub_02062D80(mapObj, 0);
+        }
+        return FALSE;
+    }
+
     sub_02062D10(mapObj);
     MapObject_SetEndMovementOff(mapObj);
     PlayerAvatar *playerAvatar = FieldSystem_GetPlayerAvatar(MapObject_FieldSystem(mapObj));
@@ -1524,8 +1540,12 @@ static BOOL ScrCmd_FollowerPause(ScriptContext *ctx)
 
 static BOOL FollowerAnimationDone(ScriptContext *ctx)
 {
+    (void)ctx;
     MapObject *follower = GetFollower();
-    if (follower == NULL || MapObject_CheckStatusFlag(follower, 1 << 30)) {
+    if (follower == NULL) {
+        return TRUE;
+    }
+    if (MapObject_CheckStatusFlag(follower, 1 << 30)) {
         return FALSE;
     }
     return LocalMapObj_CheckAnimationFinished(follower);
@@ -1644,7 +1664,12 @@ static BOOL ScrCmd_ObjectBall(ScriptContext *ctx)
     int species = FieldSystem_TryGetVar(fieldSystem, ScriptContext_ReadHalfWord(ctx));
     int type = FieldSystem_TryGetVar(fieldSystem, ScriptContext_ReadHalfWord(ctx));
 
-    MapObject *mapObj = MapObjMan_LocalMapObjByIndex(fieldSystem->mapObjMan, localID);
+    MapObject *mapObj = (localID == FOLLOWER_LOCAL_ID || localID == 0xFD)
+        ? GetFollower()
+        : MapObjMan_LocalMapObjByIndex(fieldSystem->mapObjMan, localID);
+    if (mapObj == NULL) {
+        return FALSE;
+    }
     sub_020656AC(mapObj);
     StartBallEffect(mapObj, type, species);
     return FALSE;
@@ -1672,9 +1697,11 @@ static BOOL ScrCmd_FirstBattler(ScriptContext *ctx)
 // 857: the follower's animation (a hop)
 static BOOL ScrCmd_FollowerAnimation(ScriptContext *ctx)
 {
-    if (FollowerActive(ctx->fieldSystem)) {
-        static MapObjectAnimCmd cmds[12];
-        for (int i = 0; i < (int)NELEMS(cmds); i++) {
+    MapObject *follower = GetFollower();
+    if (FollowerActive(ctx->fieldSystem) && follower != NULL) {
+        static MapObjectAnimCmd cmds[13];
+        int i = 0;
+        for (; i < 12; i++) {
             u32 entry = BLOB_BALL_ANIM_CMDS + i * 4;
             cmds[i].movementAction = Read16(entry);
             cmds[i].count = Read16(entry + 2);
@@ -1682,7 +1709,11 @@ static BOOL ScrCmd_FollowerAnimation(ScriptContext *ctx)
                 break;
             }
         }
-        MapObject_StartAnimation(GetFollower(), cmds);
+        if (i == 12) {
+            cmds[12].movementAction = MOVEMENT_ACTION_END;
+            cmds[12].count = 0;
+        }
+        MapObject_StartAnimation(follower, cmds);
     }
     return FALSE;
 }

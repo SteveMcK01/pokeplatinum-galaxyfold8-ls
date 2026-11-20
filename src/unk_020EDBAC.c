@@ -635,7 +635,7 @@ extern BOOL (*const gMovementActionFuncs_FollowerHopSouth[])(MapObject *);
 extern BOOL (*const gMovementActionFuncs_FollowerHopWest[])(MapObject *);
 extern BOOL (*const gMovementActionFuncs_FollowerHopEast[])(MapObject *);
 extern BOOL (*const gMovementActionFuncs_FollowerEmote[])(MapObject *);
-BOOL (*const *const gMovementActionFuncs[MAX_MOVEMENT_ACTION + 18])(MapObject *) = {
+BOOL (*const *const gMovementActionFuncs[MOVEMENT_ACTION_COUNT_PORT])(MapObject *) = {
 #else
 BOOL (*const *const gMovementActionFuncs[MAX_MOVEMENT_ACTION])(MapObject *) = {
 #endif
@@ -799,6 +799,7 @@ BOOL (*const *const gMovementActionFuncs[MAX_MOVEMENT_ACTION])(MapObject *) = {
     [156] = gMovementActionFuncs_FollowerHopWest,
     [157] = gMovementActionFuncs_FollowerHopEast,
     [158 ... 171] = gMovementActionFuncs_FollowerEmote,
+    [0xFE] = gMovementActionFuncs_FollowerEmote,
 #endif
 };
 

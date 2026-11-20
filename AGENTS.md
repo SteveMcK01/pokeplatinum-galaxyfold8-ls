@@ -11,6 +11,9 @@
 
 ## Last Worked On
 
+- **Pastoria City Cutscene & MapObject Script NULL Guards (`src/scrcmd.c`):**
+  - Guarded `ScrCmd_Unused_06A` (`0x006A`, `GetObjectPos`) and all object-lookup script commands in `src/scrcmd.c` (`LockObject`, `ReleaseObject`, `SetObjectFlagIsPersistent`, `SetMovementType`, `GetMovementType`, `SetPosition`, `18C`, `ShowObject`, `HideObject`, `ShakeObject`, `FlickerObject`, `Unused_2A1`, `2B6`) via `GetLocalMapObjByIndex` + `NULL` checks so unspawned local IDs (such as `0x2e` in Pastoria City) or follower IDs (`0xF4`/`0xFD`) return safely instead of dereferencing `NULL` in `MapObject_GetX` on Android ARM64.
+
 - **Gen 5 Effectiveness Type Offset, Core Yes/No Prompts & Move-Forget Screen:**
   - Offset BW2 `PokeType` IDs `>= 9` (`Fire`..`Dark`) by `+1` in `Gen5_GetBattleState` (`gen5/src/runtime.c`) to match Platinum's `TYPE_MYSTERY = 9`.
   - Checked `BTLV_INPUT_SCREEN_YES_NO` before `scd->numProcs == 0` in `Gen5_PortQueryBattleMenu` (`gen5/patches/src/ov169/btlv_scd.c.patch`) so `BtlvCore_ShowYesNo` prompts render `YES`/`NO` cards.

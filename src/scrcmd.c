@@ -2090,6 +2090,7 @@ static BOOL ScrCmd_Unused_2A1(ScriptContext *ctx)
 
     if (v4 == NULL) {
         GF_ASSERT(FALSE);
+        return FALSE;
     }
 
     MapObjectAnimCmd *v10 = Heap_Alloc(HEAP_ID_FIELD1, sizeof(MapObjectAnimCmd) * 64);
@@ -2386,8 +2387,10 @@ static BOOL ScrCmd_LockObject(ScriptContext *ctx)
 {
     FieldSystem *fieldSystem = ctx->fieldSystem;
 
-    MapObject *mapObj = MapObjMan_LocalMapObjByIndex(fieldSystem->mapObjMan, ScriptContext_ReadHalfWord(ctx));
-    MapObject_SetPauseMovementOn(mapObj);
+    MapObject *mapObj = GetLocalMapObjByIndex(fieldSystem, ScriptContext_ReadHalfWord(ctx));
+    if (mapObj != NULL) {
+        MapObject_SetPauseMovementOn(mapObj);
+    }
 
     return FALSE;
 }
@@ -2396,8 +2399,10 @@ static BOOL ScrCmd_ReleaseObject(ScriptContext *ctx)
 {
     FieldSystem *fieldSystem = ctx->fieldSystem;
 
-    MapObject *mapObj = MapObjMan_LocalMapObjByIndex(fieldSystem->mapObjMan, ScriptContext_ReadHalfWord(ctx));
-    MapObject_SetPauseMovementOff(mapObj);
+    MapObject *mapObj = GetLocalMapObjByIndex(fieldSystem, ScriptContext_ReadHalfWord(ctx));
+    if (mapObj != NULL) {
+        MapObject_SetPauseMovementOff(mapObj);
+    }
 
     return FALSE;
 }
@@ -2523,9 +2528,14 @@ static BOOL ScrCmd_Unused_06A(ScriptContext *ctx)
 {
     FieldSystem *fieldSystem = ctx->fieldSystem;
 
-    MapObject *mapObj = MapObjMan_LocalMapObjByIndex(fieldSystem->mapObjMan, ScriptContext_GetVar(ctx));
+    MapObject *mapObj = GetLocalMapObjByIndex(fieldSystem, ScriptContext_GetVar(ctx));
     u16 *v1 = ScriptContext_GetVarPointer(ctx);
     u16 *v2 = ScriptContext_GetVarPointer(ctx);
+    if (mapObj == NULL) {
+        *v1 = 0;
+        *v2 = 0;
+        return FALSE;
+    }
     *v1 = MapObject_GetX(mapObj);
     *v2 = MapObject_GetZ(mapObj);
 
@@ -2561,19 +2571,23 @@ static BOOL ScrCmd_MoveCamera(ScriptContext *ctx)
 
 static BOOL ScrCmd_SetObjectFlagIsPersistent(ScriptContext *ctx)
 {
-    MapObject *mapObj = MapObjMan_LocalMapObjByIndex(ctx->fieldSystem->mapObjMan, ScriptContext_GetVar(ctx));
+    MapObject *mapObj = GetLocalMapObjByIndex(ctx->fieldSystem, ScriptContext_GetVar(ctx));
     u8 flag = ScriptContext_ReadByte(ctx);
 
-    MapObject_SetFlagIsPersistent(mapObj, flag);
+    if (mapObj != NULL) {
+        MapObject_SetFlagIsPersistent(mapObj, flag);
+    }
     return FALSE;
 }
 
 static BOOL ScrCmd_SetMovementType(ScriptContext *ctx)
 {
-    MapObject *mapObj = MapObjMan_LocalMapObjByIndex(ctx->fieldSystem->mapObjMan, ScriptContext_GetVar(ctx));
+    MapObject *mapObj = GetLocalMapObjByIndex(ctx->fieldSystem, ScriptContext_GetVar(ctx));
     u16 movementType = ScriptContext_ReadHalfWord(ctx);
 
-    MapObject_SwitchMovementType(mapObj, movementType);
+    if (mapObj != NULL) {
+        MapObject_SwitchMovementType(mapObj, movementType);
+    }
     return FALSE;
 }
 
@@ -2582,7 +2596,7 @@ static BOOL ScrCmd_GetMovementType(ScriptContext *ctx)
     u16 *destVar = ScriptContext_GetVarPointer(ctx);
 
     *destVar = MOVEMENT_TYPE_NONE;
-    MapObject *mapObj = MapObjMan_LocalMapObjByIndex(ctx->fieldSystem->mapObjMan, ScriptContext_GetVar(ctx));
+    MapObject *mapObj = GetLocalMapObjByIndex(ctx->fieldSystem, ScriptContext_GetVar(ctx));
 
     if (mapObj != NULL) {
         *destVar = MapObject_GetMovementType(mapObj);
@@ -4641,7 +4655,10 @@ static BOOL ScrCmd_SetPosition(ScriptContext *ctx)
     u16 z = ScriptContext_GetVar(ctx);
     u16 dir = ScriptContext_GetVar(ctx);
 
-    MapObject *mapObject = MapObjMan_LocalMapObjByIndex(ctx->fieldSystem->mapObjMan, localID);
+    MapObject *mapObject = GetLocalMapObjByIndex(ctx->fieldSystem, localID);
+    if (mapObject == NULL) {
+        return FALSE;
+    }
 
     MapObject_SetPosDirFromCoords(mapObject, x, y, z, dir);
     MapObject_RecalculateObjectHeight(mapObject);
@@ -4692,10 +4709,11 @@ static BOOL ScrCmd_18C(ScriptContext *ctx)
     u16 localID = ScriptContext_GetVar(ctx);
     u16 dir = ScriptContext_GetVar(ctx);
 
-    MapObject *mapObj = MapObjMan_LocalMapObjByIndex(ctx->fieldSystem->mapObjMan, localID);
+    MapObject *mapObj = GetLocalMapObjByIndex(ctx->fieldSystem, localID);
 
     if (mapObj == NULL) {
         GF_ASSERT(FALSE);
+        return FALSE;
     }
 
     ov5_021ECDFC(mapObj, dir);
@@ -4943,10 +4961,11 @@ static BOOL ScrCmd_ShowObject(ScriptContext *ctx)
 {
     FieldSystem *fieldSystem = ctx->fieldSystem;
 
-    MapObject *mapObject = MapObjMan_LocalMapObjByIndex(fieldSystem->mapObjMan, ScriptContext_GetVar(ctx));
+    MapObject *mapObject = GetLocalMapObjByIndex(fieldSystem, ScriptContext_GetVar(ctx));
 
     if (mapObject == NULL) {
         GF_ASSERT(FALSE);
+        return FALSE;
     }
 
     MapObject_SetHidden(mapObject, FALSE);
@@ -4957,10 +4976,11 @@ static BOOL ScrCmd_HideObject(ScriptContext *ctx)
 {
     FieldSystem *fieldSystem = ctx->fieldSystem;
 
-    MapObject *mapObject = MapObjMan_LocalMapObjByIndex(fieldSystem->mapObjMan, ScriptContext_GetVar(ctx));
+    MapObject *mapObject = GetLocalMapObjByIndex(fieldSystem, ScriptContext_GetVar(ctx));
 
     if (mapObject == NULL) {
         GF_ASSERT(FALSE);
+        return FALSE;
     }
 
     MapObject_SetHidden(mapObject, TRUE);
@@ -5905,10 +5925,11 @@ static BOOL ScrCmd_ShakeObject(ScriptContext *ctx)
     u16 xOffset = ScriptContext_GetVar(ctx);
     u16 zOffset = ScriptContext_GetVar(ctx);
 
-    MapObject *mapObject = MapObjMan_LocalMapObjByIndex(ctx->fieldSystem->mapObjMan, localID);
+    MapObject *mapObject = GetLocalMapObjByIndex(ctx->fieldSystem, localID);
 
     if (mapObject == NULL) {
         GF_ASSERT(FALSE);
+        return FALSE;
     }
 
     MapObject_Shake(ctx->task, mapObject, times, speed, xOffset, zOffset);
@@ -5921,10 +5942,11 @@ static BOOL ScrCmd_FlickerObject(ScriptContext *ctx)
     u16 times = ScriptContext_GetVar(ctx);
     u16 delay = ScriptContext_GetVar(ctx);
 
-    MapObject *mapObject = MapObjMan_LocalMapObjByIndex(ctx->fieldSystem->mapObjMan, localID);
+    MapObject *mapObject = GetLocalMapObjByIndex(ctx->fieldSystem, localID);
 
     if (mapObject == NULL) {
         GF_ASSERT(FALSE);
+        return FALSE;
     }
 
     MapObject_Flicker(ctx->task, mapObject, times, delay);
@@ -6573,10 +6595,11 @@ static BOOL ScrCmd_2B6(ScriptContext *ctx)
     u16 localID = ScriptContext_GetVar(ctx);
     u16 v2 = ScriptContext_ReadByte(ctx);
 
-    MapObject *mapObject = MapObjMan_LocalMapObjByIndex(ctx->fieldSystem->mapObjMan, localID);
+    MapObject *mapObject = GetLocalMapObjByIndex(ctx->fieldSystem, localID);
 
     if (mapObject == NULL) {
         GF_ASSERT(FALSE);
+        return FALSE;
     }
 
     sub_02062D80(mapObject, v2);

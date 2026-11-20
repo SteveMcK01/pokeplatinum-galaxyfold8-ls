@@ -1,6 +1,6 @@
 --- a/src/ov169/btlv_scd.c
 +++ b/src/ov169/btlv_scd.c
-@@ -539,6 +539,13 @@
+@@ -539,6 +539,14 @@
      return scd;
  }
  
@@ -9,12 +9,13 @@
 +static BOOL sPortSubAppOpen = FALSE;
 +static u16 sPortPendingBallItem = 0;
 +void Gen5_PortQueuePokeBall(u16 item) { sPortPendingBallItem = item; }
++void Gen5_PortSetSubAppOpen(BOOL open) { sPortSubAppOpen = open; }
 +BOOL BtlvInput_PortNoUsableMove(const BtlvInput *work);
 +
  void BtlvScd_CreateInput(BtlvScd *scd) {
      GameData *gameData = GetGameData(scd->mainModule);
      u32 rule = BtlSetup_GetBattleStyle(scd->mainModule);
-@@ -550,6 +557,9 @@
+@@ -550,6 +558,9 @@
      scd->input = BtlvInput_CreateForBattle(gameData, rule, battleType, paletteFade, scd->font, &scd->keyCursorFlag,
                                             scd->scdState, multiMode, studioMode, scd->typeCount, scd->typeMask,
                                             scd->noCancel, scd->heapId);
@@ -24,7 +25,7 @@
      GFL_BGSysSetBGEnabledB(0x10, TRUE);
      BtlvScd_Nop(scd);
  }
-@@ -559,6 +569,7 @@
+@@ -559,6 +570,7 @@
      scd->fadeTo = -16;
      scd->fadeStep = -1;
      BtlvInput_StartPaletteFade(scd->input, mode);
@@ -32,7 +33,7 @@
  }
  
  void BtlvScd_StartFadeIn(BtlvScd *scd) {
-@@ -566,6 +577,7 @@
+@@ -566,6 +578,7 @@
      scd->fadeTo = 0;
      scd->fadeStep = 1;
      BtlvInput_StartFadeInWithGraphics(scd->input);
@@ -40,7 +41,7 @@
  }
  
  BOOL BtlvScd_IsFadeDone(BtlvScd *scd) {
-@@ -605,6 +617,10 @@
+@@ -605,6 +618,10 @@
  }
  
  void BtlvScd_Delete(BtlvScd *scd) {
@@ -51,7 +52,7 @@
      GameData_SetBattleKeyCursorFlag(GetGameData(scd->mainModule), scd->keyCursorFlag);
      PrintQueue_Free(scd->printQueue);
      GFL_StrBufFree(scd->strbuf);
-@@ -882,6 +898,7 @@
+@@ -882,6 +899,7 @@
  
      switch (*seq) {
      case COMMAND_SEQ_SELECT:
@@ -59,7 +60,7 @@
          input = BtlvInput_CheckInput(scd->input, &sCommandButtons, sCommandStops);
          if (input != TOUCH_RECT_NONE) {
              scd->result = sCommandResults[input];
-@@ -1359,3 +1376,170 @@
+@@ -1359,3 +1377,170 @@
  void BtlvScd_StartTypeIconAnim(BtlvScd *scd, int index) {
      BtlvInput_StartTypeIconAnim(scd->input, index);
  }

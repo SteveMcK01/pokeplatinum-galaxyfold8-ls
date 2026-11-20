@@ -6,7 +6,6 @@
 #if defined(__linux__)
 
 #include <dlfcn.h>
-#include <execinfo.h>
 #include <fcntl.h>
 #include <pthread.h>
 #include <signal.h>
@@ -15,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <unwind.h>
 
 #if defined(__ANDROID__)
 #include <android/log.h>
@@ -58,6 +58,31 @@ static void WriteCrashLine(int logFd, const char *line, int length)
 #endif
 }
 
+struct BacktraceState {
+    void **current;
+    void **end;
+};
+
+static _Unwind_Reason_Code UnwindCallback(struct _Unwind_Context *context, void *arg)
+{
+    BacktraceState *state = static_cast<BacktraceState *>(arg);
+    uintptr_t pc = _Unwind_GetIP(context);
+    if (pc != 0) {
+        if (state->current == state->end) {
+            return _URC_END_OF_STACK;
+        }
+        *state->current++ = reinterpret_cast<void *>(pc);
+    }
+    return _URC_NO_REASON;
+}
+
+static int CaptureBacktrace(void **buffer, int maxFrames)
+{
+    BacktraceState state = { buffer, buffer + maxFrames };
+    _Unwind_Backtrace(UnwindCallback, &state);
+    return static_cast<int>(state.current - buffer);
+}
+
 static void PrintBacktrace(const char *what, int logFd)
 {
     const uintptr_t base = ImageBase();
@@ -65,7 +90,7 @@ static void PrintBacktrace(const char *what, int logFd)
     int length = snprintf(line, sizeof(line), "[crash] %s, base %#lx\n", what, (unsigned long)base);
     WriteCrashLine(logFd, line, length);
     void *frames[64];
-    const int count = backtrace(frames, 64);
+    const int count = CaptureBacktrace(frames, 64);
     for (int i = 0; i < count; i++) {
         Dl_info info;
         if (dladdr(frames[i], &info) != 0 && info.dli_sname != nullptr) {

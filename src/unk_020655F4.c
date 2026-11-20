@@ -149,6 +149,8 @@ typedef struct PlayerGiveReceiveMovementData {
 } PlayerGiveReceiveMovementData;
 
 static void MapObject_DoAnimation(SysTask *task, void *data);
+static BOOL MovementAction_End(MapObject *mapObj);
+
 static BOOL MapObject_DoMovementActionStep(MapObject *mapObj, enum MovementAction movementAction, int movementStep);
 
 static const fx32 *sJumpHeightsTable[];

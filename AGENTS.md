@@ -15,6 +15,10 @@
 
 ## Last Worked On
 
+- **Companion UI Enlargement & Handheld Layout Redesign (`subprojects/packagefiles/port_common_large_ui.patch`, `subprojects/port-common.wrap`):**
+  - Increased the Gear companion base scale factor (`frame->width / 380.0f`, minimum `1.15f`) and base font size (`19.0f * sScale`) for crisp readability and thumb-friendly tap targets across phones and foldables.
+  - Enlarged and redesigned all companion screens: Pokédex header & tabs (`54px` bar, `17.5px` bold pills), Party 2x3 cards (dynamic sprite sizing, type badges, thicker HP bars), Area/Pokédex/Berries (46px encounter rows, 2-column Sinnoh berry tree grid), Map legend & item rows, Pokétch caption, PC 6x5 Box grid (vertically expanded cells with `Lv` badges), Bag sort card, and Trainer/Boss rosters.
+
 - **Architecture & Feature Technical Documentation (`docs/architecture/`):** Created `docs/architecture/README.md`, 5 feature guides under `docs/architecture/features/`, and 3 core engine guides under `docs/architecture/core/`, linked from `AGENTS.md` and `docs/thor/README.md`.
 
 - **Static / Legendary Wild Encounters in Gen 5 & Platinum Battle Fallback Fixes (`src/port/gen5_battle.c`, `src/port/gear_data.c`, `src/battle/battle_controller_player.c`):**

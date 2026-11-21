@@ -15,3 +15,5 @@ The player's guide to the Android/Thor build. Most of it applies to the PC build
 | [Building the APK](building.md) | For developers: local and CI builds, logs, technical notes |
 
 The rest of `docs/` is pret's documentation of the decompiled game.
+
+For developer architecture guides covering all fork features and core engine hooks, see [`docs/architecture/README.md`](../architecture/README.md).

@@ -9,7 +9,13 @@
 
 - **Android CI `apt` Stability (`.github/workflows/build_android.yml`):** `Install Software` rewrites Ubuntu 24.04 sources to `http://azure.archive.ubuntu.com/ubuntu/` with IPv4 forced and `timeout-minutes: 25` so cold `apt` cache runs for `gcc-arm-none-eabi` do not time out at 10 minutes.
 
+## Architecture & Technical Docs (`docs/architecture/`)
+
+- **Master Technical Index:** [`docs/architecture/README.md`](docs/architecture/README.md) — Maps every custom fork feature (`docs/architecture/features/`) and core Platinum engine subsystem (`docs/architecture/core/`) to exact source files, functions, config flags, and thread-safety rules.
+
 ## Last Worked On
+
+- **Architecture & Feature Technical Documentation (`docs/architecture/`):** Created `docs/architecture/README.md`, 5 feature guides under `docs/architecture/features/`, and 3 core engine guides under `docs/architecture/core/`, linked from `AGENTS.md` and `docs/thor/README.md`.
 
 - **Static / Legendary Wild Encounters in Gen 5 & Platinum Battle Fallback Fixes (`src/port/gen5_battle.c`, `src/port/gear_data.c`, `src/battle/battle_controller_player.c`):**
   - Updated `Gen5Battle_Wants` (`src/port/gen5_battle.c`) to accept `BATTLE_TYPE_ROAMER` and scripted/legendary wild battle status flags (`BATTLE_STATUS_LEGENDARY`, `BATTLE_STATUS_NO_RUNNING`, `BATTLE_STATUS_GIRATINA`, `BATTLE_STATUS_DISTORTION`)—and mapped Distortion World battles to `ARENA_BG_VOID`—so static encounters like Valley Windworks Drifloon and Legendaries run in the Gen 5 engine instead of falling back to Platinum's engine.

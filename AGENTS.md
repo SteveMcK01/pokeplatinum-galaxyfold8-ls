@@ -16,8 +16,8 @@
 ## Last Worked On
 
 - **Companion UI Enlargement & Handheld Layout Redesign (`subprojects/packagefiles/port_common_large_ui.patch`, `subprojects/port-common.wrap`):**
-  - Increased the Gear companion base scale factor (`frame->width / 380.0f`, minimum `1.15f`) and base font size (`19.0f * sScale`) for crisp readability and thumb-friendly tap targets across phones and foldables.
-  - Enlarged and redesigned all companion screens: Pokédex header & tabs (`54px` bar, `17.5px` bold pills), Party 2x3 cards (dynamic sprite sizing, type badges, thicker HP bars), Area/Pokédex/Berries (46px encounter rows, 2-column Sinnoh berry tree grid), Map legend & item rows, Pokétch caption, PC 6x5 Box grid (vertically expanded cells with `Lv` badges), Bag sort card, and Trainer/Boss rosters.
+  - Increased the Gear companion base scale factor (`frame->width / 380.0f`, minimum `1.35f`) and base font size (`20.0f * sScale`) with dynamic per-frame font pushing so all companion screens scale cleanly on phones and foldables.
+  - Enlarged and redesigned all companion screens: Pokédex header & tabs (`54px` bar, `18px` bold pills, Android status-bar clearance), Party 2x3 cards (type chips, held item, thicker HP bars, and 2x2 type-colored move pills with PP), Area/Pokédex/Berries (46px encounter rows, 2-column Sinnoh berry tree grid), Map zoom/follow controls (`50px`) and dynamically spaced legend/item rows, Pokétch caption, PC 6x5 Box grid (`Lv` pill badges), and Trainer/Boss rosters.
 
 - **Architecture & Feature Technical Documentation (`docs/architecture/`):** Created `docs/architecture/README.md`, 5 feature guides under `docs/architecture/features/`, and 3 core engine guides under `docs/architecture/core/`, linked from `AGENTS.md` and `docs/thor/README.md`.
 

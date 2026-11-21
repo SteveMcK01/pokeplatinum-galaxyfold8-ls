@@ -1,0 +1,132 @@
+diff --git a/src/gear_ui.cpp b/src/gear_ui.cpp
+index 7d99f39..67ed7cf 100644
+--- a/src/gear_ui.cpp
++++ b/src/gear_ui.cpp
+@@ -664,6 +664,37 @@ bool MonCard(int index, const GearMon &mon, ImVec2 size, const char *note = null
+   TextAt(draw, sRegular, S(14.0f), ImVec2(pos.x + size.x - pad - hpSize.x, barY + S(4.5f) - hpSize.y * 0.5f), kText, hp);
+   Bar(draw, ImVec2(pos.x + pad, barY), ImVec2(size.x - pad * 2 - hpSize.x - S(8.0f), S(9.0f)),
+       mon.maxHp ? (float)mon.hp / mon.maxHp : 0.0f, HpColor(mon.hp, mon.maxHp));
++  if (tall && mon.item != ITEM_NONE) {
++    TextAt(draw, sRegular, S(14.5f),
++           ImVec2(textX, line2 + S(23.0f)),
++           kWarn, Gear_ItemName(mon.item));
++  }
++  if (tall && size.y >= S(150.0f)) {
++    const float mTop = barY + S(20.0f);
++    const float mGap = S(6.0f);
++    const float mW = (size.x - pad * 2.0f - mGap) * 0.5f;
++    const float remH = pos.y + size.y - pad - mTop - mGap;
++    const float mH = fminf(S(28.0f), remH * 0.5f);
++    for (int m = 0; m < 4 && mH >= S(18.0f); m++) {
++      if (mon.moves[m] == 0) continue;
++      float mx = pos.x + pad + (m % 2) * (mW + mGap);
++      float my = mTop + (m / 2) * (mH + mGap);
++      int tp = Gear_MoveType(mon.moves[m]);
++      ImU32 mc = (tp >= 0 && tp < 18)
++                   ? kTypeColors[tp] : kPanelPressed;
++      draw->AddRectFilled(
++          ImVec2(mx, my), ImVec2(mx + mW, my + mH),
++          kBarBack, S(6.0f));
++      draw->AddRectFilled(
++          ImVec2(mx, my), ImVec2(mx + S(5.0f), my + mH),
++          mc, S(3.0f));
++      const char *mn = Gear_MoveName(mon.moves[m]);
++      ImVec2 ms = TextSize(sBold, S(14.0f), mn);
++      TextAt(draw, sBold, S(14.0f),
++             ImVec2(mx + S(10.0f), my + (mH - ms.y) * 0.5f),
++             kText, mn);
++    }
++  }
+ 
+   if (dead) {
+     // Fainted for good: dimmed, with a cross
+@@ -987,8 +1018,10 @@ void DrawParty(const SIM_CompanionFrame *frame) {
+   const float gap = S(8.0f);
+   // Three across fits the shared strip; two across when there's a whole screen
+   const int columns = frame->fullScreen ? 2 : 3;
++  const int rows = (sPartyCount + columns - 1) / columns;
++  const float availH = ImGui::GetContentRegionAvail().y - S(8.0f);
+   const float cardWidth = (width - gap * (columns - 1)) / columns;
+-  const float cardHeight = S(82.0f);
++  const float cardHeight = (frame->fullScreen && rows > 0) ? fmaxf(S(96.0f), (availH - gap * (rows - 1)) / (float)rows) : S(86.0f);
+   for (int i = 0; i < sPartyCount; i++) {
+     if (i % columns != 0) {
+       ImGui::SameLine(0.0f, gap);
+@@ -1004,7 +1037,7 @@ bool DexSwitch();
+ void DrawDex();
+ void DrawBerries();
+ bool sBerriesOpen = false; // the Area tab shows the berry patches
+-int Segments(const char *id, const char *const *labels, int count, int value, float height = 34.0f);
++int Segments(const char *id, const char *const *labels, int count, int value, float height = 44.0f;
+ int sSegmentTapped = -1; // the segment Segments() last saw tapped (even the one already chosen), else -1
+ void OpenSpecies(u16 species);
+ void PokeBall(ImDrawList *draw, ImVec2 center, float radius);
+@@ -1451,7 +1484,7 @@ void DrawDexList() {
+   ImGui::TextColored(ImColor(kTextDim), "%d Pokemon%s", count,
+                      Discovery() == GEAR_DISCOVERY_EVERYTHING ? "" : " you've seen (the Guide hides the rest)");
+ 
+-  const float rowHeight = S(36.0f);
++  const float rowHeight = S(44.0f);
+   const float iconSize = PixelSize(S(32.0f), 32.0f);
+   ImGuiListClipper clipper;
+   clipper.Begin(count, rowHeight + ImGui::GetStyle().ItemSpacing.y);
+@@ -3696,7 +3729,7 @@ int Segments(const char *id, const char *const *labels, int count, int value, fl
+     ImGui::PopID();
+     const bool selected = value == i;
+     draw->AddRectFilled(pos, ImVec2(pos.x + w, pos.y + h), selected ? kAccent : (held ? kPanelPressed : kPanel), S(12.0f));
+-    ImVec2 size = TextSize(sBold, S(15.0f), labels[i]);
++    ImVec2 size = TextSize(sBold, S(17.0f), labels[i]);
+     TextAt(draw, sBold, S(15.0f), ImVec2(pos.x + (w - size.x) * 0.5f, pos.y + (h - size.y) * 0.5f),
+            selected ? IM_COL32(16, 24, 34, 255) : kText, labels[i]);
+   }
+@@ -3780,7 +3813,7 @@ void DrawBoxGrid(int box) {
+              dim ? IM_COL32(255, 255, 255, 70) : IM_COL32_WHITE);
+     if (!mon.isEgg) {
+       char level[8];
+-      snprintf(level, sizeof(level), "%u", (unsigned)mon.level);
++      snprintf(level, sizeof(level), "Lv%u", (unsigned)mon.level);
+       ImVec2 size = TextSize(sBold, S(12.0f), level);
+       TextAt(draw, sBold, S(12.0f), ImVec2(pos.x + cell - size.x - S(5.0f), pos.y + cellH - size.y - S(3.0f)),
+              dim ? kTextDim : kText, level);
+@@ -3912,7 +3945,7 @@ void DrawPCBoxes() {
+ 
+   // < Box name (count) >
+   const float h = S(40.0f);
+-  const float arrow = S(52.0f);
++  const float arrow = S(64.0f);
+   ImVec2 pos = ImGui::GetCursorScreenPos();
+   if (Tap("pcprev", ImVec2(arrow, h))) {
+     sPCBox = (sPCBox + GEAR_PC_BOXES - 1) % GEAR_PC_BOXES;
+@@ -4166,11 +4199,11 @@ extern "C" BOOL SIM_Prj_CompanionEnabled(void) {
+ 
+ extern "C" void SIM_Prj_CompanionSetup(float outputWidth) {
+   // Laid out for a 540 px wide panel and scaled from there (the Thor's is 1080)
+-  sScale = outputWidth / 540.0f;
+-  if (sScale < 1.0f) {
+-    sScale = 1.0f;
++  sScale = outputWidth / 380.0f;
++  if (sScale < 1.25f) {
++    sScale = 1.25f;
+   }
+-  sBaseFontSize = 17.0f * sScale;
++  sBaseFontSize = 19.0f * sScale;
+ 
+   ImGuiIO &io = ImGui::GetIO();
+   ImFontConfig config;
+@@ -4210,7 +4243,9 @@ extern "C" void SIM_Prj_CompanionDraw(const SIM_CompanionFrame *frame) {
+   sPictureLoadsThisFrame = 0;
+ 
+   ImGui::SetNextWindowPos(ImVec2(frame->x, frame->y));
++  if (frame->width > 0.0f) { float ns = fmaxf(1.25f, frame->width / (frame->fullScreen ? 380.0f : 320.0f)); if (fabsf(ns - sScale) > 0.01f) { sScale = ns; sBaseFontSize = 19.0f * sScale; } }
+   ImGui::SetNextWindowSize(ImVec2(frame->width, frame->height));
++  if (sRegular) ImGui::PushFont(sRegular, sBaseFontSize);
+   ImGui::Begin("Gear", nullptr,
+                ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
+                    ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoScrollWithMouse |
+@@ -4261,5 +4296,6 @@ extern "C" void SIM_Prj_CompanionDraw(const SIM_CompanionFrame *frame) {
+   ImGui::EndChild();
+ 
+   ImGui::End();
++  if (sRegular) ImGui::PopFont();
+   TouchControls_DrawBottomOverlay(frame->outputWidth, frame->outputHeight);
+ }

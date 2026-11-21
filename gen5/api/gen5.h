@@ -173,6 +173,7 @@ typedef struct Gen5Battle {
     // with catchRefusedText: Unicode, 0xFFFE between lines, 0xFFFF after the last character)
     int levelCap;
     int critGuard;
+    int expShareAll;
     int wildCatchRefused;
     int wild2CatchRefused;
     unsigned short catchRefusedText[GEN5_PORT_TEXT_LENGTH];

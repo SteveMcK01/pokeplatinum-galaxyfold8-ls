@@ -1,16 +1,109 @@
 --- a/src/ov167/btl_server_flow_sub.c
 +++ b/src/ov167/btl_server_flow_sub.c
-@@ -534,7 +534,8 @@
-             numStanding++;
+@@ -505,46 +505,69 @@
+     for (i = 0; i < 6; i++) {
+         MI_CpuFill8(&entries[i], 0, sizeof(BtlFlowExpEntry));
+     }
+-    // An Exp. Share takes half the experience, split among the mons that hold one
+-    for (i = 0; i < numMons; i++) {
+-        mon = GetBattleMonFromParty(party, i);
+-        if (!IsFainted(mon) && GetBattleMonHeldItem(mon) == ITEM_EXP_SHARE) {
+-            numExpShare++;
+-        }
+-    }
+-    if (numExpShare != 0) {
+-        shareExp = baseExp / 2;
+-        baseExp -= shareExp;
+-        shareExp /= numExpShare;
+-        if (shareExp == 0) {
+-            shareExp = 1;
++    if (Gen5_PortExpShareAll()) {
++        // The port: Gen 6-style Exp. Share for the whole party — participants get full EXP,
++        // non-fainted non-Egg party members get half, and a held Exp. Share adds nothing
++        exp = baseExp != 0 ? baseExp : 1;
++        shareExp = baseExp / 2 != 0 ? baseExp / 2 : 1;
++        numFaced = BattleMon_GetConfrontedMonCount(defeated);
++        for (j = 0; j < numMons; j++) {
++            mon = GetBattleMonFromParty(party, j);
++            if (!IsFainted(mon) && !PokeParty_GetParam(GetSrcData(mon), 0x4c /* PKM_PARAM_IS_EGG */, NULL)) {
++                BOOL faced = FALSE;
++                monId = GetMonID(mon);
++                for (k = 0; k < numFaced; k++) {
++                    if (monId == BattleMon_GetConfrontedMonID(defeated, k)) {
++                        faced = TRUE;
++                        break;
++                    }
++                }
++                entries[j].exp = faced ? exp : shareExp;
++            }
          }
-     }
++    } else {
++        // An Exp. Share takes half the experience, split among the mons that hold one
+         for (i = 0; i < numMons; i++) {
+             mon = GetBattleMonFromParty(party, i);
+             if (!IsFainted(mon) && GetBattleMonHeldItem(mon) == ITEM_EXP_SHARE) {
+-                entries[i].exp = shareExp;
++                numExpShare++;
+             }
+         }
+-    }
+-    // The rest is split among the mons that faced the defeated one and are still standing
+-    numFaced = BattleMon_GetConfrontedMonCount(defeated);
+-    numStanding = 0;
+-    for (i = 0; i < numFaced; i++) {
+-        if (!IsFainted(GetPokeParam(flow->pokeCon, BattleMon_GetConfrontedMonID(defeated, i)))) {
+-            numStanding++;
++        if (numExpShare != 0) {
++            shareExp = baseExp / 2;
++            baseExp -= shareExp;
++            shareExp /= numExpShare;
++            if (shareExp == 0) {
++                shareExp = 1;
++            }
++            for (i = 0; i < numMons; i++) {
++                mon = GetBattleMonFromParty(party, i);
++                if (!IsFainted(mon) && GetBattleMonHeldItem(mon) == ITEM_EXP_SHARE) {
++                    entries[i].exp = shareExp;
++                }
++            }
+         }
+-    }
 -    exp = baseExp / numStanding;
-+    // The port: the DS divides by zero to 0 (no mon that faced the defeated one is standing); x86 traps
-+    exp = numStanding != 0 ? baseExp / numStanding : 0;
-     if (exp == 0) {
-         exp = 1;
-     }
-@@ -575,6 +576,8 @@
+-    if (exp == 0) {
+-        exp = 1;
+-    }
+-    for (j = 0; j < numMons; j++) {
+-        mon = GetBattleMonFromParty(party, j);
+-        if (!IsFainted(mon)) {
+-            monId = GetMonID(mon);
+-            for (k = 0; k < numFaced; k++) {
+-                if (monId == BattleMon_GetConfrontedMonID(defeated, k)) {
+-                    entries[j].exp += exp;
++        // The rest is split among the mons that faced the defeated one and are still standing
++        numFaced = BattleMon_GetConfrontedMonCount(defeated);
++        numStanding = 0;
++        for (i = 0; i < numFaced; i++) {
++            if (!IsFainted(GetPokeParam(flow->pokeCon, BattleMon_GetConfrontedMonID(defeated, i)))) {
++                numStanding++;
++            }
++        }
++        // The port: the DS divides by zero to 0 (no mon that faced the defeated one is standing); x86 traps
++        exp = numStanding != 0 ? baseExp / numStanding : 0;
++        if (exp == 0) {
++            exp = 1;
++        }
++        for (j = 0; j < numMons; j++) {
++            mon = GetBattleMonFromParty(party, j);
++            if (!IsFainted(mon)) {
++                monId = GetMonID(mon);
++                for (k = 0; k < numFaced; k++) {
++                    if (monId == BattleMon_GetConfrontedMonID(defeated, k)) {
++                        entries[j].exp += exp;
++                    }
+                 }
+             }
+         }
+@@ -575,6 +598,8 @@
              if (entry->exp > 100000) {
                  entry->exp = 100000;
              }
@@ -19,7 +112,7 @@
          }
      }
      for (i = 0; i < numMons; i++) {
-@@ -879,6 +882,12 @@
+@@ -879,6 +904,12 @@
          }
      }
      if (BtlSetup_GetBattleType(flow->mainModule) == BTL_TYPE_WILD) {

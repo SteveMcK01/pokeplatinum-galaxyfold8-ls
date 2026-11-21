@@ -50,6 +50,7 @@
 #include "charcode_convert.h"
 #include "port/gen5_data.h"
 #include "port/gen5_rom.h"
+#include "port/cheats.h"
 #include "port/nuzlocke_mode.h"
 #include "port/sim_config_prj.h"
 #include "port/test_script.h"
@@ -894,6 +895,7 @@ static void PortNuzlockeToGen5(FieldBattleDTO *dto)
     }
     sBattle.levelCap = cap > 0 && cap <= MAX_POKEMON_LEVEL ? cap : 0;
     sBattle.critGuard = NuzlockeMode_CritGuard();
+    sBattle.expShareAll = Cheats_ExpShareAll();
     if (!sBattle.isTrainer) {
         // The catch rule (NuzlockeMode_OnWildBattleStart ran before the battle, in encounter.c)
         Pokemon *wild = Party_GetPokemonBySlotIndex(dto->parties[BATTLER_ENEMY_1], 0);

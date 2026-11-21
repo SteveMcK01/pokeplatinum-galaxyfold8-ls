@@ -15,6 +15,10 @@
 
 ## Last Worked On
 
+- **Gen 5 Party-Wide Exp. Share (`gen5/api/gen5.h`, `gen5/include/gen5/port.h`, `gen5/src/runtime.c`, `gen5/patches/src/ov167/btl_server_flow_sub.c.patch`, `src/port/gen5_battle.c`):**
+  - Bridged `Cheats_ExpShareAll()` (`Settings > Gameplay > Exp. Share for the whole party`) into `Gen5Battle.expShareAll` and exposed `Gen5_PortExpShareAll()` to the BW2 battle server.
+  - Updated `AddExpAndEVs` in `btl_server_flow_sub.c` so Gen 5 battles apply Gen 6-style party-wide EXP when enabled: active participants receive 100% base EXP, non-fainted non-Egg party members (`0x4c /* PKM_PARAM_IS_EGG */`) receive 50% base EXP, and held Exp. Shares add nothing before level-difference scaling, Lucky Egg/traded bonuses, level caps, and EV distribution.
+
 - **Companion UI Enlargement & Handheld Layout Redesign (`subprojects/packagefiles/port_common_large_ui.patch`, `subprojects/port-common.wrap`):**
   - Increased the Gear companion base scale factor (`frame->width / 380.0f`, minimum `1.35f`) and base font size (`20.0f * sScale`) with dynamic per-frame font pushing so all companion screens scale cleanly on phones and foldables.
   - Enlarged and redesigned all companion screens: Pokédex header & tabs (`54px` bar, `18px` bold pills, Android status-bar clearance), Party 2x3 cards (type chips, held item, thicker HP bars, and 2x2 type-colored move pills with PP), Area/Pokédex/Berries (46px encounter rows, 2-column Sinnoh berry tree grid), Map zoom/follow controls (`50px`) and dynamically spaced legend/item rows, Pokétch caption, PC 6x5 Box grid (`Lv` pill badges), and Trainer/Boss rosters.
@@ -67,5 +71,5 @@
 ### Gameplay & Quality-of-Life Upgrades
 - **Portable PC Box Access:** Open the PC Box from the Start Menu (with restricted-map guardrails) or swap party/box Pokémon anywhere via the Gear panel.
 - **HM & TM Freedom:** Use field moves (Cut, Fly, Surf, Strength, Rock Smash, Waterfall, Rock Climb, Defog) directly from compatible party Pokémon without teaching them (with optional badge bypass), *Universal TM/HM Compatibility*, and *Infinite TMs*.
-- **Evolution, EXP & Timers:** *Trade Evolutions Without Trading* (Lv. 36+ for Kadabra/Haunter/Machoke/Graveler; level-up while holding required item for item-trade evolutions), *Modern EXP Share* (party-wide), *Hard Level Cap* (next Gym Leader cap), *Instant Honey Trees*, reduced Berry growth timers, and *Game Clock Adjustment*.
+- **Evolution, EXP & Timers:** *Trade Evolutions Without Trading* (Lv. 36+ for Kadabra/Haunter/Machoke/Graveler; level-up while holding required item for item-trade evolutions), *Modern EXP Share* (party-wide in both Platinum and Gen 5 battles), *Hard Level Cap* (next Gym Leader cap), *Instant Honey Trees*, reduced Berry growth timers, and *Game Clock Adjustment*.
 - **Built-In Legendary Mystery Gift Events:** Triggers Darkrai (Member Card), Shaymin (Oak's Letter), Arceus (Azure Flute), and Rotom Forms (Secret Key) with prerequisite checks.

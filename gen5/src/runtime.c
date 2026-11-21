@@ -71,6 +71,7 @@ static BtlSetup *sSetup;
 static BagSave *sBag;
 static BOOL sItemInBag[GEN5_ITEMS_MAX];
 static BOOL sRunning;
+static BOOL sExpShareAll;
 
 // Nuzlocke mode (Gen5Battle's levelCap, critGuard and catch refusals), for the port's patches (gen5/port.h)
 static struct {
@@ -355,6 +356,7 @@ int Gen5_BattleBegin(const Gen5Battle *battle, const char *gen5Dir)
     memset(&sNuzlocke, 0, sizeof(sNuzlocke));
     sNuzlocke.levelCap = battle->levelCap;
     sNuzlocke.critGuard = battle->critGuard != 0;
+    sExpShareAll = battle->expShareAll != 0;
     if (!battle->isTrainer && battle->wildCatchRefused) {
         sNuzlocke.refused[sNuzlocke.refusedCount++] = battle->wild.personality;
     }
@@ -914,6 +916,11 @@ u32 Gen5_PortCapExp(u16 species, u16 form, u32 current, u32 exp)
 BOOL Gen5_PortCritGuard(void)
 {
     return sNuzlocke.critGuard;
+}
+
+BOOL Gen5_PortExpShareAll(void)
+{
+    return sExpShareAll;
 }
 
 BOOL Gen5_PortCatchRefused(u32 personality)

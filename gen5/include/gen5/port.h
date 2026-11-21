@@ -124,6 +124,7 @@ void Gen5_G3DReproject(void);
 // knocked back (btl_server_flow_sub.c's)
 u32 Gen5_PortCapExp(u16 species, u16 form, u32 current, u32 exp);
 BOOL Gen5_PortCritGuard(void);
+BOOL Gen5_PortExpShareAll(void);
 BOOL Gen5_PortCatchRefused(u32 personality);
 void Gen5_PortSetSubAppOpen(BOOL open);
 

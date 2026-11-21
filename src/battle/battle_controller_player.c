@@ -338,23 +338,23 @@ int BattleController_PortChoosingBattler(BattleSystem *battleSys)
     }
     return -1;
 }
+static BattleSystem *sPendingBallBattleSys = NULL;
+static int sPendingBallBattler = -1;
+static u16 sPendingBallItem = ITEM_NONE;
+
 BOOL BattleController_PortUseBall(BattleSystem *battleSys, u16 item)
 {
     BattleContext *battleCtx = BattleSystem_GetBattleContext(battleSys);
-    if (battleCtx == NULL) {
+    if (battleCtx == NULL || item == ITEM_NONE) {
         return FALSE;
     }
     int battler = BattleController_PortChoosingBattler(battleSys);
     if (battler < 0 || battleCtx->curCommandState[battler] != COMMAND_SELECTION_SELECT) {
         return FALSE;
     }
-    BattleItemUse used;
-    memset(&used, 0, sizeof(used));
-    used.item = item;
-    used.category = ITEM_BATTLE_CATEGORY_POKE_BALLS;
-    battleCtx->battlerActions[battler][BATTLE_ACTION_PICK_COMMAND] = BATTLE_CONTROL_ITEM;
-    memcpy(&battleCtx->battlerActions[battler][BATTLE_ACTION_TEMP_VALUE], &used, sizeof(used));
-    battleCtx->curCommandState[battler] = COMMAND_SELECTION_WAIT;
+    sPendingBallBattleSys = battleSys;
+    sPendingBallBattler = battler;
+    sPendingBallItem = item;
     return TRUE;
 }
 
@@ -420,6 +420,22 @@ static void BattleControllerPlayer_CommandSelectionInput(BattleSystem *battleSys
             // fall-through
 
         case COMMAND_SELECTION_SELECT:
+#ifdef SDK_PORT
+            if (sPendingBallItem != ITEM_NONE && sPendingBallBattleSys == battleSys && sPendingBallBattler == i) {
+                BattleItemUse used;
+                memset(&used, 0, sizeof(used));
+                used.item = sPendingBallItem;
+                used.category = ITEM_BATTLE_CATEGORY_POKE_BALLS;
+                sPendingBallItem = ITEM_NONE;
+                sPendingBallBattler = -1;
+                sPendingBallBattleSys = NULL;
+                battleCtx->battlerActions[i][BATTLE_ACTION_PICK_COMMAND] = BATTLE_CONTROL_ITEM;
+                memcpy(&battleCtx->battlerActions[i][BATTLE_ACTION_TEMP_VALUE], &used, sizeof(used));
+                battleCtx->curCommandState[i] = COMMAND_SELECTION_CLEAR_TOUCH_SCREEN;
+                battleCtx->nextCommandState[i] = COMMAND_SELECTION_WAIT;
+                break;
+            }
+#endif
             if (BattleContext_IOBufferVal(battleCtx, i)) {
                 battleCtx->battlerActions[i][BATTLE_ACTION_SELECTED_COMMAND] = battleCtx->ioBuffer[i][0];
 

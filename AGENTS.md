@@ -11,6 +11,11 @@
 
 ## Last Worked On
 
+- **Static / Legendary Wild Encounters in Gen 5 & Platinum Battle Fallback Fixes (`src/port/gen5_battle.c`, `src/port/gear_data.c`, `src/battle/battle_controller_player.c`):**
+  - Updated `Gen5Battle_Wants` (`src/port/gen5_battle.c`) to accept `BATTLE_TYPE_ROAMER` and scripted/legendary wild battle status flags (`BATTLE_STATUS_LEGENDARY`, `BATTLE_STATUS_NO_RUNNING`, `BATTLE_STATUS_GIRATINA`, `BATTLE_STATUS_DISTORTION`)—and mapped Distortion World battles to `ARENA_BG_VOID`—so static encounters like Valley Windworks Drifloon and Legendaries run in the Gen 5 engine instead of falling back to Platinum's engine.
+  - Mapped `GEAR_MENU_ACTION` `BAG` (`2`) and `POKEMON` (`1`) indices to Platinum's `sActionMenuTouchRects` indices (`1` and `2`) in `Gear_PressBattleButton` (`src/port/gear_data.c`) for Platinum-engine battles (Safari Zone, Catching Tutorial).
+  - Queued `BattleController_PortUseBall` (`src/battle/battle_controller_player.c`) onto `BattleControllerPlayer_CommandSelectionInput` on the game thread and removed the cross-thread `BattleSubscreen_PortClearMenu()` call from `Gear_UseBattlePokeBall` (`src/port/gear_data.c`) to prevent a UI-thread crash during quick-throw.
+
 - **Pastoria City Cutscene & MapObject Script NULL Guards (`src/scrcmd.c`):**
   - Guarded `ScrCmd_Unused_06A` (`0x006A`, `GetObjectPos`) and all object-lookup script commands in `src/scrcmd.c` (`LockObject`, `ReleaseObject`, `SetObjectFlagIsPersistent`, `SetMovementType`, `GetMovementType`, `SetPosition`, `18C`, `ShowObject`, `HideObject`, `ShakeObject`, `FlickerObject`, `Unused_2A1`, `2B6`) via `GetLocalMapObjByIndex` + `NULL` checks so unspawned local IDs (such as `0x2e` in Pastoria City) or follower IDs (`0xF4`/`0xFD`) return safely instead of dereferencing `NULL` in `MapObject_GetX` on Android ARM64.
 
@@ -32,7 +37,7 @@
 - **Pokémon-Themed UI & Controls:** Styled Settings and Gear screens, responsive touch overlays, left-stick-as-D-pad option, widescreen 3D rendering, 60 FPS, instant text, save slots/cloud sync, local multiplayer (ENet), and custom texture packs.
 
 ### Gen 5 Battles & Summary (`gen5/`, `src/port/gen5_*.{c,cpp}`)
-- **Embedded BW2 Battle Engine & View:** Runs Platinum battles inside Black 2 / White 2's engine (`pokebw2` compiled and symbol-prefixed as `bw2_*`, using the player's own B2/W2 USA ROM) with BW2 sound effects and cries over Platinum's music, plus BW2's Pokémon Summary and move-forget screens.
+- **Embedded BW2 Battle Engine & View:** Runs Platinum battles (wild, honey tree, roamer, scripted/legendary wild encounters, and trainer battles) inside Black 2 / White 2's engine (`pokebw2` compiled and symbol-prefixed as `bw2_*`, using the player's own B2/W2 USA ROM) with BW2 sound effects and cries over Platinum's music, plus BW2's Pokémon Summary and move-forget screens.
 - **Full-Screen Touch Battle HUD (`src/port/touch_controls.cpp`, `src/port/gear_data.c`):**
   - 2x2 Action cards (`FIGHT`, `BAG`, `POKEMON`, `RUN`/`BACK`, plus Safari/Pal Park variants).
   - Type-colored Move cards with live PP counters, type pills, and effectiveness badges (`SUPER EFFECTIVE`, `NOT VERY EFFECTIVE`, `NO EFFECT`, accounting for Levitate, Wonder Guard, and Mold Breaker).

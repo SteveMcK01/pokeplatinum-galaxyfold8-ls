@@ -1157,7 +1157,17 @@ void Gear_PressBattleButton(int button)
     if (sReportedMenuKind == GEAR_MENU_PARTY || sReportedMenuKind == GEAR_MENU_PARTY_MON) {
         BattleParty_PortPress(button);
     } else {
-        BattleSubscreen_PortPress(button);
+        int mappedButton = button;
+        if (sReportedMenuKind == GEAR_MENU_ACTION) {
+            // Overlay sends Gen 5 action indices (0=FIGHT, 1=POKEMON, 2=BAG, 3=RUN);
+            // Platinum's sActionMenuTouchRects uses (0=FIGHT, 1=BAG, 2=POKEMON, 3=RUN).
+            if (button == 1) {
+                mappedButton = 2;
+            } else if (button == 2) {
+                mappedButton = 1;
+            }
+        }
+        BattleSubscreen_PortPress(mappedButton);
     }
 }
 
@@ -1439,6 +1449,5 @@ BOOL Gear_UseBattlePokeBall(u16 item)
     if (!BattleController_PortUseBall(sBattleSys, item)) {
         return FALSE;
     }
-    BattleSubscreen_PortClearMenu();
     return TRUE;
 }

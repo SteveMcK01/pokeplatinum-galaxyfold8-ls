@@ -88,9 +88,12 @@ BOOL Gen5Battle_Wants(const FieldBattleDTO *dto)
     if (!SIM_Config_prj_GetConfig()->gen5Battles || Gen5Rom_GameName() == NULL) {
         return FALSE;
     }
-    // A wild battle, alone or beside a partner (two wild Pokémon), with nothing special about it but a honey tree
-    if (dto->battleType == BATTLE_TYPE_WILD_MON || dto->battleType == BATTLE_TYPE_AI_PARTNER) {
-        return (dto->battleStatusMask & ~BATTLE_STATUS_HONEY_TREE) == 0;
+    // A wild battle: regular, honey tree, roamer, or scripted/legendary/distortion encounter
+    if (dto->battleType == BATTLE_TYPE_WILD_MON || dto->battleType == BATTLE_TYPE_ROAMER
+        || dto->battleType == BATTLE_TYPE_AI_PARTNER) {
+        const u32 allowedWildFlags = BATTLE_STATUS_HONEY_TREE | BATTLE_STATUS_NO_RUNNING
+            | BATTLE_STATUS_LEGENDARY | BATTLE_STATUS_GIRATINA | BATTLE_STATUS_DISTORTION;
+        return (dto->battleStatusMask & ~allowedWildFlags) == 0;
     }
     // A trainer battle: single, double (one trainer's two Pokémon), against two trainers (TAG), or with them beside a
     // partner (2vs2 and AI). The story's trainers (Gym Leaders, the rival, Cynthia, Team Galactic) are started by
@@ -831,7 +834,12 @@ static void ArenaFromDTO(const FieldBattleDTO *dto, int *bg, int *terrain, int *
             *bg = ARENA_BG_VOID;
             break;
         default:
-            *bg = ARENA_BG_GRASS;
+            if ((dto->battleStatusMask & (BATTLE_STATUS_DISTORTION | BATTLE_STATUS_GIRATINA)) != 0
+                || dto->terrain == TERRAIN_GIRATINA) {
+                *bg = ARENA_BG_VOID;
+            } else {
+                *bg = ARENA_BG_GRASS;
+            }
             break;
         }
         switch (dto->terrain) {

@@ -15,37 +15,31 @@
 
 ## Last Worked On
 
-- **Overworld 3D Fog White-Screen Fix on Route 210 North (`src/overlay005/fog_manager.c`):**
-  - Suppressed hardware 3D `G3X_SetFog` under `#ifndef SDK_BUILD_ARM` in `FogManager_ApplyParameters` while keeping `fogMan->enabled` and the 2D `BG2` mist overlay active, preventing `libntr`'s OpenGL NDC depth calculation (`sim_shaders.hpp`) from saturating Route 210 North to solid white (and Turnback Cave to solid black).
+### Current Handoff: Route 210 North / Foggy Overworld Solid White Screen (Android Port)
 
-- **Gen 5 Party-Wide Exp. Share (`gen5/api/gen5.h`, `gen5/include/gen5/port.h`, `gen5/src/runtime.c`, `gen5/patches/src/ov167/btl_server_flow_sub.c.patch`, `src/port/gen5_battle.c`):**
-  - Bridged `Cheats_ExpShareAll()` (`Settings > Gameplay > Exp. Share for the whole party`) into `Gen5Battle.expShareAll` and exposed `Gen5_PortExpShareAll()` to the BW2 battle server.
-  - Updated `AddExpAndEVs` in `btl_server_flow_sub.c` so Gen 5 battles apply Gen 6-style party-wide EXP when enabled: active participants receive 100% base EXP, non-fainted non-Egg party members (`0x4c /* PKM_PARAM_IS_EGG */`) receive 50% base EXP, and held Exp. Shares add nothing before level-difference scaling, Lucky Egg/traded bonuses, level caps, and EV distribution.
+- **Goal:**
+  - Fix a rendering bug on the Android port (`build_target = 'android'`) where walking into foggy overworld areas (specifically **Route 210 North**, `OVERWORLD_WEATHER_FOG` / weather `0xD` handled by `ov5_021DAEC0` in `src/overlay005/ov5_021D5EB8.c`) turns the top screen solid white (`#FFFFFF`) and heavily washes out the PiP bottom screen in white, while walking south back out of the route immediately restores normal rendering. (Dark-fog areas like Turnback Cave use the same fog system with `GX_RGB(0, 0, 0)`.)
 
-- **Companion UI Enlargement & Handheld Layout Redesign (`subprojects/packagefiles/port_common_large_ui.patch`):**
-  - Increased the Gear companion base scale factor (`frame->width / 380.0f` fullscreen, `frame->width / 320.0f` split-screen, minimum `1.35f`) and base font size (`20.0f * sScale`) with dynamic per-frame font pushing (`ImGui::PushFont(sRegular, sBaseFontSize)`).
-  - Enlarged and redesigned companion screens: Pokédex header & tabs (`54px` bar, `18.5px` bold pills, Android status-bar `topInset` clearance), daycare-aware full-height Party 2x3 cards (`64px` sprite slots, type chips, `@ <Item>`, `11px` HP bars, and 2x2 type-colored move pills with `PP/MaxPP`), Area/Pokédex/PC Find lists (`46px` rows, `40px` icons), Map zoom/follow buttons (`50px`) and `42px` item rows, Pokétch caption (`72px` reserve), PC 6x5 Box grid (`Lv` pill badges, `52px` box header), and Trainer badges (`18px` radius).
+- **What Has Been Tried So Far:**
+  1. **Disabled hardware 3D fog (`G3X_SetFog`) on port builds (`src/overlay005/fog_manager.c`, commits `515c25503` & `9a27a2a34`):**
+     - `FogManager_ApplyParameters` now passes `FALSE` to `G3X_SetFog` under `#ifndef SDK_BUILD_ARM` (while keeping `fogMan->enabled` accurate so `SystemFlag_CheckDefogActive` / Defog HM logic still works).
+     - Verified via `subprojects/libntr/meson.build` that `build_target == 'android'` defines `-DSDK_PORT` and `-DSDK_BUILD_LINUX` / `-DSDK_BUILD_ANDROID` (and does **not** define `SDK_BUILD_ARM`).
+     - **Result:** Did **not** fix the white screen on Route 210 North (`22763.mp4` recorded on commit `9a27a2a34` still shows the solid white top screen and washed-out PiP bottom screen upon stepping north onto Route 210 North).
 
-- **Architecture & Feature Technical Documentation (`docs/architecture/`):** Created `docs/architecture/README.md`, 5 feature guides under `docs/architecture/features/`, and 3 core engine guides under `docs/architecture/core/`, linked from `AGENTS.md` and `docs/thor/README.md`.
+- **Where Investigation Currently Stands (Root Cause Leads):**
+  - Since `G3X_SetFog` is already disabled in `FogManager_ApplyParameters` and **both** the main top screen and the PiP bottom screen turn bright white simultaneously when crossing the map border into Route 210 North, the remaining white-out is **not** coming from 3D polygon fog (`u_fogEnable` in `sim_shaders.hpp`).
+  - **Primary suspects to inspect next:**
+    1. **2D `BG2` Fog Layer + Widescreen/Shader Blending (`subprojects/libntr/libraries/sim/src/shaders/g2_fragment.glsl` & `src/overlay005/ov5_021D5EB8.c`):**
+       - `ov5_021DAEC0` enables `BG2` (`GXLayers_EngineAToggleLayers(GX_PLANEMASK_BG2, 1)`, priority `0` above `BG0` priority `1`, `charBase = 0x00000`, `screenBase = 0xe000`) and calls `ov5_021D64E4` → `G2_SetBlendAlpha(GX_BLEND_PLANEMASK_BG2, GX_BLEND_PLANEMASK_BG0 | GX_BLEND_PLANEMASK_BD, ev1, ev2)` ramping `ev1` from `0` to `9` (`ev2 = 16 - ev1`).
+       - Because `charBase == 0x00000 && screenBase == 0xe000`, `sim_main.cpp:1318` sets `wideBgMask |= 1 << 2` (`G2SIM_DrawBGWide`). Check what `BG2` tile/palette data is uploaded in `ov5_021D6DCC` / `ov5_021D6E20` and how `g2_fragment.glsl` (`lines 125-156`) blends `bgc[2]` when `BG2` is drawn (`wideBgMask & 4`).
+    2. **`MASTER_BRIGHT` / `BLDY` / `PortWeatherTask` (`src/overlay005/ov5_021D5EB8.c` & `subprojects/libntr/libraries/sim/src/sim_main.cpp:1416-1431`):**
+       - Notice that in the test video, the **PiP bottom screen** (`isSub` / sub-engine) also becomes heavily washed out in white at the exact moment Route 210 North loads. Check `PortWeatherTask` in `src/overlay005/ov5_021D5EB8.c` (hooked at line `1199` under `#ifdef SDK_PORT`) and any `GX_SetMasterBrightness` / `GXS_SetMasterBrightness` / `G2_SetBlendBrightness` calls triggered on map/weather transitions (`src/field_map_change.c` or `ov5_021D5EB8.c`), as `g2_fragment.glsl:186` applies `inMasterBrightMode == 1` (`color.rgb += (1.0 - color.rgb) * inMasterBrightFactor`) as a full-screen whiteout.
+    3. **Verify `G3X_SetFog` is not re-enabled elsewhere:**
+       - Confirm no other call site writes `REG_G3X_DISP3DCNT_FME_MASK` or `G3X_SetFog` outside `FogManager_ApplyParameters` (already checked `src/overlay005/`; verify `subprojects/libntr` doesn't default `FME` on).
 
-- **Static / Legendary Wild Encounters in Gen 5 & Platinum Battle Fallback Fixes (`src/port/gen5_battle.c`, `src/port/gear_data.c`, `src/battle/battle_controller_player.c`):**
-  - Updated `Gen5Battle_Wants` (`src/port/gen5_battle.c`) to accept `BATTLE_TYPE_ROAMER` and scripted/legendary wild battle status flags (`BATTLE_STATUS_LEGENDARY`, `BATTLE_STATUS_NO_RUNNING`, `BATTLE_STATUS_GIRATINA`, `BATTLE_STATUS_DISTORTION`)—and mapped Distortion World battles to `ARENA_BG_VOID`—so static encounters like Valley Windworks Drifloon and Legendaries run in the Gen 5 engine instead of falling back to Platinum's engine.
-  - Mapped `GEAR_MENU_ACTION` `BAG` (`2`) and `POKEMON` (`1`) indices to Platinum's `sActionMenuTouchRects` indices (`1` and `2`) in `Gear_PressBattleButton` (`src/port/gear_data.c`) for Platinum-engine battles (Safari Zone, Catching Tutorial).
-  - Queued `BattleController_PortUseBall` (`src/battle/battle_controller_player.c`) onto `BattleControllerPlayer_CommandSelectionInput` on the game thread and removed the cross-thread `BattleSubscreen_PortClearMenu()` call from `Gear_UseBattlePokeBall` (`src/port/gear_data.c`) to prevent a UI-thread crash during quick-throw.
-
-- **Pastoria City Cutscene & MapObject Script NULL Guards (`src/scrcmd.c`):**
-  - Guarded `ScrCmd_Unused_06A` (`0x006A`, `GetObjectPos`) and all object-lookup script commands in `src/scrcmd.c` (`LockObject`, `ReleaseObject`, `SetObjectFlagIsPersistent`, `SetMovementType`, `GetMovementType`, `SetPosition`, `18C`, `ShowObject`, `HideObject`, `ShakeObject`, `FlickerObject`, `Unused_2A1`, `2B6`) via `GetLocalMapObjByIndex` + `NULL` checks so unspawned local IDs (such as `0x2e` in Pastoria City) or follower IDs (`0xF4`/`0xFD`) return safely instead of dereferencing `NULL` in `MapObject_GetX` on Android ARM64.
-
-- **Gen 5 Effectiveness Type Offset, Core Yes/No Prompts & Move-Forget Screen:**
-  - Offset BW2 `PokeType` IDs `>= 9` (`Fire`..`Dark`) by `+1` in `Gen5_GetBattleState` (`gen5/src/runtime.c`) to match Platinum's `TYPE_MYSTERY = 9`.
-  - Checked `BTLV_INPUT_SCREEN_YES_NO` before `scd->numProcs == 0` in `Gen5_PortQueryBattleMenu` (`gen5/patches/src/ov169/btlv_scd.c.patch`) so `BtlvCore_ShowYesNo` prompts render `YES`/`NO` cards.
-  - Called `Gen5_PortSetSubAppOpen(TRUE)` in `BtlvCore_StartForgetMoveSelect` (`gen5/patches/src/ov167/btlv_core.c.patch`) to open the DS bottom screen for move-forget selection.
-
-- **Gen 5 Battle Target Highlighting & Yes/No Touch Overlay (`c270bd3b6`):**
-  - Updated `gen5/patches/src/ov169/btlv_scd.c.patch` (`Gen5_PortQueryBattleMenu`) so spread/group/self/side moves (`scd->targets.selectCount == 0`, where `BtlvScd_GetTargetPos` outputs `BTL_POS_NONE`) resolve each slot's battle position via `ViewPosToBattlePos(scd->mainModule, sTargetButtonViewPos[kBw2Btn[t]])` and highlight every affected living battler instead of falling back to only slot `0`.
-  - Updated `src/port/touch_controls.cpp` (`DrawFullScreenBattleOverlay`) to color-code `GEAR_MENU_TARGETS` cards (red for foes on `row == 0`, green for allies/self on `row == 1`) and added a two-card `GEAR_MENU_YES_NO` renderer (`menu.yes` -> `Gear_PressBattleButton(0)` at `(128, 56)`, `menu.no` -> `Gear_PressBattleButton(1)` at `(128, 104)`).
-- **Overworld Water Spawn Submerging (`f079bf8b7`):** Kept Flying-type Pokémon floating above water while submerging Gyarados, Mantine, and Mantyke.
-- **Full-Screen Gen 5 Battle Overlay & Poké Ball Carousel (`965927aec` – `4cb88a7d5`):** Added the transparent `< [Poké Ball + Qty] >` quick-throw carousel beside the player's status bar, bottom-right 2x2 action/move/target/Yes-No card panel, live Gen V weather pill, automatic dialogue wrapping, and PiP transition suppression.
+- **Immediate Next Steps for Next Session:**
+  1. Inspect `PortWeatherTask` in `src/overlay005/ov5_021D5EB8.c` and check why both top and bottom screens whiten on Route 210 North entry.
+  2. Temporarily test disabling `BG2` in `ov5_021DAEC0` (or clamping `BG2` alpha in `ov5_021D64E4` / `g2_fragment.glsl`) and/or logging `s_reg_GX_BLDCNT`, `s_reg_GX_BLDALPHA`, `s_reg_GX_MASTER_BRIGHT`, and `s_reg_GXS_DB_MASTER_BRIGHT` on Route 210 North to isolate whether `BG2` blending or `MASTER_BRIGHT` is saturating the frame.
 
 ## All Included Features (Fork Inventory)
 

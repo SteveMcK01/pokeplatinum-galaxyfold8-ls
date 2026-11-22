@@ -15,9 +15,20 @@
 
 ## Last Worked On
 
-- **Overworld Fog Solid White Screen Fix (`subprojects/packagefiles/libntr_g2_blend_regs.patch`, `subprojects/libntr.wrap`, `src/overlay005/fog_manager.c`):**
-  - **2D Blend Register Fix (`libntr/libraries/gx/src/g2.c` via `libntr_g2_blend_regs.patch`):** Patched `G2x_SetBlendAlpha_`, `G2x_SetBlendBrightness_`, `G2x_SetBlendBrightnessExt_`, and `G2x_ChangeBlendBrightness_` under `#ifdef SDK_PORT` to write directly to `reg_G2_BLDALPHA` / `reg_G2_BLDY` (and `reg_G2S_DB_*`) instead of writing out-of-bounds 32-bit/16-bit offsets past `s_reg_G2_BLDCNT` in `.bss`. Previously, `s_reg_G2_BLDALPHA` was never updated on Route 210 North (`OVERWORLD_WEATHER_FOG`), leaving stale values (`alphaA = 1.0, alphaB = 0.0`) in `g2_fragment.glsl` and rendering the white `BG2` fog layer at 100% opacity.
-  - **3D Hardware Fog Suppression (`src/overlay005/fog_manager.c`):** Passed `FALSE` to `G3X_SetFog` under `#ifndef SDK_BUILD_ARM` while keeping `fogMan->enabled` accurate for Defog HM checks.
+- **Overworld Fog Solid White Screen Bug (In Progress — Deferred to Fix a Higher-Priority Bug First):**
+  - **Confirmed Symptoms & Isolation:**
+    - Entering foggy overworld maps (such as Route 210 North, `OVERWORLD_WEATHER_FOG`) turns the Engine A (top screen) 3D viewport solid white.
+    - Engine B (the PiP / sub-screen window) is completely unaffected, confirming the bug is isolated to Engine A's overworld fog pipeline rather than master brightness or sub-screen compositing.
+    - Using the HM move **Defog** immediately clears the white screen (via `SystemFlag_CheckDefogActive` / `ov5_021D6868` transitioning the active weather task to `unk_BA6 = 5` -> `unk_BA2 = 5` -> `ov5_021D69B8`, which disables `BG2`, resets BG priorities, calls `G2_BlendNone()`, and calls `FogManager_ApplyParameters(..., FOG_PARAMETER_ENABLED, FALSE, ...)`).
+  - **Changes Already Landed & Tested (`commit b6624b3f4`):**
+    - **`subprojects/packagefiles/libntr_g2_blend_regs.patch` + `subprojects/libntr.wrap`:** Patched `G2x_SetBlendAlpha_`, `G2x_SetBlendBrightness_`, `G2x_SetBlendBrightnessExt_`, and `G2x_ChangeBlendBrightness_` in `subprojects/libntr/libraries/gx/src/g2.c` under `#ifdef SDK_PORT` to write directly to `reg_G2_BLDALPHA` / `reg_G2_BLDY` (and `reg_G2S_DB_*`) instead of writing out-of-bounds past `s_reg_G2_BLDCNT` in `.bss`.
+    - **`src/overlay005/fog_manager.c`:** Suppressed `G3X_SetFog` enable bit on non-ARM (`#ifndef SDK_BUILD_ARM`) while preserving `fogMan->enabled` for Defog checks.
+  - **What Was Ruled Out / Still Needs Investigation When Returning:**
+    - Wiring `libntr_g2_blend_regs.patch` alone did **not** resolve the solid white screen on Route 210 North (`b6624b3f4` still reproduces it).
+    - **Next places to inspect when resuming:**
+      1. `subprojects/libntr/meson.build` (lines 110–165) to verify whether `-DSDK_PORT` is actually defined when compiling `libntr` on `build_target=android` (if `SDK_PORT` is not defined inside `libntr`, the `#ifdef SDK_PORT` branch in `g2.c` was skipped).
+      2. `src/overlay005/fog_manager.c` (`FogManager_ApplyParameters`, `FogManager_ApplyColor`, `FogManager_ApplyDensityTable`) and `ov5_021D7308`–`ov5_021D7500` in `src/overlay005/ov5_021D5EB8.c` (lines 1880–2060) to verify all `G3X_SetFog` / `G3X_SetFogColor` / `G3X_SetFogTable` paths and confirm `REG_FOG_TABLE_0_ADDR` in `subprojects/libntr/libraries/sim/src/g3_draw.cpp:414` does not read unmapped DS I/O memory (`0x04000360`) on Android.
+      3. `BG2` alpha blending interaction with `bg0as3d` in `subprojects/libntr/libraries/sim/src/shaders/g2_fragment.glsl` (lines 127–156): note that on Route 210 North (`ov5_021DAEC0`), `BG2` has priority 1 (above 3D `BG0` at priority 2), and `ov5_021D64E4` sets `BLDCNT` Target 1 = `BG2`, Target 2 = `BG0 | BD`. Check what `bgc[2]` and `currentBgDrawn` evaluate to in `g2_fragment.glsl` when `BG2` is drawn over `BG0` (`bg0as3d != 0`).
 
 ## All Included Features (Fork Inventory)
 

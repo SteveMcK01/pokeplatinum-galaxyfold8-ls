@@ -15,6 +15,9 @@
 
 ## Last Worked On
 
+- **Overworld 3D Fog White-Screen Fix on Route 210 North (`src/overlay005/fog_manager.c`):**
+  - Suppressed hardware 3D `G3X_SetFog` under `#ifdef SDK_PORT` in `FogManager_ApplyParameters` while keeping `fogMan->enabled` and the 2D `BG2` mist overlay active, preventing `libntr`'s OpenGL NDC depth calculation (`sim_shaders.hpp`) from saturating Route 210 North to solid white (and Turnback Cave to solid black).
+
 - **Gen 5 Party-Wide Exp. Share (`gen5/api/gen5.h`, `gen5/include/gen5/port.h`, `gen5/src/runtime.c`, `gen5/patches/src/ov167/btl_server_flow_sub.c.patch`, `src/port/gen5_battle.c`):**
   - Bridged `Cheats_ExpShareAll()` (`Settings > Gameplay > Exp. Share for the whole party`) into `Gen5Battle.expShareAll` and exposed `Gen5_PortExpShareAll()` to the BW2 battle server.
   - Updated `AddExpAndEVs` in `btl_server_flow_sub.c` so Gen 5 battles apply Gen 6-style party-wide EXP when enabled: active participants receive 100% base EXP, non-fainted non-Egg party members (`0x4c /* PKM_PARAM_IS_EGG */`) receive 50% base EXP, and held Exp. Shares add nothing before level-difference scaling, Lucky Egg/traded bonuses, level caps, and EV distribution.

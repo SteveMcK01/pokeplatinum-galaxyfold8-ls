@@ -56,7 +56,7 @@ void FogManager_ApplyParameters(FogManager *fogMan, enum FogParameterFlags param
         fogMan->offset = offset;
     }
 
-#ifdef SDK_PORT
+#ifndef SDK_BUILD_ARM
     G3X_SetFog(FALSE, fogMan->mode, fogMan->slope, fogMan->offset);
 #else
     G3X_SetFog(fogMan->enabled, fogMan->mode, fogMan->slope, fogMan->offset);

@@ -1,0 +1,115 @@
+diff --git a/libraries/gx/src/g2.c b/libraries/gx/src/g2.c
+index 3459993..8d27f25 100644
+--- a/libraries/gx/src/g2.c
++++ b/libraries/gx/src/g2.c
+@@ -51,7 +51,19 @@ void G2x_SetBlendAlpha_ (u32 addr, int plane1, int plane2, int ev1, int ev2)
+ 	SDK_MINMAX_ASSERT(ev1, 0, 31);
+ 	SDK_MINMAX_ASSERT(ev2, 0, 31);
+ 
++#ifdef SDK_PORT
++	u16 cnt = (u16)(G2_BLENDTYPE_ALPHA | plane1 | (plane2 << 8));
++	u16 alpha = (u16)(ev1 | (ev2 << 8));
++	if (addr == (u64)&reg_G2_BLDCNT) {
++		reg_G2_BLDCNT = cnt;
++		reg_G2_BLDALPHA = alpha;
++	} else {
++		reg_G2S_DB_BLDCNT = cnt;
++		reg_G2S_DB_BLDALPHA = alpha;
++	}
++#else
+ 	*((vu32 *)addr + 0) = (u32)((G2_BLENDTYPE_ALPHA | plane1 | plane2 << 8) | ((ev1 | ev2 << 8) << 16));
++#endif
+ }
+ 
+ #ifdef SDK_PORT
+@@ -63,6 +75,17 @@ void G2x_SetBlendBrightness_ (u32 addr, int plane, int brightness)
+ 	SDK_MINMAX_ASSERT(brightness, -31, 31);
+ 	SDK_MINMAX_ASSERT(plane, 0, 0x40 - 1);
+ 
++#ifdef SDK_PORT
++	u16 cnt = (u16)((brightness < 0 ? G2_BLENDTYPE_FADEOUT : G2_BLENDTYPE_FADEIN) | plane);
++	u16 y = (u16)(brightness < 0 ? -brightness : brightness);
++	if (addr == (u64)&reg_G2_BLDCNT) {
++		reg_G2_BLDCNT = cnt;
++		reg_G2_BLDY = y;
++	} else {
++		reg_G2S_DB_BLDCNT = cnt;
++		reg_G2S_DB_BLDY = y;
++	}
++#else
+ 	if (brightness < 0) {
+ 		*((vu16 *)addr + 0) = (u16)(G2_BLENDTYPE_FADEOUT | plane);
+ 		*((vu16 *)addr + 2) = (u16) - brightness;
+@@ -70,6 +93,7 @@ void G2x_SetBlendBrightness_ (u32 addr, int plane, int brightness)
+ 		*((vu16 *)addr + 0) = (u16)(G2_BLENDTYPE_FADEIN | plane);
+ 		*((vu16 *)addr + 2) = (u16)brightness;
+ 	}
++#endif
+ }
+ 
+ #ifdef SDK_PORT
+@@ -84,6 +108,20 @@ void G2x_SetBlendBrightnessExt_ (u32 addr, int plane1, int plane2, int ev1, int
+ 	SDK_MINMAX_ASSERT(ev1, 0, 31);
+ 	SDK_MINMAX_ASSERT(ev2, 0, 31);
+ 
++#ifdef SDK_PORT
++	u16 cnt = (u16)((brightness < 0 ? G2_BLENDTYPE_FADEOUT : G2_BLENDTYPE_FADEIN) | plane1 | (plane2 << 8));
++	u16 alpha = (u16)(ev1 | (ev2 << 8));
++	u16 y = (u16)(brightness < 0 ? -brightness : brightness);
++	if (addr == (u64)&reg_G2_BLDCNT) {
++		reg_G2_BLDCNT = cnt;
++		reg_G2_BLDALPHA = alpha;
++		reg_G2_BLDY = y;
++	} else {
++		reg_G2S_DB_BLDCNT = cnt;
++		reg_G2S_DB_BLDALPHA = alpha;
++		reg_G2S_DB_BLDY = y;
++	}
++#else
+ 	*((vu16 *)addr + 1) = (u16)(ev1 | (ev2 << 8));
+ 
+ 	if (brightness < 0) {
+@@ -93,6 +131,7 @@ void G2x_SetBlendBrightnessExt_ (u32 addr, int plane1, int plane2, int ev1, int
+ 		*((vu16 *)addr + 0) = (u16)(G2_BLENDTYPE_FADEIN | plane1 | (plane2 << 8));
+ 		*((vu16 *)addr + 2) = (u16)brightness;
+ 	}
++#endif
+ }
+ 
+ #ifdef SDK_PORT
+@@ -101,10 +140,27 @@ void G2x_ChangeBlendBrightness_ (u64 addr, int brightness)
+ void G2x_ChangeBlendBrightness_ (u32 addr, int brightness)
+ #endif
+ {
+-	u16 tmp;
+ 	SDK_MINMAX_ASSERT(brightness, -31, 31);
+ 
+-	tmp = *((vu16 *)addr + 0);
++#ifdef SDK_PORT
++	u16 y = (u16)(brightness < 0 ? -brightness : brightness);
++	if (addr == (u64)&reg_G2_BLDCNT) {
++		if (brightness < 0 && (reg_G2_BLDCNT & REG_G2_BLDCNT_EFFECT_MASK) == G2_BLENDTYPE_FADEIN) {
++			reg_G2_BLDCNT = (u16)((reg_G2_BLDCNT & ~REG_G2_BLDCNT_EFFECT_MASK) | G2_BLENDTYPE_FADEOUT);
++		} else if (brightness >= 0 && (reg_G2_BLDCNT & REG_G2_BLDCNT_EFFECT_MASK) == G2_BLENDTYPE_FADEOUT) {
++			reg_G2_BLDCNT = (u16)((reg_G2_BLDCNT & ~REG_G2_BLDCNT_EFFECT_MASK) | G2_BLENDTYPE_FADEIN);
++		}
++		reg_G2_BLDY = y;
++	} else {
++		if (brightness < 0 && (reg_G2S_DB_BLDCNT & REG_G2_BLDCNT_EFFECT_MASK) == G2_BLENDTYPE_FADEIN) {
++			reg_G2S_DB_BLDCNT = (u16)((reg_G2S_DB_BLDCNT & ~REG_G2_BLDCNT_EFFECT_MASK) | G2_BLENDTYPE_FADEOUT);
++		} else if (brightness >= 0 && (reg_G2S_DB_BLDCNT & REG_G2_BLDCNT_EFFECT_MASK) == G2_BLENDTYPE_FADEOUT) {
++			reg_G2S_DB_BLDCNT = (u16)((reg_G2S_DB_BLDCNT & ~REG_G2_BLDCNT_EFFECT_MASK) | G2_BLENDTYPE_FADEIN);
++		}
++		reg_G2S_DB_BLDY = y;
++	}
++#else
++	u16 tmp = *((vu16 *)addr + 0);
+ 
+ 	if (brightness < 0) {
+ 		if (G2_BLENDTYPE_FADEIN == (tmp & REG_G2_BLDCNT_EFFECT_MASK)) {
+@@ -119,4 +175,5 @@ void G2x_ChangeBlendBrightness_ (u32 addr, int brightness)
+ 
+ 		*((vu16 *)addr + 2) = (u16)brightness;
+ 	}
++#endif
+ }

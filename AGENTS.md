@@ -18,28 +18,44 @@
 ### Current Handoff: Route 210 North / Foggy Overworld Solid White Screen (Android Port)
 
 - **Goal:**
-  - Fix a rendering bug on the Android port (`build_target = 'android'`) where walking into foggy overworld areas (specifically **Route 210 North**, `OVERWORLD_WEATHER_FOG` / weather `0xD` handled by `ov5_021DAEC0` in `src/overlay005/ov5_021D5EB8.c`) turns the top screen solid white (`#FFFFFF`) and heavily washes out the PiP bottom screen in white, while walking south back out of the route immediately restores normal rendering. (Dark-fog areas like Turnback Cave use the same fog system with `GX_RGB(0, 0, 0)`.)
+  - Fix a rendering bug on the Android port (`build_target = 'android'`) where walking into foggy overworld areas (specifically **Route 210 North**) turns the **top screen (Engine A) solid white (`#FFFFFF`)**, while walking south back out immediately restores normal rendering.
 
-- **What Has Been Tried So Far:**
-  1. **Disabled hardware 3D fog (`G3X_SetFog`) on port builds (`src/overlay005/fog_manager.c`, commits `515c25503` & `9a27a2a34`):**
-     - `FogManager_ApplyParameters` now passes `FALSE` to `G3X_SetFog` under `#ifndef SDK_BUILD_ARM` (while keeping `fogMan->enabled` accurate so `SystemFlag_CheckDefogActive` / Defog HM logic still works).
-     - Verified via `subprojects/libntr/meson.build` that `build_target == 'android'` defines `-DSDK_PORT` and `-DSDK_BUILD_LINUX` / `-DSDK_BUILD_ANDROID` (and does **not** define `SDK_BUILD_ARM`).
-     - **Result:** Did **not** fix the white screen on Route 210 North (`22763.mp4` recorded on commit `9a27a2a34` still shows the solid white top screen and washed-out PiP bottom screen upon stepping north onto Route 210 North).
+- **Key Clarification (PiP Bottom Screen):**
+  - The PiP bottom screen is **not** independently turning white—its opacity automatically fades after 7 seconds without touch input, allowing the solid white Engine A canvas behind it to bleed through. The bug is isolated to **Engine A (top screen)**.
 
-- **Where Investigation Currently Stands (Root Cause Leads):**
-  - Since `G3X_SetFog` is already disabled in `FogManager_ApplyParameters` and **both** the main top screen and the PiP bottom screen turn bright white simultaneously when crossing the map border into Route 210 North, the remaining white-out is **not** coming from 3D polygon fog (`u_fogEnable` in `sim_shaders.hpp`).
-  - **Primary suspects to inspect next:**
-    1. **2D `BG2` Fog Layer + Widescreen/Shader Blending (`subprojects/libntr/libraries/sim/src/shaders/g2_fragment.glsl` & `src/overlay005/ov5_021D5EB8.c`):**
-       - `ov5_021DAEC0` enables `BG2` (`GXLayers_EngineAToggleLayers(GX_PLANEMASK_BG2, 1)`, priority `0` above `BG0` priority `1`, `charBase = 0x00000`, `screenBase = 0xe000`) and calls `ov5_021D64E4` → `G2_SetBlendAlpha(GX_BLEND_PLANEMASK_BG2, GX_BLEND_PLANEMASK_BG0 | GX_BLEND_PLANEMASK_BD, ev1, ev2)` ramping `ev1` from `0` to `9` (`ev2 = 16 - ev1`).
-       - Because `charBase == 0x00000 && screenBase == 0xe000`, `sim_main.cpp:1318` sets `wideBgMask |= 1 << 2` (`G2SIM_DrawBGWide`). Check what `BG2` tile/palette data is uploaded in `ov5_021D6DCC` / `ov5_021D6E20` and how `g2_fragment.glsl` (`lines 125-156`) blends `bgc[2]` when `BG2` is drawn (`wideBgMask & 4`).
-    2. **`MASTER_BRIGHT` / `BLDY` / `PortWeatherTask` (`src/overlay005/ov5_021D5EB8.c` & `subprojects/libntr/libraries/sim/src/sim_main.cpp:1416-1431`):**
-       - Notice that in the test video, the **PiP bottom screen** (`isSub` / sub-engine) also becomes heavily washed out in white at the exact moment Route 210 North loads. Check `PortWeatherTask` in `src/overlay005/ov5_021D5EB8.c` (hooked at line `1199` under `#ifdef SDK_PORT`) and any `GX_SetMasterBrightness` / `GXS_SetMasterBrightness` / `G2_SetBlendBrightness` calls triggered on map/weather transitions (`src/field_map_change.c` or `ov5_021D5EB8.c`), as `g2_fragment.glsl:186` applies `inMasterBrightMode == 1` (`color.rgb += (1.0 - color.rgb) * inMasterBrightFactor`) as a full-screen whiteout.
-    3. **Verify `G3X_SetFog` is not re-enabled elsewhere:**
-       - Confirm no other call site writes `REG_G3X_DISP3DCNT_FME_MASK` or `G3X_SetFog` outside `FogManager_ApplyParameters` (already checked `src/overlay005/`; verify `subprojects/libntr` doesn't default `FME` on).
+- **What Has Been Checked & Ruled Out:**
+  1. **Hardware 3D Fog (`src/overlay005/fog_manager.c`, commits `515c25503` & `9a27a2a34`):**
+     - `FogManager_ApplyParameters` already passes `FALSE` to `G3X_SetFog` under `#ifndef SDK_BUILD_ARM` (while keeping `fogMan->enabled` accurate for Defog HM checks).
+     - Confirmed `build_target == 'android'` defines `-DSDK_PORT` and `-DSDK_BUILD_LINUX` / `-DSDK_BUILD_ANDROID` (not `SDK_BUILD_ARM`). Disabling `G3X_SetFog` did **not** stop the solid white screen.
+  2. **`PortWeatherTask` (`src/overlay005/ov5_021D5EB8.c:104-110`):**
+     - Verified `PortWeatherTask` only calls `FrameRate_SkipHalfRateTick()` for 60 FPS pacing and forwards to `portTask`; it does not touch `MASTER_BRIGHT` or blend registers.
+  3. **`G2_SetBlendAlpha` Register Packing (`subprojects/libntr/libraries/gx/src/g2.c:44-55`):**
+     - Verified `G2x_SetBlendAlpha_` packs `(G2_BLENDTYPE_ALPHA | plane1 | plane2 << 8) | ((ev1 | ev2 << 8) << 16)` cleanly for 64-bit `SDK_PORT` builds.
+  4. **Fog Weather Tasks in `src/overlay005/ov5_021D5EB8.c`:**
+     - `Unk_ov5_02201D78` maps weather entries `8` (`ov5_021D879C`, lines 3100–3179, heavy fog with `ev1` ramping `0 -> 16` / `ev2 = 16 - ev1` and `G2_SetBG2Priority(3)`) and `14` (`ov5_021DAEC0`, lines 5165–5240, standard fog with `ev1` ramping `0 -> 9` / `ev2 = 16 - ev1`). Both load BG resource `0x6` (`Unk_ov5_021F8D90[6]` = `{ 0x33, 0x2D, 0x2F }`) onto `BG2` and call `ov5_021D64E4(ev1, 16 - ev1)`.
+     - Under widescreen (`src/port/widescreen.c:83-90`), `ov5_PortWeatherLayers` sets `wideBgs |= 1 << 2`, causing `sim_main.cpp:1343` to rasterize `BG2` via `G2SIM_DrawBGWide` (`subprojects/libntr/libraries/sim/src/sim_g2.cpp:306`).
+
+- **Where Investigation Currently Stands (Exact Next Inspection):**
+  - Why does Engine A turn **solid `#FFFFFF` white** even when `BG2` is placed at `priority 3` (behind 3D `BG0`) or blended at `ev1 = 9..16`? Two concrete places remain to check:
+    1. **What `ov5_021D64E4` actually writes to `BLDCNT` / `BLDALPHA` and how `g2_fragment.glsl` (lines 125–210) composites `BG2` + 3D `BG0`:**
+       - In `g2_fragment.glsl:127-155`, layers draw back-to-front (`priority 3 -> 0`). When `BG2` has `priority 3` (drawn first, `currentBgDrawn = 2`) and 3D `BG0` (`bgNum == 0 && bg0as3d != 0`) draws on top of it, `g2_fragment.glsl:131-134` overrides `alphaA = bgc[0].a; alphaB = 1.0 - alphaA;`—**only** if `BG0` is Target 1 (`(bldcnt >> 0) & 1`) and `BG2` is Target 2 (`(bldcnt >> (8 + 2)) & 1`). Conversely, if `BG2` is drawn *after* `BG0` (or `BG2` is Target 1 with `ev1 = 16, ev2 = 0`), `alphaA = 1.0, alphaB = 0.0` outputs 100% opaque `BG2` (`bgc[2]`).
+    2. **What `G2SIM_DrawBGWide` (`sim_g2.cpp:306-360`) / `DrawBGLine_Text` outputs for `BG2` (and whether `MASTER_BRIGHT` / `BLDY` is active in `g2_fragment.glsl:160-210`):**
+       - Check whether `BG2` tiles/palette (`0x33, 0x2D, 0x2F`) or `G2SIM_DrawBGWide` fill `BG2` with opaque white pixels (`alpha > 0.1`), or whether `inMasterBrightMode` / `BLDY` fade-to-white is triggered during the weather transition.
 
 - **Immediate Next Steps for Next Session:**
-  1. Inspect `PortWeatherTask` in `src/overlay005/ov5_021D5EB8.c` and check why both top and bottom screens whiten on Route 210 North entry.
-  2. Temporarily test disabling `BG2` in `ov5_021DAEC0` (or clamping `BG2` alpha in `ov5_021D64E4` / `g2_fragment.glsl`) and/or logging `s_reg_GX_BLDCNT`, `s_reg_GX_BLDALPHA`, `s_reg_GX_MASTER_BRIGHT`, and `s_reg_GXS_DB_MASTER_BRIGHT` on Route 210 North to isolate whether `BG2` blending or `MASTER_BRIGHT` is saturating the frame.
+  1. Run this single command to inspect `ov5_021D64E4`, the rest of `G2SIM_DrawBGWide`, and lines 135–210 of `g2_fragment.glsl`:
+     ```bash
+     (
+       cd ~/pokeplatinum-galaxyfold8-ls
+       echo "=== 1. ov5_021D64E4 in ov5_021D5EB8.c ==="
+       grep -rn -n -C 20 "void ov5_021D64E4" src/overlay005/ov5_021D5EB8.c
+       echo "=== 2. G2SIM_DrawBGWide body in sim_g2.cpp ==="
+       nl -ba subprojects/libntr/libraries/sim/src/sim_g2.cpp | sed -n '306,365p'
+       echo "=== 3. g2_fragment.glsl lines 135-210 ==="
+       nl -ba subprojects/libntr/libraries/sim/src/shaders/g2_fragment.glsl | sed -n '135,210p'
+     )
+     ```
+  2. Based on that output, check whether `G2SIM_DrawBGWide` is rendering `BG2` opaquely (e.g., wrong palette/alpha or `wideBgMask` issue) or `g2_fragment.glsl` is applying `ev1 = 16, ev2 = 0` / `MASTER_BRIGHT` white saturation, then patch and push (`git add ... && git commit -m "..." && git push`) to trigger the Android CI APK build.
 
 ## All Included Features (Fork Inventory)
 

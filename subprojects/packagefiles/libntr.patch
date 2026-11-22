@@ -1,0 +1,1857 @@
+diff --git a/include/simulator/sim.h b/include/simulator/sim.h
+index fa8a06e..afc4410 100644
+--- a/include/simulator/sim.h
++++ b/include/simulator/sim.h
+@@ -137,7 +137,52 @@ void SIM_SetWidescreenScene(BOOL wide);
+ // drawn across the whole width from their tilemaps (a backdrop that scrolls), not only
+ // in the 4:3 middle. Default: neither (the game widens its camera; 2D stays 4:3).
+ void SIM_SetWidescreenSceneOptions(BOOL scale3D, u8 wideBgLayers);
++// Also asked for every frame: main-engine OBJ layers (bit n: priority n) repeated across the
++// sides of a wide scene, the 4:3 picture wrapping around (left of the middle shows its right
++// edge, and so on), for 2D effects with no edges of their own (rain, snow, sand). Default:
++// none (OBJs stay in the 4:3 middle).
++void SIM_SetWidescreenObjWrap(u8 objPriorities);
++// Also asked for every frame: main-engine text-mode BG layers (bit n: BGn) drawn in the 4:3 middle as
++// usual, with their leftmost and rightmost pixel columns continued across the sides of a wide scene,
++// for a bar or a box that reaches the screen's edges (its text stays in the middle). Default: none.
++void SIM_SetWidescreenBgEdgeExtend(u8 bgLayers);
++// Also asked for every frame: main- or sub-engine text-mode BG layers (bit n: BGn) whose sides, in a wide scene, repeat the
++// picture's pixel column `column` (0 to 1 across the 256 pixels) for each row, on both sides, instead of the edge columns:
++// for a background of horizontal stripes whose own edges are a frame. Wins over the edge extension and the mirror.
++void SIM_SetWidescreenBgStripe(u8 bgLayers, float column);
++// Wide BG layers (SIM_SetWidescreenSceneOptions) whose sides mirror the 256-pixel picture instead of repeating it
++void SIM_SetWidescreenBgMirror(u8 bgLayers);
++// Polygons drawn while it is non-zero are moved toward the camera for the depth test only: nothing at their lowest point
++// on screen, `top` (fx32, view units) at their highest. For the overworld's sprites. Default: 0
++void SIM_SetSpriteDepthBias(fx32 top);
++// 0 = none, 1 = clip bottom 35% (submerged sprite), 2 = clip top 35% (upside-down reflection)
++void SIM_SetSpriteSubmergeClip(int mode);
++// Layers (SIM_SetWidescreenBgEdgeExtend) whose sides mirror the 256-pixel picture instead of continuing its edge columns
++void SIM_SetWidescreenBgEdgeMirror(u8 bgLayers);
++
++// Small images stamped onto a wide BG layer's picture each frame (Platinum's HP boxes get caps at their outer ends,
++// in the sides of the wide screen). The image is RGB, pure white is transparent. A stamp is placed with its top left
++// at (x, y) in the 256-pixel screen's coordinates (x may be negative or past 255), drawn height rows tall (the
++// row above the image's last five is repeated to stretch it), mirrored left to right when flipX
++typedef struct SIM_WideStamp {
++  short x;
++  short y;
++  short height;
++  unsigned char flipX;
++  unsigned char extraTop; // of a stretch, the rows added under the image's top (the rest go under its HP band)
++} SIM_WideStamp;
++void SIM_SetWidescreenStampImage(const unsigned char *rgb, int width, int height);
++void SIM_SetWidescreenStamps(unsigned char bgLayer, const SIM_WideStamp *stamps, int count);
++// Also asked for every frame: main-engine OBJ priorities (bit n: priority n) whose dark pixels at the 4:3 picture's
++// leftmost and rightmost columns continue across the sides of a wide scene, for a black bar that reaches the
++// screen's edge (the Gen 5 battle's party balls' bar and ability bar). Default: none.
++void SIM_SetWidescreenObjEdgeExtend(u8 objPriorities);
+ BOOL SIM_IsWidescreenActive(void);
++
++// The DS's polygon ID rule for translucent polygons: one is not blended over a pixel that another translucent
++// polygon with the same polygon ID drew (so overlapping parts of one object, such as a sprite's shadow, are not
++// darkened twice). Off by default (the game sets it as it needs, any time).
++void SIM_SetTranslucentPolygonIdRule(BOOL enabled);
+ float SIM_WidescreenRatio(void);
+ 
+ // The DS clock (RTC) the game reads: the device's local time plus this many seconds
+diff --git a/libraries/gx/src/g3imm.c b/libraries/gx/src/g3imm.c
+index b8cf1f4..e17e577 100644
+--- a/libraries/gx/src/g3imm.c
++++ b/libraries/gx/src/g3imm.c
+@@ -43,9 +43,20 @@ void G3_LoadMtx43 (const MtxFx43 *m)
+ void G3_MultMtx44 (const MtxFx44 *m)
+ {
+ 	SDK_NULL_ASSERT(m);
++    #ifdef SDK_PORT
++    draw_msg_t * msg;
++    msg = malloc( sizeof( draw_msg_t ) );
++
++    msg->type = DRAW_CMD_G3_MTXMULT44;
++    memcpy( &msg->data.mtx44, m, sizeof( MtxFx44 ) );
++
++    SIM_HandleG3Command( msg );
++    free( msg );
++    #else
+ 
+ 	reg_G3X_GXFIFO = G3OP_MTX_MULT_4x4;
+ 	GX_SendFifo64B(&m->_00, (void *)&reg_G3X_GXFIFO);
++    #endif
+ }
+ 
+ void G3_MultMtx43 (const MtxFx43 *m)
+@@ -70,17 +81,33 @@ void G3_MultMtx43 (const MtxFx43 *m)
+ void G3_MultMtx33 (const MtxFx33 *m)
+ {
+ 	SDK_NULL_ASSERT(m);
++    #ifdef SDK_PORT
++    draw_msg_t * msg;
++    msg = malloc( sizeof( draw_msg_t ) );
++
++    msg->type = DRAW_CMD_G3_MTXMULT33;
++    memcpy( &msg->data.mtx33, m, sizeof( MtxFx33 ) );
++
++    SIM_HandleG3Command( msg );
++    free( msg );
++    #else
+ 
+ 	reg_G3X_GXFIFO = G3OP_MTX_MULT_3x3;
+ 	GX_SendFifo36B(&m->_00, (void *)&reg_G3X_GXFIFO);
++    #endif
+ }
+ 
+ void G3_Shininess (const u32 *table)
+ {
+ 	SDK_NULL_ASSERT(table);
+ 
++    #ifdef SDK_PORT
++    // The simulator's lighting has no shininess table (g3_handler.cpp)
++    (void)table;
++    #else
+ 	reg_G3X_GXFIFO = G3OP_SHININESS;
+ 	GX_SendFifo128B(&table[0], (void *)&reg_G3X_GXFIFO);
++    #endif
+ }
+ 
+ void G3_MultTransMtx33 (const MtxFx33 *mtx, const VecFx32 *trans)
+@@ -88,10 +115,20 @@ void G3_MultTransMtx33 (const MtxFx33 *mtx, const VecFx32 *trans)
+ 	SDK_NULL_ASSERT(mtx);
+ 	SDK_NULL_ASSERT(trans);
+ 
++    #ifdef SDK_PORT
++    // The 3x3 matrix and the translation as one 4x3 matrix
++    MtxFx43 m;
++    m._00 = mtx->_00; m._01 = mtx->_01; m._02 = mtx->_02;
++    m._10 = mtx->_10; m._11 = mtx->_11; m._12 = mtx->_12;
++    m._20 = mtx->_20; m._21 = mtx->_21; m._22 = mtx->_22;
++    m._30 = trans->x; m._31 = trans->y; m._32 = trans->z;
++    G3_MultMtx43(&m);
++    #else
+ 	reg_G3X_GXFIFO = G3OP_MTX_MULT_4x3;
+ 	GX_SendFifo36B(&mtx->_00, (void *)&reg_G3X_GXFIFO);
+ 
+ 	reg_G3X_GXFIFO = (u32)trans->x;
+ 	reg_G3X_GXFIFO = (u32)trans->y;
+ 	reg_G3X_GXFIFO = (u32)trans->z;
++    #endif
+ }
+diff --git a/libraries/gx/src/gx_bgcnt.c b/libraries/gx/src/gx_bgcnt.c
+index 3f6d01d..c6765fa 100644
+--- a/libraries/gx/src/gx_bgcnt.c
++++ b/libraries/gx/src/gx_bgcnt.c
+@@ -183,9 +183,6 @@ void * G2_GetBG0CharPtr (void)
+ {
+ 	int baseBlock = 0x4000 * ((reg_G2_BG0CNT & REG_G2_BG0CNT_CHARBASE_MASK) >> REG_G2_BG0CNT_CHARBASE_SHIFT);
+ 
+-	#ifndef SDK_BUILD_ARM
+-    baseBlock = baseBlock & 131071;
+-    #endif
+ 	return (void *)(HW_BG_VRAM + getBGCharOffset_() + baseBlock);
+ }
+ 
+@@ -198,9 +195,6 @@ void * G2S_GetBG0CharPtr (void)
+ void * G2_GetBG1CharPtr (void)
+ {
+ 	int baseBlock = 0x4000 * ((reg_G2_BG1CNT & REG_G2_BG1CNT_CHARBASE_MASK) >> REG_G2_BG1CNT_CHARBASE_SHIFT);
+-    #ifndef SDK_BUILD_ARM
+-    baseBlock = baseBlock & 131071;
+-    #endif
+ 	return (void *)(HW_BG_VRAM + getBGCharOffset_() + baseBlock);
+ }
+ 
+@@ -218,9 +212,6 @@ void * G2_GetBG2CharPtr (void)
+ 	if (bgMode < 5 || !(bg & REG_G2_BG2CNT_COLORMODE_MASK)) {
+ 		int offset = getBGCharOffset_();
+ 		u32 blockID = (bg & REG_G2_BG2CNT_CHARBASE_MASK) >> REG_G2_BG2CNT_CHARBASE_SHIFT;
+-        #ifndef SDK_BUILD_ARM
+-        blockID = blockID % 8;
+-        #endif
+ 		return (void *)(HW_BG_VRAM + offset + 0x4000 * blockID);
+ 	} else {
+ 		return NULL;
+@@ -261,9 +252,6 @@ void * G2S_GetBG3CharPtr (void)
+ 
+ 	if (bgMode < 3 || (bgMode < 6 && !(bg & REG_G2S_DB_BG2CNT_COLORMODE_MASK))) {
+ 		u32 blockID = (bg & REG_G2S_DB_BG3CNT_CHARBASE_MASK) >> REG_G2S_DB_BG3CNT_CHARBASE_SHIFT;
+-        #ifndef SDK_BUILD_ARM
+-        blockID = blockID % 8;
+-        #endif
+ 		return (void *)(HW_DB_BG_VRAM + 0x4000 * blockID);
+ 	} else {
+ 		return NULL;
+diff --git a/libraries/sim/include/sim_g2.h b/libraries/sim/include/sim_g2.h
+index 197acb6..733d3c1 100644
+--- a/libraries/sim/include/sim_g2.h
++++ b/libraries/sim/include/sim_g2.h
+@@ -1,10 +1,13 @@
+ #ifndef SIM_G2_H
+ #define SIM_G2_H
+ #include <nitro/types.h>
++#include <simulator/sim.h>
+ void G2SIM_DrawBG( u8 bgNum, u8 bgMode, u8 bg03D, u8 isSub );
+ void G2SIM_DrawOBJ( u32 line, u8 isSub, int bgnum );
+ void G2SIM_PlotPixel(u8 * screenBuf, u8 r, u8 g, u8 b, u32 x, u32 y, BOOL isSub);
+ // Widescreen: a main-engine text-mode BG layer drawn width DS pixels wide (centred on the
+ // screen) into its own texture, bound to the layer's texture unit. false: not text mode
+-bool G2SIM_DrawBGWide( u8 bgNum, u8 bgMode, int width );
++bool G2SIM_DrawBGWide( u8 bgNum, u8 bgMode, int width, bool mirror, u8 isSub );
++void G2SIM_SetWideStampImage( const unsigned char *rgb, int width, int height );
++void G2SIM_SetWideStamps( unsigned char bgNum, const SIM_WideStamp *stamps, int count );
+ #endif
+\ No newline at end of file
+diff --git a/libraries/sim/src/g3_draw.cpp b/libraries/sim/src/g3_draw.cpp
+index 94342cc..5b093dd 100644
+--- a/libraries/sim/src/g3_draw.cpp
++++ b/libraries/sim/src/g3_draw.cpp
+@@ -52,6 +52,18 @@ static GLuint s_G3DrawVertexArray;
+ static GLuint s_G3DrawVertexBuffer;
+ 
+ extern G3SIM_TexImageParam_t s_texImageParam;
++
++// The bound texture's wrapping, from TEXIMAGE_PARAM: repeat, mirrored repeat or, with repeat off,
++// clamped to the edge texel as the DS does. The translucent polygons drawn at the end of the frame
++// set theirs too (they always repeated, and HGSS's starter balls showed their clamped spotlight
++// tiled across each ball)
++static void G3SIM_ApplyTexWrap(const G3SIM_TexImageParam_t *param)
++{
++	GLint s = param->repeatS ? (param->flipS ? GL_MIRRORED_REPEAT : GL_REPEAT) : GL_CLAMP_TO_EDGE;
++	GLint t = param->repeatT ? (param->flipT ? GL_MIRRORED_REPEAT : GL_REPEAT) : GL_CLAMP_TO_EDGE;
++	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, s);
++	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, t);
++}
+ extern G3SIM_PolygonAttr_t s_curPolygonAttr;
+ extern GLuint g3shaderProgramID;
+ extern u8 s_SIM_g3tex[4*1024*1024];
+@@ -86,7 +98,7 @@ static void* getTextureVramBank()
+ 			vramBank = (void *)HW_LCDC_VRAM_C;
+ 			break;
+ 		case GX_VRAM_TEX_0_D:
+-			vramBank = (void *)HW_LCDC_VRAM_A;
++			vramBank = (void *)HW_LCDC_VRAM_D;
+ 			break;
+ 		default:
+ 			//?
+@@ -226,14 +238,17 @@ void G3SIM_DrawInit()
+ 	glEnableVertexAttribArray(0);
+     glEnableVertexAttribArray(1);
+ 	glEnableVertexAttribArray(2);
++	glEnableVertexAttribArray(3);
+ 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(G3SIM_Vertex_t), (void*)offsetof(G3SIM_Vertex_t, x));
+     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(G3SIM_Vertex_t), (void*)offsetof(G3SIM_Vertex_t, s));
+ 	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(G3SIM_Vertex_t), (void*)offsetof(G3SIM_Vertex_t, r));
++	glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, sizeof(G3SIM_Vertex_t), (void*)offsetof(G3SIM_Vertex_t, w));
+ 
+ 	glBindVertexArray(0);
+ 	glDisableVertexAttribArray(0);
+     glDisableVertexAttribArray(1);
+ 	glDisableVertexAttribArray(2);
++	glDisableVertexAttribArray(3);
+ }
+ 
+ static void G3SIM_FlushArrayInner();
+@@ -347,27 +362,7 @@ static void G3SIM_FlushArrayInner()
+ 
+ 		texture->Activate();
+ 
+-		if(s_texImageParam.repeatS) {
+-			if(s_texImageParam.flipS)
+-			{
+-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);
+-			} else {
+-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+-			}
+-		} else {
+-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+-		}
+-
+-		if(s_texImageParam.repeatT) {
+-			if(s_texImageParam.flipT)
+-			{
+-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
+-			} else {
+-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+-			}
+-		} else {
+-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+-		}
++		G3SIM_ApplyTexWrap(&s_texImageParam);
+ 
+ 
+ 		GLint texUnitLoc = G3SIM_Uniform("myTexture");
+@@ -472,14 +467,61 @@ static void G3SIM_FlushArrayInner()
+ 	#endif
+ }
+ 
++// A polygon's culling and depth test in GL, as G3SIM_PolygonAttr sets them when the polygon
++// attributes come
++static void G3SIM_ApplyCullAndDepth(const G3SIM_PolygonAttr_t *attr)
++{
++	switch(attr->cullMode) {
++		case GX_CULL_ALL:
++			glEnable(GL_CULL_FACE);
++			glCullFace(GL_FRONT_AND_BACK);
++			break;
++		case GX_CULL_FRONT:
++			glEnable(GL_CULL_FACE);
++			glCullFace(GL_BACK);
++			break;
++		case GX_CULL_BACK:
++			glEnable(GL_CULL_FACE);
++			glCullFace(GL_FRONT);
++			break;
++		case GX_CULL_NONE:
++			glDisable(GL_CULL_FACE);
++			break;
++	}
++	glDepthFunc(attr->depthTest ? GL_LEQUAL : GL_LESS);
++}
++
++static bool s_TranslucentIdRule = false;
++
++extern "C" void SIM_SetTranslucentPolygonIdRule(BOOL enabled)
++{
++	s_TranslucentIdRule = enabled != FALSE;
++}
++
+ void G3SIM_DrawItems()
+ {
++	// The polygon ID rule: the stencil holds the ID (plus 1) of the translucent polygon that last drew a pixel
++	const bool idRule = s_TranslucentIdRule && s_G3DrawItemListCount != 0;
++	if(idRule) {
++		glStencilMask(0xFF);
++		glClearStencil(0);
++		glClear(GL_STENCIL_BUFFER_BIT);
++		glEnable(GL_STENCIL_TEST);
++		glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
++	}
+ 	//TODO sort the items by Z coordinate
+ 
+ 
+ 	//Draws all the translucent objects that were deferred to the end of the frame.
+ 	for(int i=0; i<s_G3DrawItemListCount; i++) {
+ 		g3_draw_item_t * item = &s_G3DrawItemList[i];
++		// Each with its own culling and depth test: GL has those of the last polygon attributes
++		// the frame set, which culled polygons drawn without culling (Black 2 and White 2's
++		// battle particles)
++		G3SIM_ApplyCullAndDepth(&item->polygonAttr);
++		if(idRule) {
++			glStencilFunc(GL_NOTEQUAL, (item->polygonAttr.polygonId & 0x3F) + 1, 0xFF);
++		}
+ 		if(item->textureId != 0){
+ 			glActiveTexture(GL_TEXTURE0);
+ 			glBindTexture(GL_TEXTURE_2D, item->textureId);
+@@ -489,19 +531,7 @@ void G3SIM_DrawItems()
+ 			glProgramUniform1i(g3shaderProgramID, G3SIM_Uniform("useTexture") , 0);
+ 		}
+ 
+-		if(item->texImageParam.flipS)
+-		{
+-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);
+-		} else {
+-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+-		}
+-
+-		if(item->texImageParam.flipT)
+-		{
+-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
+-		} else {
+-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+-		}
++		G3SIM_ApplyTexWrap(&item->texImageParam);
+ 
+ 		// Set the polygon mode in the shader
+ 		GLint polygonModeLoc = G3SIM_Uniform("polygonMode");
+@@ -518,6 +548,14 @@ void G3SIM_DrawItems()
+ 
+ 		free(item->verts);
+ 	}
++	if(idRule) {
++		glDisable(GL_STENCIL_TEST);
++	}
++	if (s_G3DrawItemListCount != 0) {
++		// Back to the current polygon attributes' (G3SIM_PolygonAttr sets the depth test only
++		// when it changes)
++		G3SIM_ApplyCullAndDepth(&s_curPolygonAttr);
++	}
+ 	s_G3DrawItemListCount = 0;
+ 
+ 	// Texture packs reloaded or switched: textures are made again from here on (nothing
+diff --git a/libraries/sim/src/g3_handler.cpp b/libraries/sim/src/g3_handler.cpp
+index 59cc18a..181f12d 100644
+--- a/libraries/sim/src/g3_handler.cpp
++++ b/libraries/sim/src/g3_handler.cpp
+@@ -78,128 +78,113 @@ extern u8 s_SIM_useWBuffer;
+ 
+ static void CommonDebugCommandHandling(draw_command_type_t aCommand);
+ 
+-static float GetVtxPosition(G3SIM_Vertex_t * vtx, int comp)
++// Polygon clipping, as the DS's geometry engine does it (and melonDS after it): in clip space, before the divide
++// by W, against the six planes -w <= x, y, z <= w. A vertex outside a plane is replaced by the points where the
++// polygon's edges cross it, with the texture coordinates and colours interpolated there, so a polygon that reaches
++// past the screen's edges or behind the camera is cut to its visible part instead of being dropped or projected
++// through W = 0.
++typedef struct {
++    s32 pos[4];
++    GLfloat s, t, r, g, b, a;
++} G3SIM_ClipVtx_t;
++
++// A polygon of up to 4 vertices gains at most one per plane
++#define G3SIM_CLIP_MAX_VERTS 10
++
++// Where the edge from vin (inside the plane) to vout (outside it) crosses it. Always computed from the inside
++// vertex, so that the two polygons sharing an edge get the same point and no crack opens between them
++static void ClipSegment(G3SIM_ClipVtx_t * outbuf, const G3SIM_ClipVtx_t * vin, const G3SIM_ClipVtx_t * vout,
++                        int comp, s32 plane, BOOL attribs)
+ {
+-    switch(comp){
+-        case 0:
+-            return vtx->x;
+-        case 1:
+-            return vtx->y;
+-        case 2:
+-            return vtx->z;
+-        case 3:
+-            return vtx->w;
+-        default:
+-            return 0.0f;
+-    }
+-}
+-
+-
+-void ClipSegment(fx32* outbuf, fx32 * vin, fx32 * vout, int comp, s32 plane, BOOL attribs)
+-{
+-    s64 factor_num = (s32)vin[3] - (plane * (s32)vin[comp]);
+-    s32 factor_den = factor_num - ((s32)vout[3] - (plane*(s32)vout[comp]));
+-
+-#define INTERPOLATE(var)  { outbuf[var] = (vin[var] + ((vout[var] - vin[var]) * factor_num) / factor_den); }
+-
+-    if (comp != 0) INTERPOLATE(0);
+-    if (comp != 1) INTERPOLATE(1);
+-    if (comp != 2) INTERPOLATE(2);
+-    INTERPOLATE(3);
+-    outbuf[comp] = plane*outbuf[3];
+-
+-    //if (attribs)
+-    //{
+-    //    INTERPOLATE(Color[0]);
+-    //    INTERPOLATE(Color[1]);
+-    //    INTERPOLATE(Color[2]);
+-//
+-    //    INTERPOLATE(TexCoords[0]);
+-    //    INTERPOLATE(TexCoords[1]);
+-    //}
+-
+-    //outbuf->Clipped = true;
++    s64 distIn = (s64)vin->pos[3] - plane * (s64)vin->pos[comp];    // >= 0
++    s64 distOut = (s64)vout->pos[3] - plane * (s64)vout->pos[comp]; // < 0
++    s64 den = distIn - distOut;                                     // > 0
+ 
++    for (int i = 0; i < 4; i++) {
++        outbuf->pos[i] = (s32)(vin->pos[i] + (((s64)vout->pos[i] - vin->pos[i]) * distIn) / den);
++    }
++    outbuf->pos[comp] = plane * outbuf->pos[3];
++
++    if (attribs) {
++        GLfloat f = (GLfloat)((double)distIn / (double)den);
++#define INTERPOLATE(var) outbuf->var = vin->var + (vout->var - vin->var) * f
++        INTERPOLATE(s);
++        INTERPOLATE(t);
++        INTERPOLATE(r);
++        INTERPOLATE(g);
++        INTERPOLATE(b);
++        INTERPOLATE(a);
+ #undef INTERPOLATE
++    }
+ }
+ 
+-
+-
+-static int ClipAgainstPlane(fx32 verts[][4], int nVerts, int clipStart, int comp, BOOL attribs)
++// Sutherland-Hodgman against one plane: comp <= w (plane 1) or comp >= -w (plane -1)
++static int ClipAgainstPlane(G3SIM_ClipVtx_t * out, const G3SIM_ClipVtx_t * in, int nVerts, int comp, s32 plane,
++                            BOOL attribs)
+ {
+-    fx32 temp[10][4];
+-    int prev, next;
+-    int c = clipStart;
+-
+-    if (clipStart == 2)
+-    {
+-        temp[0][0] = verts[0][0]; temp[0][1] = verts[0][1]; temp[0][2] = verts[0][2]; temp[0][3] = verts[0][3];
+-        temp[1][0] = verts[1][0]; temp[1][1] = verts[1][1]; temp[1][2] = verts[1][2]; temp[1][3] = verts[1][3];
+-    }
++    int c = 0;
+ 
+-    for(int i = clipStart; i < nVerts; i++) {
+-        prev = i-1; if (prev < 0) prev = nVerts-1;
+-        next = i+1; if (next >= nVerts) next = 0;
++    for (int i = 0; i < nVerts; i++) {
++        const G3SIM_ClipVtx_t * cur = &in[i];
++        const G3SIM_ClipVtx_t * next = &in[(i + 1) % nVerts];
++        BOOL curIn = (s64)plane * cur->pos[comp] <= (s64)cur->pos[3];
++        BOOL nextIn = (s64)plane * next->pos[comp] <= (s64)next->pos[3];
+ 
+-        fx32 vtx[4];
+-        vtx[0] = verts[i][0]; vtx[1] = verts[i][1]; vtx[2] = verts[i][2]; vtx[3] = verts[i][3];
+-        if(vtx[comp] > vtx[3]) {
+-            //if ((comp == 2) && (!(gpu.CurPolygonAttr & (1<<12)))) return 0;  //I think this is the W buffering thing
+-
+-            fx32 * vprev = verts[prev];
+-            if(vprev[comp] <= vprev[3]) {
+-                //ClipSegment((fx32*)&temp[c], &vtx[0], vprev, comp, 1, attribs);
+-                c++;
+-            }
+-
+-            fx32 * vnext = verts[next];
+-            if(vnext[comp] <= vnext[3]) {
+-                //ClipSegment((fx32*)&temp[c], &vtx[0], vnext, comp, 1, attribs);
+-                c++;
++        if (curIn) {
++            out[c++] = *cur;
++        }
++        if (curIn != nextIn) {
++            if (curIn) {
++                ClipSegment(&out[c], cur, next, comp, plane, attribs);
++            } else {
++                ClipSegment(&out[c], next, cur, comp, plane, attribs);
++                if (!attribs) {
++                    out[c].s = out[c].t = out[c].r = out[c].g = out[c].b = out[c].a = 0.0f;
++                }
+             }
+-        } else {
+-            memcpy(&temp[c++], vtx, sizeof(fx32)*4);
++            c++;
+         }
+     }
+ 
+-    nVerts = c;
+-    c = clipStart;
+-    for(int i=clipStart; i < nVerts; i++) {
+-        prev = i-1; if (prev < 0) prev = nVerts-1;
+-        next = i+1; if (next >= nVerts) next = 0;
++    return c;
++}
+ 
+-        fx32 vtx[4];
+-        vtx[0] = temp[i][0]; vtx[1] = temp[i][1]; vtx[2] = temp[i][2]; vtx[3] = temp[i][3];
+-        if(vtx[comp] < -vtx[3]) {
+-            fx32 * vprev = temp[prev];
+-            if(vprev[comp] >= -vprev[3]) {
+-                //ClipSegment((fx32*)&verts[c], &vtx[0], vprev, comp, -1, attribs);
+-                c++;
+-            }
++// Clips verts (room for G3SIM_CLIP_MAX_VERTS) in place; returns how many are left (0: nothing is visible)
++static int ClipVertices(G3SIM_ClipVtx_t * verts, int nVerts, BOOL attribs)
++{
++    G3SIM_ClipVtx_t temp[G3SIM_CLIP_MAX_VERTS];
+ 
+-            fx32 * vnext = temp[next];
+-            if(vnext[comp] >= -vnext[3]) {
+-                //ClipSegment((fx32*)&verts[c], &vtx[0], vnext, comp, -1, attribs);
+-                c++;
+-            }
+-        } else {
+-            memcpy(&verts[c++], vtx, sizeof(fx32)*4);
++    // Z (near and far), then Y, then X
++    static const int comps[3] = { 2, 1, 0 };
++    for (int i = 0; i < 3 && nVerts > 0; i++) {
++        nVerts = ClipAgainstPlane(temp, verts, nVerts, comps[i], 1, attribs);
++        if (nVerts == 0) {
++            break;
+         }
++        nVerts = ClipAgainstPlane(verts, temp, nVerts, comps[i], -1, attribs);
+     }
+ 
+-    return c;
++    return nVerts;
+ }
+ 
++// Positions only (the box test): verts has room for G3SIM_CLIP_MAX_VERTS
+ int G3SIM_ClipPolygon(fx32 verts[][4], int nVerts, int clipStart, BOOL attribs)
+ {
+-    // Z clipping
+-    nVerts = ClipAgainstPlane(verts, nVerts, clipStart, 2, attribs);
++    G3SIM_ClipVtx_t clip[G3SIM_CLIP_MAX_VERTS] = {};
++    (void)clipStart;
++    (void)attribs;
+ 
+-    // Y clipping
+-    nVerts = ClipAgainstPlane(verts, nVerts, clipStart, 1, attribs);
+-
+-    // X clipping
+-    nVerts = ClipAgainstPlane(verts, nVerts, clipStart, 0, attribs);
++    for (int i = 0; i < nVerts; i++) {
++        for (int j = 0; j < 4; j++) {
++            clip[i].pos[j] = verts[i][j];
++        }
++    }
++    nVerts = ClipVertices(clip, nVerts, FALSE);
++    for (int i = 0; i < nVerts; i++) {
++        for (int j = 0; j < 4; j++) {
++            verts[i][j] = clip[i].pos[j];
++        }
++    }
+     return nVerts;
+ }
+ 
+@@ -1617,10 +1602,28 @@ void G3SIM_Vtx(s16 x, s16 y, s16 z)
+     return;
+ }
+ 
++// SIM_SetSpriteDepthBias: polygons drawn while it is set are moved toward the camera for the depth test only (their
++// place on screen is unchanged), by nothing at their lowest point on screen up to `top` (fx32, in view units) at their
++// highest. A standing sprite's head then clears what stands just behind it (a sign's lower edge) while its feet stay
++// where the ground's effects (tall grass) can cover them. The DS snaps polygon edges to its 256x192 pixels, which
++// hides most of those overlaps; drawn at a higher resolution they show
++static fx32 s_spriteDepthBiasTop;
++
++extern "C" void SIM_SetSpriteDepthBias(fx32 top)
++{
++    s_spriteDepthBiasTop = top;
++}
++
++static int s_spriteSubmergeClipMode = 0;
++
++extern "C" void SIM_SetSpriteSubmergeClip(int mode)
++{
++    s_spriteSubmergeClipMode = mode;
++}
++
+ void G3SIM_SubmitPolygon(G3SIM_FxVtx_t * fxVerts, int numVerts) {
+-    G3SIM_Vertex_t glVerts[6];
+-    u8 addPolygon = TRUE;
+-    int numFinalVerts = numVerts;
++    G3SIM_ClipVtx_t clip[G3SIM_CLIP_MAX_VERTS];
++    G3SIM_Vertex_t polyVerts[G3SIM_CLIP_MAX_VERTS];
+ 
+     if(numVerts < 3 || numVerts > 4) {
+         SIM_assert_always();
+@@ -1629,117 +1632,168 @@ void G3SIM_SubmitPolygon(G3SIM_FxVtx_t * fxVerts, int numVerts) {
+ 
+     for(int i=0; i < numVerts; i++) {
+         G3SIM_FxVtx_t * curVtx = &fxVerts[i];
+-    
+-        // Truncate W to 24 bits
+-        curVtx->w &= 0x00FFFFFF;
+-    
+-        float floatX, floatY, floatW;
+-        float screenX, screenY;
+-    
+-        floatX = FX_FX32_TO_F32(curVtx->x);
+-        floatY = FX_FX32_TO_F32(curVtx->y);
+-        floatW = FX_FX32_TO_F32(curVtx->w);
+-    
+-        screenX = (((floatX+floatW)*256.0f) / (2*floatW));
+-        screenY = (((floatY+floatW)*192.0f) / (2*floatW));
+-        					
+-        screenX = (screenX / 128.0f) - 1.0f;
+-        screenY = (screenY / 96.0f) - 1.0f;
+-    
+-        glVerts[i].x = screenX;
+-        glVerts[i].y = screenY;
+-        glVerts[i].s = curVtx->s;
+-        glVerts[i].t = curVtx->t;
+-        glVerts[i].r = curVtx->r;
+-        glVerts[i].g = curVtx->g;
+-        glVerts[i].b = curVtx->b;
+-        glVerts[i].a = curVtx->a;
++        for(int j=0; j < 4; j++) {
++            clip[i].pos[j] = curVtx->nums[j];
++        }
++        clip[i].s = curVtx->s;
++        clip[i].t = curVtx->t;
++        clip[i].r = curVtx->r;
++        clip[i].g = curVtx->g;
++        clip[i].b = curVtx->b;
++        clip[i].a = curVtx->a;
++    }
++
++    if (s_spriteSubmergeClipMode != 0 && numVerts >= 3) {
++        double lo = 1e9, hi = -1e9;
++        bool validW = true;
++        for (int i = 0; i < numVerts; i++) {
++            if (clip[i].pos[3] <= 0) { validW = false; break; }
++            double ny = (double)clip[i].pos[1] / (double)clip[i].pos[3];
++            if (ny < lo) lo = ny;
++            if (ny > hi) hi = ny;
++        }
++        if (validW && hi > lo) {
++            double cutY = (s_spriteSubmergeClipMode == 1)
++                ? (lo + (hi - lo) * 0.35)
++                : (hi - (hi - lo) * 0.35);
++            G3SIM_ClipVtx_t out[G3SIM_CLIP_MAX_VERTS];
++            int outCount = 0;
++            for (int i = 0; i < numVerts; i++) {
++                int j = (i + 1) % numVerts;
++                double yi = (double)clip[i].pos[1] / (double)clip[i].pos[3];
++                double yj = (double)clip[j].pos[1] / (double)clip[j].pos[3];
++                bool inI = (s_spriteSubmergeClipMode == 1) ? (yi >= cutY) : (yi <= cutY);
++                bool inJ = (s_spriteSubmergeClipMode == 1) ? (yj >= cutY) : (yj <= cutY);
++                if (inI) {
++                    out[outCount++] = clip[i];
++                }
++                if (inI != inJ) {
++                    // Solve (p1 + t*(q1 - p1)) / (p3 + t*(q3 - p3)) = cutY
++                    double p1 = (double)clip[i].pos[1], p3 = (double)clip[i].pos[3];
++                    double q1 = (double)clip[j].pos[1], q3 = (double)clip[j].pos[3];
++                    double denom = (q1 - p1) - cutY * (q3 - p3);
++                    double t = (denom != 0.0) ? ((cutY * p3 - p1) / denom) : 0.0;
++                    if (t < 0.0) t = 0.0;
++                    if (t > 1.0) t = 1.0;
++                    G3SIM_ClipVtx_t v;
++                    for (int k = 0; k < 4; k++) {
++                        v.pos[k] = (s32)(clip[i].pos[k] + t * (clip[j].pos[k] - clip[i].pos[k]));
++                    }
++                    v.s = (float)(clip[i].s + t * (clip[j].s - clip[i].s));
++                    v.t = (float)(clip[i].t + t * (clip[j].t - clip[i].t));
++                    v.r = (float)(clip[i].r + t * (clip[j].r - clip[i].r));
++                    v.g = (float)(clip[i].g + t * (clip[j].g - clip[i].g));
++                    v.b = (float)(clip[i].b + t * (clip[j].b - clip[i].b));
++                    v.a = (u8)(clip[i].a + t * (clip[j].a - clip[i].a));
++                    out[outCount++] = v;
++                }
++            }
++            if (outCount >= 3) {
++                numVerts = outCount;
++                for (int i = 0; i < numVerts; i++) clip[i] = out[i];
++            }
++        }
++    }
++
++    // Clipped in clip space: what is left has -w <= x, y, z <= w, so W >= 0 and the divide below stays on screen
++    numVerts = ClipVertices(clip, numVerts, TRUE);
++    if(numVerts < 3) {
++        return;
+     }
+ 
+     // Get the W size and remove the polygon if W is 0
+     u32 wsize = 0;
+-    for(int i=0; i < 4; i++) {
+-        G3SIM_FxVtx_t * curVtx = &fxVerts[i];
+-        u32 w = curVtx->w;
++    for(int i=0; i < numVerts; i++) {
++        u32 w = (u32)clip[i].pos[3];
+         if(w == 0){
+-            addPolygon = FALSE;
++            return;
+         }
+         while ((w >> wsize) && (wsize < 32)) {
+             wsize += 4;
+         }
+     }
+ 
+-    // Normalize W
+-    for(int i=0; i < 4; i++) {
+-        G3SIM_FxVtx_t * curVtx = &fxVerts[i];
+-        
++    // The sprite depth bias's span: the polygon's lowest and highest points on screen (NDC y)
++    double biasBottom = 0.0, biasSpan = 0.0;
++    if(s_spriteDepthBiasTop != 0 && !s_SIM_useWBuffer) {
++        double lo = 1e9, hi = -1e9;
++        for(int i=0; i < numVerts; i++) {
++            double y = (double)clip[i].pos[1] / (double)clip[i].pos[3];
++            lo = y < lo ? y : lo;
++            hi = y > hi ? y : hi;
++        }
++        biasBottom = lo;
++        biasSpan = hi - lo;
++    }
++
++    for(int i=0; i < numVerts; i++) {
++        G3SIM_ClipVtx_t * curVtx = &clip[i];
++        s32 vw = curVtx->pos[3];
++
++        polyVerts[i].x = (GLfloat)((double)curVtx->pos[0] / (double)vw);
++        polyVerts[i].y = (GLfloat)((double)curVtx->pos[1] / (double)vw);
++        polyVerts[i].s = curVtx->s;
++        polyVerts[i].t = curVtx->t;
++        polyVerts[i].r = curVtx->r;
++        polyVerts[i].g = curVtx->g;
++        polyVerts[i].b = curVtx->b;
++        polyVerts[i].a = curVtx->a;
++
++        // Normalize W
+         s32 w, wshifted;
+-        
++
+         if(wsize < 16) {
+-        	w = curVtx->w << (16-wsize);
++        	w = vw << (16-wsize);
+         	wshifted = w >> (16-wsize);
+         } else {
+-        	w = curVtx->w >> (wsize - 16);
++        	w = vw >> (wsize - 16);
+         	wshifted = w << (wsize - 16);
+         }
+-        
+-        s32 z;
+-        
+-        if(curVtx->w) {
+-        	z = ((((s64)curVtx->z * 0x4000) / curVtx->w) + 0x3FFF) * 0x200;
+-        } else {
+-        	z = 0x7FFE00;
++
++        s32 z = ((((s64)curVtx->pos[2] * 0x4000) / vw) + 0x3FFF) * 0x200;
++
++        // The sprite depth bias: the depth of the same point moved d toward the camera. With the projection's z column,
++        // z_clip = m22 * z_view + m32 and w = -z_view, so moving it d closer gives z_clip + m22 * d over w - d
++        if(biasSpan > 0.0) {
++            double t = ((double)curVtx->pos[1] / (double)vw - biasBottom) / biasSpan;
++            s64 d = (s64)((double)s_spriteDepthBiasTop * t);
++            s64 m22 = currentProjectionMatrix.nums[2][2];
++            s64 vwBiased = (s64)vw - d;
++            if(d > 0 && vwBiased > 0) {
++                s64 zClip = (s64)curVtx->pos[2] + ((m22 * d) >> FX32_SHIFT);
++                z = (s32)((((zClip * 0x4000) / vwBiased) + 0x3FFF) * 0x200);
++            }
+         }
+-        
++
++        if(s_spriteSubmergeClipMode == 2 && !s_SIM_useWBuffer) {
++            s64 d = FX32_ONE * 24;
++            s64 m22 = currentProjectionMatrix.nums[2][2];
++            s64 vwBiased = (s64)vw + d;
++            if(vwBiased > 0) {
++                s64 zClip = (s64)curVtx->pos[2] - ((m22 * d) >> FX32_SHIFT);
++                z = (s32)((((zClip * 0x4000) / vwBiased) + 0x3FFF) * 0x200);
++            }
++        }
++
+         if(s_SIM_useWBuffer) {
+         	z = wshifted;
+         }
+-        
++
+         if(z < 0) {
+         	z = 0;
+         } else if(z > 0xFFFFFF) {
+         	z = 0xFFFFFF;
+         }
+-        
+-        glVerts[i].z = (((float)z / 16777215.0f) * 2.0f) - 1.0f;
+-        glVerts[i].w = (((float)w / 16777215.0f) * 2.0f) - 1.0f;
+-    }
+-
+-    // If we have a quad, convert it into 2 triangles
+-    if(numVerts == 4) {
+-        //make a copy of the quad
+-        G3SIM_Vertex_t quad[4];
+-        memcpy(quad, glVerts, sizeof(G3SIM_Vertex_t) * 4);
+-
+-        //Convert to 2 triangles
+-        #define CopyVertex(srcIdx, destIdx) memcpy(&glVerts[destIdx], &quad[srcIdx], sizeof(G3SIM_Vertex_t))
+-        CopyVertex(0, 0);
+-        CopyVertex(1, 1);
+-        CopyVertex(2, 2);
+-        CopyVertex(2, 3);
+-        CopyVertex(3, 4);
+-        CopyVertex(0, 5);
+-        #undef CopyVertex
+-
+-        numFinalVerts = 6;
+-    }
+-
+-    // Check if any of the verts are horribly out of bounds
+-    // TODO: This is a HACK and we should eventually remove it
+-    for(int i=0; i < numFinalVerts; i++) {
+-        if(glVerts[i].x > 50.0f || glVerts[i].x < -50.0f) {
+-            addPolygon = FALSE;
+-        }
+-        if(glVerts[i].y > 50.0f || glVerts[i].y < -50.0f) {
+-            addPolygon = FALSE;
+-        }
+-    }
+ 
+-    if(addPolygon) {
+-        for(int i=0; i < numFinalVerts; i++) {
+-            G3SIM_AddVtx(&glVerts[i]);
+-        }
++        polyVerts[i].z = (((float)z / 16777215.0f) * 2.0f) - 1.0f;
++        // The clip-space W, for the vertex shader (W is not used otherwise)
++        polyVerts[i].w = (GLfloat)((double)vw / 4096.0);
+     }
+ 
+-
++    // The clipped polygon is convex: a fan of triangles
++    for(int i=1; i + 1 < numVerts; i++) {
++        G3SIM_AddVtx(&polyVerts[0]);
++        G3SIM_AddVtx(&polyVerts[i]);
++        G3SIM_AddVtx(&polyVerts[i + 1]);
++    }
+ }
+diff --git a/libraries/sim/src/shaders/g2_fragment.glsl b/libraries/sim/src/shaders/g2_fragment.glsl
+index 6f1bc95..bad4cac 100644
+--- a/libraries/sim/src/shaders/g2_fragment.glsl
++++ b/libraries/sim/src/shaders/g2_fragment.glsl
+@@ -24,6 +24,17 @@ uniform float tex3dScaleS;
+ // whose width they use, holding only this screen (G2SIM_DrawBGWide)
+ uniform int wideBgMask;
+ uniform float wideBgScaleS;
++// OBJ priorities repeated across the sides (bit n: priority n): the 4:3 picture wraps around
++uniform int wideObjMask;
++// BG layers (bit n: BGn) whose edge columns continue across the sides
++uniform int wideEdgeMask;
++// BG layers (bit n: BGn) of those whose sides mirror the picture instead of continuing its edge column
++uniform int wideEdgeMirrorMask;
++// BG layers (bit n: BGn) whose sides repeat the picture's pixel column wideStripeColumn for each row
++uniform int wideStripeMask;
++uniform float wideStripeColumn;
++// OBJ priorities (bit n: priority n) whose dark edge pixels continue across the sides
++uniform int wideObjEdgeMask;
+ 
+ smooth in vec2 fragTexCoord;
+ //uniform float inAlpha;
+@@ -59,14 +70,31 @@ void main()
+     if ((wideBgMask & 1) != 0 && bg0as3d == 0) {
+         bgc[0] = texture(bgTexture[0], cWide);
+     }
+-    bgc[1] = (wideBgMask & 2) != 0 ? texture(bgTexture[1], cWide) : (inside2d ? texture(bgTexture[1], c2d) : none);
+-    bgc[2] = (wideBgMask & 4) != 0 ? texture(bgTexture[2], cWide) : (inside2d ? texture(bgTexture[2], c2d) : none);
+-    bgc[3] = (wideBgMask & 8) != 0 ? texture(bgTexture[3], cWide) : (inside2d ? texture(bgTexture[3], c2d) : none);
++    vec2 cEdge = vec2(clamp(c2d.s, 0.002, 0.998), c2d.t);
++    vec2 cStripe = vec2(wideStripeColumn, c2d.t);
++    vec2 cEdgeMirror = vec2(clamp(c2d.s < 0.0 ? -c2d.s : (c2d.s > 1.0 ? 2.0 - c2d.s : c2d.s), 0.002, 0.998), c2d.t);
++    bgc[1] = (wideBgMask & 2) != 0 ? texture(bgTexture[1], cWide) : ((inside2d || (wideEdgeMask & 2) != 0) ? texture(bgTexture[1], (wideStripeMask & 2) != 0 && !inside2d ? cStripe : ((wideEdgeMirrorMask & 2) != 0 ? cEdgeMirror : cEdge)) : none);
++    bgc[2] = (wideBgMask & 4) != 0 ? texture(bgTexture[2], cWide) : ((inside2d || (wideEdgeMask & 4) != 0) ? texture(bgTexture[2], (wideStripeMask & 4) != 0 && !inside2d ? cStripe : ((wideEdgeMirrorMask & 4) != 0 ? cEdgeMirror : cEdge)) : none);
++    bgc[3] = (wideBgMask & 8) != 0 ? texture(bgTexture[3], cWide) : ((inside2d || (wideEdgeMask & 8) != 0) ? texture(bgTexture[3], (wideStripeMask & 8) != 0 && !inside2d ? cStripe : ((wideEdgeMirrorMask & 8) != 0 ? cEdgeMirror : cEdge)) : none);
+     vec4 objc[4];
+-    objc[0] = inside2d ? texture(objTexture[0], c2d) : none;
+-    objc[1] = inside2d ? texture(objTexture[1], c2d) : none;
+-    objc[2] = inside2d ? texture(objTexture[2], c2d) : none;
+-    objc[3] = inside2d ? texture(objTexture[3], c2d) : none;
++    vec2 cWrap = vec2(fract(c2d.s), c2d.t);
++    // Outside the 4:3 picture, the edge column's pixel if there is one (a bar that reaches the edge, with its border and
++    // its inside), for the priorities asked for
++    vec2 cObjEdge = vec2(clamp(c2d.s, 0.002, 0.998), c2d.t);
++    vec4 objEdge[4];
++    for (int k = 0; k < 4; k++) {
++        objEdge[k] = none;
++        if (!inside2d && (wideObjEdgeMask & (1 << k)) != 0) {
++            vec4 e = texture(objTexture[k], cObjEdge);
++            if (e.a > 0.1) {
++                objEdge[k] = e;
++            }
++        }
++    }
++    objc[0] = inside2d ? texture(objTexture[0], c2d) : ((wideObjMask & 1) != 0 ? texture(objTexture[0], cWrap) : objEdge[0]);
++    objc[1] = inside2d ? texture(objTexture[1], c2d) : ((wideObjMask & 2) != 0 ? texture(objTexture[1], cWrap) : objEdge[1]);
++    objc[2] = inside2d ? texture(objTexture[2], c2d) : ((wideObjMask & 4) != 0 ? texture(objTexture[2], cWrap) : objEdge[2]);
++    objc[3] = inside2d ? texture(objTexture[3], c2d) : ((wideObjMask & 8) != 0 ? texture(objTexture[3], cWrap) : objEdge[3]);
+     vec4 objWin = inside2d ? texture(objWindowTexture, c2d) : none;
+     for(int i=0; i<4; i++) {
+         int bgNum = bgOrder[i];
+diff --git a/libraries/sim/src/shaders/g3_fragment.glsl b/libraries/sim/src/shaders/g3_fragment.glsl
+index 02681e4..99067f9 100644
+--- a/libraries/sim/src/shaders/g3_fragment.glsl
++++ b/libraries/sim/src/shaders/g3_fragment.glsl
+@@ -10,7 +10,7 @@ uniform float fogDepthBoundary[32];
+ uniform float fogDensity[32];
+ smooth in vec2 fragTexCoord;
+ smooth in vec4 fragInColor;
+-smooth in vec4 coords;
++smooth in vec4 coordsW;
+ // Edge marking (sim_main.cpp's edge pass) reads what the opaque pixels leave in attr: the
+ // polygon ID (6 bits, times 4) in r, the depth's high and low bytes in g and b. a is the write
+ // mask, blended like the colour: 1 for an opaque pixel replaces the pixel's attributes, 0 for a
+@@ -22,6 +22,7 @@ layout(location = 1) out vec4 attr;
+ 
+ void main()
+ {
++    vec4 coords = vec4(coordsW.xyz / coordsW.w, 1.0);
+     vec4 shadedColor;
+     if( useTexture == 1 ) {
+         if(polygonMode == 0) {
+diff --git a/libraries/sim/src/shaders/g3_vertex.glsl b/libraries/sim/src/shaders/g3_vertex.glsl
+index 63ff1c9..ebeac83 100644
+--- a/libraries/sim/src/shaders/g3_vertex.glsl
++++ b/libraries/sim/src/shaders/g3_vertex.glsl
+@@ -4,18 +4,24 @@ R""(
+ layout (location = 0) in vec3 position;
+ layout (location = 1) in vec2 texCoord;
+ layout (location = 2) in vec4 inColor;
++// The vertex's clip-space W (positive), for perspective-correct interpolation as on the DS; 0 (not set) draws
++// flat, as before
++layout (location = 3) in float clipW;
+ 
+ smooth out vec2 fragTexCoord;
+ smooth out vec4 fragInColor;
+-smooth out vec4 coords;
++// (xyz * w, w): the fragment shader divides by the interpolated w to get the screen-linear xyz back (NDC z
++// is linear in screen space; GLSL ES has no noperspective)
++smooth out vec4 coordsW;
+ 
+ // Widescreen scenes the game didn't widen itself: narrower, so 4:3 shapes stay 4:3
+ uniform float xScale;
+ 
+ void main()
+ {
+-    gl_Position = vec4(position.x * xScale, position.y, position.z, 1.0);
+-    coords = vec4(position.x, position.y, position.z, 1.0);
++    float w = clipW > 0.0 ? clipW : 1.0;
++    gl_Position = vec4(position.x * xScale * w, position.y * w, position.z * w, w);
++    coordsW = vec4(position.x * w, position.y * w, position.z * w, w);
+     fragTexCoord = vec2(texCoord.x, texCoord.y);
+     fragInColor = inColor;
+ }
+diff --git a/libraries/sim/src/sim_companion.cpp b/libraries/sim/src/sim_companion.cpp
+index cfe9fd9..b89e9d0 100644
+--- a/libraries/sim/src/sim_companion.cpp
++++ b/libraries/sim/src/sim_companion.cpp
+@@ -12,6 +12,15 @@
+ #include "imgui_impl_opengl3.h"
+ #include "simulator/imgui/imgui.hpp"
+ 
++extern "C" __attribute__((weak)) BOOL TouchControls_IsEnabled(void) {
++  return FALSE;
++}
++
++extern "C" __attribute__((weak)) void TouchControls_DrawBottomOverlay(float width, float height) {
++  (void)width;
++  (void)height;
++}
++
+ namespace {
+ 
+ ImGuiContext *sContext = nullptr;
+@@ -149,7 +158,7 @@ extern "C" void SIM_Companion_QueueTouch(int type, int x, int y) {
+ 
+ extern "C" void SIM_Companion_Render(const SIM_CompanionLayout *layout) {
+   sDsViewSet = false;
+-  if (!layout->companionVisible) {
++  if (!layout->companionVisible && !TouchControls_IsEnabled()) {
+     sPendingTouches.clear();
+     return;
+   }
+@@ -203,7 +212,10 @@ extern "C" void SIM_Companion_Render(const SIM_CompanionLayout *layout) {
+ 
+   ImGui_ImplOpenGL3_NewFrame();
+   ImGui::NewFrame();
+-  SIM_Prj_CompanionDraw(&layout->frame);
++  if (layout->companionVisible) {
++    SIM_Prj_CompanionDraw(&layout->frame);
++  }
++  TouchControls_DrawBottomOverlay(layout->frame.outputWidth, layout->frame.outputHeight);
+   ImGui::Render();
+ 
+   glViewport(0, 0, (GLsizei)layout->frame.outputWidth, (GLsizei)layout->frame.outputHeight);
+diff --git a/libraries/sim/src/sim_g2.cpp b/libraries/sim/src/sim_g2.cpp
+index de2b91b..b3cf7bd 100644
+--- a/libraries/sim/src/sim_g2.cpp
++++ b/libraries/sim/src/sim_g2.cpp
+@@ -66,6 +66,21 @@ static void PlotLinePixel(u8 *screenBuf, u8 r, u8 g, u8 b, u32 x, u32 y, BOOL is
+   pixel[3] = 255;
+ }
+ 
++// Whether a hardware window's horizontal range holds screenX. On a wide layer a window that
++// starts at the screen's left edge (0) continues across the left side, and one that reaches its
++// right edge (255) across the right side (the HM cut-in's band spans the whole screen)
++static bool WideWindowContains(int screenX, int left, int right) {
++  if (sWideOut != nullptr) {
++    if (left == 0 && screenX < 0) {
++      screenX = 0;
++    }
++    if (right >= SIM_NDS_SCREEN_WIDTH - 1 && screenX >= SIM_NDS_SCREEN_WIDTH - 1) {
++      screenX = SIM_NDS_SCREEN_WIDTH - 2;
++    }
++  }
++  return screenX >= 0 && screenX < SIM_NDS_SCREEN_WIDTH && screenX >= left && screenX < right;
++}
++
+ static void DrawBGLine_Text(u32 line, u32 bgnum, u8 mosaic, u8 isSub);
+ static void DrawBGLine_Extended(u32 line, u32 bgnum, u8 mosaic, u8 isSub);
+ static void DrawBGLine_Affine(u32 line, u32 bgnum, u8 mosaic, u8 isSub);
+@@ -262,9 +277,36 @@ void G2SIM_DrawBG(u8 bgNum, u8 bgMode, u8 bg03D, u8 isSub) {
+ #endif
+ }
+ 
+-bool G2SIM_DrawBGWide(u8 bgNum, u8 bgMode, int width) {
++static const int kMaxWideStamps = 16;
++static unsigned char sStampImage[16 * 64 * 3];
++static int sStampW = 0;
++static int sStampH = 0;
++static SIM_WideStamp sStamps[kMaxWideStamps];
++static int sStampCount = 0;
++static int sStampBg = -1;
++
++void G2SIM_SetWideStampImage(const unsigned char *rgb, int width, int height) {
++  if (rgb == nullptr || width <= 0 || height <= 0 || width > 16 || height > 64) {
++    sStampW = sStampH = 0;
++    return;
++  }
++  memcpy(sStampImage, rgb, (size_t)width * height * 3);
++  sStampW = width;
++  sStampH = height;
++}
++
++void G2SIM_SetWideStamps(unsigned char bgNum, const SIM_WideStamp *stamps, int count) {
++  sStampBg = bgNum;
++  sStampCount = count > kMaxWideStamps ? kMaxWideStamps : (count < 0 ? 0 : count);
++  for (int i = 0; i < sStampCount; i++) {
++    sStamps[i] = stamps[i];
++  }
++}
++
++bool G2SIM_DrawBGWide(u8 bgNum, u8 bgMode, int width, bool mirror, u8 isSub) {
+   const bool text = bgNum <= 1 ? bgMode <= 5 : bgNum == 2 ? (bgMode <= 1 || bgMode == 3) : bgMode == 0;
+-  if (!text || width <= SIM_NDS_SCREEN_WIDTH || width > kWideTexWidth || !s_SIM_DBG_BGenable[bgNum]) {
++  const bool enabled = isSub ? s_SIM_DBG_BGSenable[bgNum] : s_SIM_DBG_BGenable[bgNum];
++  if (!text || width <= SIM_NDS_SCREEN_WIDTH || width > kWideTexWidth || !enabled) {
+     return false;
+   }
+   static u8 sWideBuf[4 * kWideTexWidth * SIM_NDS_SCREEN_HEIGHT];
+@@ -285,12 +327,83 @@ bool G2SIM_DrawBGWide(u8 bgNum, u8 bgMode, int width) {
+   sLineWidth = width;
+   sWideOut = sWideBuf;
+   for (int j = 0; j < SIM_NDS_SCREEN_HEIGHT; j++) {
+-    DrawBGLine_Text(j, bgNum, 0, FALSE);
++    DrawBGLine_Text(j, bgNum, 0, isSub);
+   }
+   sLineStart = 0;
+   sLineWidth = SIM_NDS_SCREEN_WIDTH;
+   sWideOut = nullptr;
+ 
++  if (mirror) {
++    // The sides show the picture mirrored: column -1-k is column k, and column 256+k is column 255-k
++    const int pad = (width - SIM_NDS_SCREEN_WIDTH) / 2;
++    for (int row = 0; row < SIM_NDS_SCREEN_HEIGHT; row++) {
++      u8 *line = sWideBuf + 4 * kWideTexWidth * row;
++      for (int x = 0; x < width; x++) {
++        const int screenX = x - pad;
++        int src;
++        if (screenX < 0) {
++          src = -1 - screenX;
++        } else if (screenX >= SIM_NDS_SCREEN_WIDTH) {
++          src = 2 * SIM_NDS_SCREEN_WIDTH - 1 - screenX;
++        } else {
++          continue;
++        }
++        if (src < 0 || src >= SIM_NDS_SCREEN_WIDTH) {
++          continue; // more than a screen's width of side
++        }
++        memcpy(line + 4 * x, line + 4 * (src + pad), 4);
++      }
++    }
++  }
++
++  if (sStampW > 0 && bgNum == sStampBg) {
++    const int pad = (width - SIM_NDS_SCREEN_WIDTH) / 2;
++    for (int i = 0; i < sStampCount; i++) {
++      const SIM_WideStamp &st = sStamps[i];
++      for (int r = 0; r < st.height; r++) {
++        // A stamp taller than its image repeats rows: st.extraTop of row 3 (under the box's corner, above the HP
++        // band), and the rest of the row above the image's last five (the fill under the band)
++        int srcRow = r;
++        if (st.height > sStampH) {
++          const int tail = 5;
++          const int topRows = 4; // rows 0..3, then extraTop copies of row 3
++          if (r < topRows) {
++            srcRow = r;
++          } else if (r < topRows + st.extraTop) {
++            srcRow = topRows - 1;
++          } else if (r >= st.height - tail) {
++            srcRow = r - (st.height - sStampH);
++          } else if (r - st.extraTop < sStampH - tail) {
++            srcRow = r - st.extraTop;
++          } else {
++            srcRow = sStampH - tail - 1;
++          }
++        }
++        const int y = st.y + r;
++        if (y < 0 || y >= SIM_NDS_SCREEN_HEIGHT || srcRow < 0 || srcRow >= sStampH) {
++          continue;
++        }
++        u8 *line = sWideBuf + 4 * kWideTexWidth * (SIM_NDS_SCREEN_HEIGHT - 1 - y);
++        for (int c = 0; c < sStampW; c++) {
++          const int srcCol = st.flipX ? sStampW - 1 - c : c;
++          const unsigned char *px = sStampImage + 3 * (srcRow * sStampW + srcCol);
++          if (px[0] == 255 && px[1] == 255 && px[2] == 255) {
++            continue;
++          }
++          const int x = st.x + c + pad;
++          if (x < 0 || x >= width) {
++            continue;
++          }
++          u8 *d = line + 4 * x;
++          d[0] = px[0];
++          d[1] = px[1];
++          d[2] = px[2];
++          d[3] = 255;
++        }
++      }
++    }
++  }
++
+   glActiveTexture(GL_TEXTURE0 + s_bgTexUnits[bgNum]);
+   glBindTexture(GL_TEXTURE_2D, sWideTextures[bgNum]);
+   glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, kWideTexWidth, SIM_NDS_SCREEN_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, sWideBuf);
+@@ -650,7 +763,7 @@ static void DrawBGLine_Text(u32 line, u32 bgnum, u8 mosaic, u8 isSub) {
+         u8 windowTop = (win0V >> 8) & 0b11111111;
+ 
+         const int screenX = (int)i + sLineStart;
+-        if (screenX >= 0 && screenX < SIM_NDS_SCREEN_WIDTH && screenX >= windowLeft && screenX < windowRight &&
++        if (WideWindowContains(screenX, windowLeft, windowRight) &&
+             line >= windowTop && line < windowBottom) {
+           // Inside window
+           windowPass = ((winIn >> bgnum) & 1);
+@@ -746,7 +859,7 @@ static void DrawBGLine_Text(u32 line, u32 bgnum, u8 mosaic, u8 isSub) {
+         u8 windowTop = (win0V >> 8) & 0b11111111;
+ 
+         const int screenX = (int)i + sLineStart;
+-        if (screenX >= 0 && screenX < SIM_NDS_SCREEN_WIDTH && screenX >= windowLeft && screenX < windowRight &&
++        if (WideWindowContains(screenX, windowLeft, windowRight) &&
+             line >= windowTop && line < windowBottom) {
+           // Inside window
+           windowPass = ((winIn >> bgnum) & 1);
+diff --git a/libraries/sim/src/sim_g3_CommandProcessor.cpp b/libraries/sim/src/sim_g3_CommandProcessor.cpp
+index 33433a0..22aeab4 100644
+--- a/libraries/sim/src/sim_g3_CommandProcessor.cpp
++++ b/libraries/sim/src/sim_g3_CommandProcessor.cpp
+@@ -652,7 +652,30 @@ void HandleCommandMessage(draw_msg_t *msg) {
+ }
+ 
+ // C APIs
++// A command that draws, or ends a frame: the next frame's 3D starts there (SIM_Begin3DCommand
++// clears the last one). Matrix and state commands don't: games send them at other times too
++// (Platinum's PC boxes, from their vblank handler, with the 3D still to be shown at the next vblank)
++static bool StartsDrawing(int type) {
++    switch (type) {
++    case DRAW_CMD_G3_BEGIN:
++    case DRAW_CMD_G3_VTX:
++    case DRAW_CMD_G3_VTX10:
++    case DRAW_CMD_G3_VTX16:
++    case DRAW_CMD_G3_VTXXY:
++    case DRAW_CMD_G3_VTXXZ:
++    case DRAW_CMD_G3_VTXYZ:
++    case DRAW_CMD_G3_VTXDIFF:
++    case DRAW_CMD_G3_CMD_LIST:
++    case DRAW_CMD_G3_SWAPBUFFERS:
++        return true;
++    default:
++        return false;
++    }
++}
++
+ void SIM_HandleG3Command(draw_msg_t * msg) {
+-    SIM_Begin3DCommand();
++    if (StartsDrawing(msg->type)) {
++        SIM_Begin3DCommand();
++    }
+     SIM::G3::HandleCommandMessage(msg);
+ }
+\ No newline at end of file
+diff --git a/libraries/sim/src/sim_main.cpp b/libraries/sim/src/sim_main.cpp
+index e34a072..ca9c398 100644
+--- a/libraries/sim/src/sim_main.cpp
++++ b/libraries/sim/src/sim_main.cpp
+@@ -728,6 +728,7 @@ extern "C" int SIM_AntiAliasingSamples(void) {
+ // viewport that wide (latched at the end of SIM_Render, for the 3D drawn until the next one)
+ static BOOL sWideRequested = FALSE;
+ static bool sWideActive = false;
++static bool sWideSubTop = false; // a wide scene whose top screen is the sub engine (2D only: BW2's Summary)
+ static int sWide3dWidth = SIM_NDS_SCREEN_WIDTH; // the 3D being drawn: its width
+ static int sWideWidth = SIM_NDS_SCREEN_WIDTH;   // the top display's
+ static int sFboWidth = SIM_NDS_SCREEN_WIDTH;    // the 3D framebuffer's
+@@ -737,6 +738,20 @@ static bool sWideScale3DRequested = false;
+ static u8 sWideBgRequested = 0;
+ static bool sWideScale3D = false; // libntr narrows the 3D to keep its 4:3 shapes
+ static u8 sWideBgLayers = 0;      // main-engine BG layers drawn across the whole width
++static u8 sWideObjRequested = 0;
++static u8 sWideObjWrap = 0;       // main-engine OBJ priorities repeated across the sides
++static u8 sWideEdgeRequested = 0;
++static u8 sWideObjEdgeRequested = 0;
++static u8 sWideObjEdge = 0;       // main-engine OBJ priorities whose dark edge pixels continue across the sides
++static u8 sWideMirrorRequested = 0;
++static u8 sWideMirrorBgs = 0;     // wide BG layers whose sides mirror the picture
++static u8 sWideEdgeMirrorRequested = 0;
++static u8 sWideStripeRequested = 0;
++static float sWideStripeColumnRequested = 0.99f;
++static u8 sWideStripeBgs = 0;
++static float sWideStripeColumn = 0.99f;
++static u8 sWideEdgeMirrorBgs = 0; // of those, the layers whose sides mirror the picture
++static u8 sWideEdgeBgs = 0;       // main-engine BG layers whose edge columns continue across the sides
+ 
+ extern "C" void SIM_SetWidescreenScene(BOOL wide) {
+   sWideRequested = wide;
+@@ -747,6 +762,39 @@ extern "C" void SIM_SetWidescreenSceneOptions(BOOL scale3D, u8 wideBgLayers) {
+   sWideBgRequested = wideBgLayers & 0x0F;
+ }
+ 
++extern "C" void SIM_SetWidescreenObjWrap(u8 objPriorities) {
++  sWideObjRequested = objPriorities & 0x0F;
++}
++
++extern "C" void SIM_SetWidescreenObjEdgeExtend(u8 objPriorities) {
++  sWideObjEdgeRequested = objPriorities & 0x0F;
++}
++
++extern "C" void SIM_SetWidescreenStampImage(const unsigned char *rgb, int width, int height) {
++  G2SIM_SetWideStampImage(rgb, width, height);
++}
++
++extern "C" void SIM_SetWidescreenStamps(unsigned char bgLayer, const SIM_WideStamp *stamps, int count) {
++  G2SIM_SetWideStamps(bgLayer, stamps, count);
++}
++
++extern "C" void SIM_SetWidescreenBgEdgeMirror(u8 bgLayers) {
++  sWideEdgeMirrorRequested = bgLayers & 0x0F;
++}
++
++extern "C" void SIM_SetWidescreenBgStripe(u8 bgLayers, float column) {
++  sWideStripeRequested = bgLayers & 0x0F;
++  sWideStripeColumnRequested = column;
++}
++
++extern "C" void SIM_SetWidescreenBgMirror(u8 bgLayers) {
++  sWideMirrorRequested = bgLayers & 0x0F;
++}
++
++extern "C" void SIM_SetWidescreenBgEdgeExtend(u8 bgLayers) {
++  sWideEdgeRequested = bgLayers & 0x0F;
++}
++
+ extern "C" BOOL SIM_IsWidescreenActive(void) {
+   return sWideActive ? TRUE : FALSE;
+ }
+@@ -830,6 +878,7 @@ void *SIM_RenderInit(void *arg) {
+     fflush(stdout);
+   }
+ 
++  SDL_SetHintWithPriority(SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0", SDL_HINT_OVERRIDE);
+   SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER |
+            SDL_INIT_JOYSTICK);
+   SIM_Audio_Init(44100);
+@@ -1283,13 +1332,15 @@ static void DrawEngine(BOOL isSub) {
+   u8 *bgBufs[4] = {isSub ? bg0stex : bg0tex, isSub ? bg1stex : bg1tex, isSub ? bg2stex : bg2tex,
+                    isSub ? bg3stex : bg3tex};
+   // Widescreen: the layers the game asked for span the whole top screen
+-  const bool wideEngine = sWideActive && !isSub && (dispSel ? !isSub : isSub);
++  // (the sub engine's too when it is the top screen: BW2's Summary, whose backdrop scrolls)
++  const bool wideEngine = (sWideActive && !isSub && (dispSel ? !isSub : isSub)) || (sWideSubTop && isSub && (dispSel ? !isSub : isSub));
++  const int wideBgWidth = sWideSubTop && isSub ? sFboWidth : sWide3dWidth;
+   int wideBgMask = 0;
+   for (int i = 0; i < 4; i++) {
+     const int bg = bgOrder[i];
+     glActiveTexture(GL_TEXTURE0 + s_bgTexUnits[bg]);
+     if (bgEnabled[bg] && !(bg == 0 && bg0as3d)) {
+-      if (wideEngine && ((sWideBgLayers >> bg) & 1) && G2SIM_DrawBGWide((u8)bg, bgMode, sWide3dWidth)) {
++      if (wideEngine && ((sWideBgLayers >> bg) & 1) && G2SIM_DrawBGWide((u8)bg, bgMode, wideBgWidth, ((sWideMirrorBgs >> bg) & 1) != 0, isSub)) {
+         wideBgMask |= 1 << bg;
+         continue;
+       }
+@@ -1348,13 +1399,25 @@ static void DrawEngine(BOOL isSub) {
+ 
+   // Widescreen: the 3D engine on the top screen shows the whole wide scene, its 2D layers in
+   // the middle; otherwise the 3D scene is the left DS screen's width of its framebuffer
+-  const bool wideHere = sWideActive && !isSub && topScreen;
++  const bool wideHere = (sWideActive && !isSub && topScreen) || (sWideSubTop && isSub && topScreen);
+   glProgramUniform1f(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideRatio"),
+-                     wideHere ? (float)sWide3dWidth / (float)SIM_NDS_SCREEN_WIDTH : 1.0f);
++                     wideHere ? (float)(sWideSubTop && isSub ? sFboWidth : sWide3dWidth) / (float)SIM_NDS_SCREEN_WIDTH : 1.0f);
+   glProgramUniform1f(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "tex3dScaleS"),
+                      (float)(wideHere ? sWide3dWidth : SIM_NDS_SCREEN_WIDTH) / (float)sFboWidth);
+   glProgramUniform1i(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideBgMask"),
+                      wideHere ? wideBgMask : 0);
++  glProgramUniform1i(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideObjMask"),
++                     wideHere ? sWideObjWrap : 0);
++  glProgramUniform1i(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideEdgeMask"),
++                     wideHere ? sWideEdgeBgs : 0);
++  glProgramUniform1i(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideEdgeMirrorMask"),
++                     wideHere ? sWideEdgeMirrorBgs : 0);
++  glProgramUniform1i(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideStripeMask"),
++                     wideHere ? sWideStripeBgs : 0);
++  glProgramUniform1f(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideStripeColumn"),
++                     sWideStripeColumn);
++  glProgramUniform1i(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideObjEdgeMask"),
++                     wideHere ? sWideObjEdge : 0);
+   glProgramUniform1f(g2shaderProgramID, glGetUniformLocation(g2shaderProgramID, "wideBgScaleS"),
+                      (float)sWide3dWidth / 512.0f);
+ 
+@@ -1795,8 +1858,8 @@ void *SIM_Render(void *arg) {
+     }
+     if (dualScreen) {
+       aspectRatio = 256.0f / 192.0f;
+-      if (sWideActive && !s_SIM_config.swapScreens) {
+-        aspectRatio = (float)sWide3dWidth / 192.0f;
++      if ((sWideActive || sWideSubTop) && !s_SIM_config.swapScreens) {
++        aspectRatio = (float)sFboWidth / 192.0f;
+       }
+ 
+       // Widescreen: the top display's width at the DS screen's height, even, up to 2:1
+@@ -2463,10 +2526,22 @@ void *SIM_Render(void *arg) {
+     if (wide != sWideActive) {
+       printf("Widescreen: %s\n", wide ? "on" : "off");
+     }
++    // The sub engine on the top screen (2D only): the scene stays 4:3 for the 3D (on the bottom screen), the top 2D
++    // layers get the wide scene's edge extension
++    const bool wideSub = s_SIM_config.widescreen && sWideRequested && SIM_Display_SecondaryActive() &&
++                         !s_SIM_config.swapScreens && !(s_reg_GX_POWCNT >> 15) && sFboWidth > SIM_NDS_SCREEN_WIDTH;
++    sWideSubTop = wideSub;
+     sWideActive = wide;
+     sWide3dWidth = wide ? sFboWidth : SIM_NDS_SCREEN_WIDTH;
+     sWideScale3D = wide && sWideScale3DRequested;
+-    sWideBgLayers = wide ? sWideBgRequested : 0;
++    sWideBgLayers = (wide || wideSub) ? sWideBgRequested : 0;
++    sWideObjWrap = (wide || wideSub) ? sWideObjRequested : 0;
++    sWideEdgeBgs = (wide || wideSub) ? sWideEdgeRequested : 0;
++    sWideMirrorBgs = (wide || wideSub) ? sWideMirrorRequested : 0;
++    sWideEdgeMirrorBgs = (wide || wideSub) ? sWideEdgeMirrorRequested : 0;
++    sWideStripeBgs = (wide || wideSub) ? sWideStripeRequested : 0;
++    sWideStripeColumn = sWideStripeColumnRequested;
++    sWideObjEdge = (wide || wideSub) ? sWideObjEdgeRequested : 0;
+   }
+ 
+   // Setup 3D Viewport
+@@ -2515,8 +2590,19 @@ static bool s3DClearPending = false;
+ void SIM_Begin3DCommand() {
+   if (s3DClearPending) {
+     s3DClearPending = false;
++    // The 3D buffer, whichever is bound: a game's vblank handler runs while the screen's own
++    // buffer is bound (after the frame is drawn, before it's shown), and a clear there blacked
++    // out the whole frame (Platinum's PC boxes, whose vblank handler sends matrix commands)
++    GLint bound = 0;
++    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &bound);
++    if ((GLuint)bound != g3FrameBuffer) {
++      glBindFramebuffer(GL_FRAMEBUFFER, g3FrameBuffer);
++    }
+     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
++    if ((GLuint)bound != g3FrameBuffer) {
++      glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)bound);
++    }
+   }
+ }
+ 
+diff --git a/libraries/sim/src/sim_settings.cpp b/libraries/sim/src/sim_settings.cpp
+index 364ba20..9e6cfea 100644
+--- a/libraries/sim/src/sim_settings.cpp
++++ b/libraries/sim/src/sim_settings.cpp
+@@ -119,6 +119,8 @@ void DrawTextures() {
+   }
+ }
+ 
++extern "C" __attribute__((weak)) void TouchControls_DrawDisplaySettings(void);
++
+ void DrawDisplay() {
+   SIM_config_type *config = SIM_GetConfigPtr();
+ 
+@@ -159,7 +161,7 @@ void DrawDisplay() {
+ 
+ #ifdef SDK_BUILD_ANDROID
+   const char *secondLabel = "Bottom screen on the second display";
+-  const char *secondHelp = "On dual-screen devices like the AYN Thor. Off puts both screens on this display.";
++  const char *secondHelp = "For dual-screen devices with a secondary display. Off puts both screens on this display.";
+ #else
+   const char *secondLabel = "Bottom screen in its own window";
+   const char *secondHelp = "Off puts both screens in this window.";
+@@ -184,7 +186,7 @@ void DrawDisplay() {
+   }
+ 
+   bool wide = config->widescreen != FALSE;
+-  if (Toggle("Widescreen (experimental)", "Where the game allows it (the overworld in clear weather), "
++  if (Toggle("Widescreen (experimental)", "Where the game allows it (the overworld, Gen 5 battles), "
+              "the scene fills the whole top display instead of a 4:3 box. Text boxes and menus stay 4:3 in the "
+              "middle. Needs the bottom screen on its own display.", &wide)) {
+     config->widescreen = wide ? TRUE : FALSE;
+@@ -212,6 +214,10 @@ void DrawDisplay() {
+   }
+ #endif
+ 
++  if (TouchControls_DrawDisplaySettings != nullptr) {
++    TouchControls_DrawDisplaySettings();
++  }
++
+   DrawTextures();
+ 
+   Section("Frame timing");
+@@ -588,7 +594,8 @@ void Draw() {
+   if (wide) {
+     const float sideWidth = std::min(S(280.0f), width * 0.34f);
+     ImDrawList *draw = ImGui::GetWindowDrawList();
+-    draw->AddRectFilled(ImVec2(0, 0), ImVec2(sideWidth, height), IM_COL32(18, 22, 30, 255));
++    draw->AddRectFilled(ImVec2(0, 0), ImVec2(sideWidth, height), IM_COL32(10, 17, 27, 255));
++    draw->AddLine(ImVec2(sideWidth - S(1.0f), 0), ImVec2(sideWidth - S(1.0f), height), IM_COL32(198, 30, 48, 220), S(2.0f));
+     close = BeginPane("##pages", ImVec2(0, 0), ImVec2(sideWidth, height), "Settings", "Close");
+     bool sidebarFocused = false;
+     for (size_t i = 0; i < sPages.size(); i++) {
+diff --git a/libraries/sim/src/sim_ui.cpp b/libraries/sim/src/sim_ui.cpp
+index 0c8d03a..1f384ad 100644
+--- a/libraries/sim/src/sim_ui.cpp
++++ b/libraries/sim/src/sim_ui.cpp
+@@ -25,20 +25,28 @@ namespace SIM::UI {
+ 
+ namespace {
+ 
+-constexpr ImU32 kBackground = IM_COL32(22, 27, 36, 255);
+-constexpr ImU32 kTitleBar = IM_COL32(30, 36, 48, 255);
+-constexpr ImU32 kPanel = IM_COL32(37, 45, 59, 255);
+-constexpr ImU32 kPanelHover = IM_COL32(44, 54, 71, 255);
+-constexpr ImU32 kPanelPressed = IM_COL32(58, 71, 93, 255);
+-constexpr ImU32 kAccent = IM_COL32(96, 172, 232, 255);
+-constexpr ImU32 kAccentPressed = IM_COL32(72, 144, 204, 255);
+-constexpr ImU32 kOnAccent = IM_COL32(12, 20, 30, 255);
+-constexpr ImU32 kText = IM_COL32(236, 240, 247, 255);
+-constexpr ImU32 kTextDim = IM_COL32(146, 158, 176, 255);
+-constexpr ImU32 kTextOff = IM_COL32(92, 102, 120, 255);
+-constexpr ImU32 kError = IM_COL32(242, 116, 104, 255);
+-constexpr ImU32 kGood = IM_COL32(112, 208, 142, 255);
+-constexpr ImU32 kSwitchOff = IM_COL32(72, 82, 100, 255);
++// Sinnoh Pokedex hardware & LCD screen palette
++constexpr ImU32 kDexRed = IM_COL32(198, 30, 48, 255);
++constexpr ImU32 kDexRedDark = IM_COL32(138, 16, 30, 255);
++constexpr ImU32 kDexRedHighlight = IM_COL32(232, 72, 88, 255);
++constexpr ImU32 kDexLensCore = IM_COL32(46, 188, 255, 255);
++constexpr ImU32 kDexLensRim = IM_COL32(226, 236, 248, 255);
++constexpr ImU32 kCardBorder = IM_COL32(42, 68, 102, 255);
++
++constexpr ImU32 kBackground = IM_COL32(13, 22, 34, 255);
++constexpr ImU32 kTitleBar = kDexRed;
++constexpr ImU32 kPanel = IM_COL32(23, 36, 54, 255);
++constexpr ImU32 kPanelHover = IM_COL32(30, 47, 70, 255);
++constexpr ImU32 kPanelPressed = IM_COL32(40, 62, 92, 255);
++constexpr ImU32 kAccent = IM_COL32(56, 189, 248, 255);
++constexpr ImU32 kAccentPressed = IM_COL32(28, 152, 214, 255);
++constexpr ImU32 kOnAccent = IM_COL32(10, 18, 28, 255);
++constexpr ImU32 kText = IM_COL32(238, 244, 252, 255);
++constexpr ImU32 kTextDim = IM_COL32(148, 170, 198, 255);
++constexpr ImU32 kTextOff = IM_COL32(88, 104, 128, 255);
++constexpr ImU32 kError = IM_COL32(248, 113, 113, 255);
++constexpr ImU32 kGood = IM_COL32(74, 222, 128, 255);
++constexpr ImU32 kSwitchOff = IM_COL32(48, 64, 88, 255);
+ constexpr ImU32 kFocus = IM_COL32(255, 214, 102, 255);
+ 
+ ImFont *sRegular = nullptr;
+@@ -334,33 +342,59 @@ bool BeginPane(const char *id, ImVec2 pos, ImVec2 size, const char *title, const
+   float barHeight = 0.0f;
+   if (title != nullptr) {
+     ImDrawList *draw = ImGui::GetWindowDrawList();
+-    barHeight = S(54.0f);
+-    draw->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + barHeight), kTitleBar);
++    barHeight = S(58.0f);
++    // Pokedex crimson top hardware casing with highlight and recessed hinge line
++    draw->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + barHeight), kDexRed);
++    draw->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + S(2.0f)), kDexRedHighlight);
++    draw->AddRectFilled(ImVec2(pos.x, pos.y + barHeight - S(4.0f)), ImVec2(pos.x + size.x, pos.y + barHeight), kDexRedDark);
++    draw->AddLine(ImVec2(pos.x, pos.y + barHeight - S(1.0f)), ImVec2(pos.x + size.x, pos.y + barHeight - S(1.0f)),
++                  IM_COL32(10, 14, 22, 255), S(2.0f));
+ 
+     float titleX = pos.x + S(18.0f);
+     if (backLabel != nullptr) {
+       char label[64];
+       snprintf(label, sizeof(label), "<  %s", backLabel);
+       ImVec2 textSize = Measure(BoldFont(), S(16.0f), label);
+-      ImVec2 buttonSize(textSize.x + S(28.0f), barHeight - S(14.0f));
+-      ImVec2 buttonPos(pos.x + S(8.0f), pos.y + S(7.0f));
++      ImVec2 buttonSize(textSize.x + S(28.0f), barHeight - S(18.0f));
++      ImVec2 buttonPos(pos.x + S(10.0f), pos.y + S(7.0f));
+       ImGui::SetCursorScreenPos(buttonPos);
+       ImGui::PushItemFlag(ImGuiItemFlags_NoNavDefaultFocus, true); // the pad starts on the content (B is back)
+       bool pressed = ImGui::InvisibleButton("##back", buttonSize, ImGuiButtonFlags_EnableNav);
+       ImGui::PopItemFlag();
+       bool held = ImGui::IsItemActive();
+       ImVec2 max(buttonPos.x + buttonSize.x, buttonPos.y + buttonSize.y);
+-      draw->AddRectFilled(buttonPos, max, held ? kPanelPressed : (Hovered() ? kPanelHover : kPanel), S(10.0f));
++      draw->AddRectFilled(buttonPos, max, held ? kPanelPressed : (Hovered() ? kPanelHover : IM_COL32(22, 32, 48, 255)), S(10.0f));
++      draw->AddRect(buttonPos, max, IM_COL32(255, 255, 255, 70), S(10.0f), 0, S(1.5f));
+       Text(draw, BoldFont(), S(16.0f), ImVec2(buttonPos.x + S(14.0f), buttonPos.y + (buttonSize.y - textSize.y) * 0.5f),
+            kText, label);
+       FocusRing(buttonPos, max);
+       back = pressed;
+       titleX = max.x + S(14.0f);
++    } else {
++      // Pokedex blue camera sensor lens + R/Y/G indicator LEDs when no back button occupies left bezel
++      const float lensR = S(15.0f);
++      ImVec2 lensCenter(pos.x + S(26.0f), pos.y + (barHeight - S(4.0f)) * 0.5f);
++      draw->AddCircleFilled(lensCenter, lensR + S(3.0f), IM_COL32(18, 24, 34, 255));
++      draw->AddCircleFilled(lensCenter, lensR + S(1.5f), kDexLensRim);
++      draw->AddCircleFilled(lensCenter, lensR - S(1.0f), IM_COL32(16, 118, 186, 255));
++      draw->AddCircleFilled(ImVec2(lensCenter.x - S(2.0f), lensCenter.y - S(2.0f)), lensR * 0.68f, kDexLensCore);
++      draw->AddCircleFilled(ImVec2(lensCenter.x - S(4.5f), lensCenter.y - S(4.5f)), lensR * 0.26f, IM_COL32(255, 255, 255, 230));
++      const ImU32 leds[3] = {
++        IM_COL32(255, 72, 72, 255),
++        IM_COL32(255, 214, 64, 255),
++        IM_COL32(72, 232, 128, 255),
++      };
++      for (int led = 0; led < 3; led++) {
++        ImVec2 lp(lensCenter.x + lensR + S(12.0f) + led * S(12.0f), lensCenter.y - S(5.0f));
++        draw->AddCircleFilled(lp, S(4.2f), IM_COL32(18, 24, 34, 255));
++        draw->AddCircleFilled(lp, S(3.0f), leds[led]);
++      }
++      titleX = lensCenter.x + lensR + S(48.0f);
+     }
+     float titleWidth = pos.x + size.x - titleX - S(12.0f);
+     ImVec2 titleSize = Measure(BoldFont(), S(21.0f), title);
+-    draw->PushClipRect(ImVec2(titleX, pos.y), ImVec2(titleX + titleWidth, pos.y + barHeight), true);
+-    Text(draw, BoldFont(), S(21.0f), ImVec2(titleX, pos.y + (barHeight - titleSize.y) * 0.5f), kText, title);
++    draw->PushClipRect(ImVec2(titleX, pos.y), ImVec2(titleX + titleWidth, pos.y + barHeight - S(4.0f)), true);
++    Text(draw, BoldFont(), S(21.0f), ImVec2(titleX, pos.y + (barHeight - S(4.0f) - titleSize.y) * 0.5f), kText, title);
+     draw->PopClipRect();
+   }
+ 
+@@ -416,10 +450,18 @@ void Space(float px) {
+ 
+ void Section(const char *title) {
+   Space(10.0f);
++  ImDrawList *draw = ImGui::GetWindowDrawList();
+   ImVec2 pos = ImGui::GetCursorScreenPos();
+   float width = ImGui::GetContentRegionAvail().x;
+   ImVec2 size = Measure(BoldFont(), S(15.0f), title, width);
+-  Text(ImGui::GetWindowDrawList(), BoldFont(), S(15.0f), ImVec2(pos.x + S(4.0f), pos.y), kAccent, title, width);
++  draw->AddRectFilled(ImVec2(pos.x + S(2.0f), pos.y + S(2.0f)), ImVec2(pos.x + S(6.0f), pos.y + size.y - S(2.0f)),
++                      kDexRed, S(2.0f));
++  Text(draw, BoldFont(), S(15.0f), ImVec2(pos.x + S(12.0f), pos.y), kAccent, title, width - S(12.0f));
++  float lineX = pos.x + S(18.0f) + size.x;
++  if (lineX < pos.x + width - S(8.0f)) {
++    float midY = pos.y + size.y * 0.5f;
++    draw->AddLine(ImVec2(lineX, midY), ImVec2(pos.x + width - S(4.0f), midY), kCardBorder, S(1.5f));
++  }
+   ImGui::Dummy(ImVec2(width, size.y + S(8.0f)));
+ }
+ 
+@@ -490,14 +532,26 @@ bool Toggle(const char *label, const char *help, bool *value, bool enabled) {
+   bool held = ImGui::IsItemActive() && !sDragging;
+ 
+   draw->AddRectFilled(pos, max, RowColor(held, Hovered()), S(kRounding));
++  draw->AddRect(pos, max, *value && enabled ? IM_COL32(56, 189, 248, 110) : kCardBorder, S(kRounding), 0, S(1.5f));
+   RowText(draw, ImVec2(pos.x + pad, pos.y + (height - textHeight) * 0.5f), textWidth, label, help, enabled, false);
+ 
+   ImVec2 sw(pos.x + width - pad - switchW, pos.y + (height - switchH) * 0.5f);
+   ImU32 track = *value ? (enabled ? kAccent : kTextOff) : kSwitchOff;
+   draw->AddRectFilled(sw, ImVec2(sw.x + switchW, sw.y + switchH), track, switchH * 0.5f);
++  draw->AddRect(sw, ImVec2(sw.x + switchW, sw.y + switchH), IM_COL32(12, 18, 28, 180), switchH * 0.5f, 0, S(1.5f));
+   float knobX = *value ? sw.x + switchW - switchH * 0.5f : sw.x + switchH * 0.5f;
+-  draw->AddCircleFilled(ImVec2(knobX, sw.y + switchH * 0.5f), switchH * 0.5f - S(3.0f),
+-                        enabled ? IM_COL32(246, 248, 252, 255) : kTextDim);
++  ImVec2 knobCenter(knobX, sw.y + switchH * 0.5f);
++  float knobR = switchH * 0.5f - S(3.0f);
++  draw->AddCircleFilled(knobCenter, knobR, enabled ? IM_COL32(246, 248, 252, 255) : kTextDim);
++  if (*value && enabled) {
++    // Poke Ball top crimson arc + center band & button
++    draw->PathArcTo(knobCenter, knobR, 3.14159265f, 6.2831853f, 16);
++    draw->PathFillConvex(kDexRed);
++    draw->AddLine(ImVec2(knobCenter.x - knobR, knobCenter.y), ImVec2(knobCenter.x + knobR, knobCenter.y),
++                  IM_COL32(18, 24, 34, 255), S(2.0f));
++    draw->AddCircleFilled(knobCenter, S(3.4f), IM_COL32(18, 24, 34, 255));
++    draw->AddCircleFilled(knobCenter, S(1.8f), IM_COL32(248, 250, 252, 255));
++  }
+   FocusRing(pos, max);
+   EndRow(pos, width, height);
+ 
+@@ -531,6 +585,7 @@ bool Choice(const char *label, const char *help, int *value, const char *const *
+   ImVec2 pos = ImGui::GetCursorScreenPos();
+ 
+   draw->AddRectFilled(pos, ImVec2(pos.x + width, pos.y + height), kPanel, S(kRounding));
++  draw->AddRect(pos, ImVec2(pos.x + width, pos.y + height), kCardBorder, S(kRounding), 0, S(1.5f));
+   RowText(draw, ImVec2(pos.x + pad, pos.y + pad), inner, label, help, enabled, false);
+ 
+   bool changed = false;
+@@ -575,6 +630,7 @@ bool Stepper(const char *label, const char *help, int *value, int min, int max,
+   ImVec2 pos = ImGui::GetCursorScreenPos();
+ 
+   draw->AddRectFilled(pos, ImVec2(pos.x + width, pos.y + height), kPanel, S(kRounding));
++  draw->AddRect(pos, ImVec2(pos.x + width, pos.y + height), kCardBorder, S(kRounding), 0, S(1.5f));
+   RowText(draw, ImVec2(pos.x + pad, pos.y + (height - textHeight) * 0.5f), textWidth, label, help, enabled, false);
+ 
+   bool changed = false;
+@@ -634,6 +690,7 @@ bool ButtonAt(const char *label, const char *help, bool primary, bool enabled, f
+   bool held = ImGui::IsItemActive() && !sDragging;
+   ImU32 fill = primary && enabled ? (held ? kAccentPressed : kAccent) : RowColor(held, Hovered());
+   draw->AddRectFilled(pos, max, fill, S(kRounding));
++  draw->AddRect(pos, max, primary && enabled ? IM_COL32(180, 232, 255, 160) : kCardBorder, S(kRounding), 0, S(1.5f));
+ 
+   if (centred) {
+     ImVec2 size = Measure(BoldFont(), S(17.0f), label, textWidth);
+@@ -699,6 +756,7 @@ bool Card(const char *title, const char *subtitle, bool selected, bool enabled)
+   ImGui::PopID();
+   bool held = ImGui::IsItemActive() && !sDragging;
+   draw->AddRectFilled(pos, max, selected && !held ? kPanelPressed : RowColor(held, Hovered()), S(kRounding));
++  draw->AddRect(pos, max, selected ? kAccent : kCardBorder, S(kRounding), 0, S(1.5f));
+   if (selected) {
+     draw->AddRectFilled(ImVec2(pos.x + S(6.0f), pos.y + S(12.0f)), ImVec2(pos.x + S(10.0f), max.y - S(12.0f)), kAccent,
+                         S(2.0f));
+@@ -976,6 +1034,7 @@ void Panel(const char *title, const char *text) {
+   const float height = textHeight + pad * 2;
+   ImVec2 pos = ImGui::GetCursorScreenPos();
+   draw->AddRectFilled(pos, ImVec2(pos.x + width, pos.y + height), kPanel, S(kRounding));
++  draw->AddRect(pos, ImVec2(pos.x + width, pos.y + height), kCardBorder, S(kRounding), 0, S(1.5f));
+   RowText(draw, ImVec2(pos.x + pad, pos.y + pad), width - pad * 2, title, text, true, false);
+   EndRow(pos, width, height);
+ }
+@@ -1006,6 +1065,7 @@ bool Tile(const char *label, const char *sub, bool selected, bool enabled) {
+   bool held = ImGui::IsItemActive() && !sDragging;
+   ImU32 fill = selected ? (held ? kAccentPressed : kAccent) : RowColor(held, Hovered());
+   draw->AddRectFilled(pos, max, fill, S(10.0f));
++  draw->AddRect(pos, max, selected ? IM_COL32(180, 232, 255, 160) : kCardBorder, S(10.0f), 0, S(1.5f));
+ 
+   const float labelPx = S(15.0f), subPx = S(13.0f);
+   const bool hasSub = sub != nullptr && sub[0] != '\0';
+diff --git a/libraries/sim7/src/pxi.c b/libraries/sim7/src/pxi.c
+index e415e0d..c239387 100644
+--- a/libraries/sim7/src/pxi.c
++++ b/libraries/sim7/src/pxi.c
+@@ -17,6 +17,14 @@ SIM_queue_t * drawQueuePtr;
+ SIM_queue_t * pxiQueuePtr;
+ SIM_queue_t * pxi7to9QueuePtr;
+ 
++// The ARM7's direct channel commands (NitroSystem's wave output, NNS_SndWaveOut..., uses them; the sequences don't):
++// carried out on the simulated channels, as the SDK's SND_CommandProc does
++#define UNPACK_COMMAND(arg, shift, bit) (((arg) >> (shift)) & ((1 << (bit)) - 1))
++void SND_LockChannel7(u32 chBitMask, u32 flags);
++void SND_UnlockChannel7(u32 chBitMask, u32 flags);
++void SND_StopUnlockedChannel7(u32 chBitMask, u32 flags);
++void SIM_SndUpdateChannelStatus(void);
++
+ static SIM_queue_t SIM_drawQueue;
+ static SIM_queue_t SIM_pxiQueue;
+ static SIM_queue_t SIM_pxi7to9Queue;
+@@ -109,6 +117,10 @@ void SIM_procPXI(void)
+ 					{
+ 						break;
+ 					}
++					// The sequences run on the audio callback's thread (SND_SeqMain), these commands on this one: on the
++					// DS the ARM7 does both in turn. Without the lock a sequence started or stopped here could be read
++					// half set up there (a crash in the sequencer's byte cache, through a null track pointer)
++					SDL_LockAudio();
+ 					while( sndCommandList != NULL ){
+ 						switch( sndCommandList->id )
+ 						{
+@@ -185,6 +197,15 @@ void SIM_procPXI(void)
+ 
+             				case SND_COMMAND_START_TIMER:
+ 
++								// Not the channels a capture (reverb, effects) starts with: the simulator doesn't capture, and
++								// they would play its unwritten buffer
++								for( int i=0; i<SND_CHANNEL_NUM && sndCommandList->arg[1] == 0; i++)
++								{
++									if( (sndCommandList->arg[0] >> i) & 1 )
++									{
++										SND_StartChannel7(i);
++									}
++								}
+ 								{
+ 									u32 wav_len = 200;
+ 									u8 channelsEnabled[32] = {0};
+@@ -235,6 +256,13 @@ void SIM_procPXI(void)
+ 
+             				case SND_COMMAND_STOP_TIMER:
+ 
++								for( int i=0; i<SND_CHANNEL_NUM; i++)
++								{
++									if( (sndCommandList->arg[0] >> i) & 1 )
++									{
++										SND_StopChannel7(i, (s32)sndCommandList->arg[3]);
++									}
++								}
+ 								u8 channelsEnabled[32] = {0};
+ 								u8 alarmsEnabled[32] = {0};
+ 								for( int i=0; i<32; i++ )
+@@ -272,23 +300,34 @@ void SIM_procPXI(void)
+             				    break;
+ 
+             				case SND_COMMAND_CHANNEL_TIMER:
+-
++            				    for (int i = 0; i < SND_CHANNEL_NUM; i++) {
++            				        if ((sndCommandList->arg[0] >> i) & 1) SND_SetChannelTimer7(i, (int)sndCommandList->arg[1]);
++            				    }
+             				    break;
+ 
+             				case SND_COMMAND_CHANNEL_VOLUME:
+-
++            				    for (int i = 0; i < SND_CHANNEL_NUM; i++) {
++            				        if ((sndCommandList->arg[0] >> i) & 1) SND_SetChannelVolume7(i, (int)sndCommandList->arg[1], (SNDChannelDataShift)sndCommandList->arg[2]);
++            				    }
+             				    break;
+ 
+             				case SND_COMMAND_CHANNEL_PAN:
+-
++            				    for (int i = 0; i < SND_CHANNEL_NUM; i++) {
++            				        if ((sndCommandList->arg[0] >> i) & 1) SND_SetChannelPan7(i, (int)sndCommandList->arg[1]);
++            				    }
+             				    break;
+ 
+             				case SND_COMMAND_SETUP_CHANNEL_PCM:
+-								{
+-
+-									
+-
+-								}
++								SND_SetupChannelPcm7((int)UNPACK_COMMAND(sndCommandList->arg[0], 0, 16),
++								                     (const void *)sndCommandList->arg[1],
++								                     (SNDWaveFormat)UNPACK_COMMAND(sndCommandList->arg[3], 24, 2),
++								                     (SNDChannelLoop)UNPACK_COMMAND(sndCommandList->arg[3], 26, 2),
++								                     (int)UNPACK_COMMAND(sndCommandList->arg[3], 0, 16),
++								                     (int)UNPACK_COMMAND(sndCommandList->arg[2], 0, 22),
++								                     (int)UNPACK_COMMAND(sndCommandList->arg[2], 24, 7),
++								                     (SNDChannelDataShift)UNPACK_COMMAND(sndCommandList->arg[2], 22, 2),
++								                     (int)UNPACK_COMMAND(sndCommandList->arg[0], 16, 16),
++								                     (int)UNPACK_COMMAND(sndCommandList->arg[3], 16, 7));
+ 
+             				    break;
+ 
+@@ -311,12 +350,15 @@ void SIM_procPXI(void)
+             				    break;
+ 
+             				case SND_COMMAND_LOCK_CHANNEL:
++            				    SND_LockChannel7((u32)sndCommandList->arg[0], (u32)sndCommandList->arg[1]);
+             				    break;
+ 
+             				case SND_COMMAND_UNLOCK_CHANNEL:
++            				    SND_UnlockChannel7((u32)sndCommandList->arg[0], (u32)sndCommandList->arg[1]);
+             				    break;
+ 
+             				case SND_COMMAND_STOP_UNLOCKED_CHANNEL:
++            				    SND_StopUnlockedChannel7((u32)sndCommandList->arg[0], (u32)sndCommandList->arg[1]);
+             				    break;
+ 
+             				case SND_COMMAND_INVALIDATE_SEQ:
+@@ -339,6 +381,9 @@ void SIM_procPXI(void)
+ 						}
+ 						sndCommandList = sndCommandList->next;
+ 					} 
++						// The channels' status as the commands left it, before they count as done
++						SIM_SndUpdateChannelStatus();
++						SDL_UnlockAudio();
+ 						if( win_SNDi_SharedWork )
+ 						{
+ 							win_SNDi_SharedWork->finishCommandTag++;
+diff --git a/libraries/sim7/src/snd/snd_exchannel.c b/libraries/sim7/src/snd/snd_exchannel.c
+index 6f43a29..e57939c 100644
+--- a/libraries/sim7/src/snd/snd_exchannel.c
++++ b/libraries/sim7/src/snd/snd_exchannel.c
+@@ -150,6 +150,26 @@ void SND_UpdateExChannel(void)
+     }
+ }
+ 
++#ifdef SDK_PORT
++// The channels that play, for SND_GetChannelStatus (the ARM7 driver's SND_UpdateSharedWork, which the simulator
++// doesn't have): NitroSystem's wave output (NNS_SndWaveOutIsPlaying) reads it. After the driver's work (in the audio
++// callback) and after each batch of commands (pxi.c)
++void SIM_SndUpdateChannelStatus(void)
++{
++    u32 status = 0;
++    int ch;
++
++    if (SNDi_SharedWork == NULL)
++        return;
++    for (ch = 0; ch < SND_CHANNEL_NUM; ch++)
++    {
++        if (SND_IsChannelActive7(ch))
++            status |= 1 << ch;
++    }
++    SNDi_SharedWork->channelStatus = status;
++}
++#endif
++
+ void SND_ExChannelMain(BOOL doPeriodicProc)
+ {
+     SNDExChannel *ch_p;
+@@ -285,6 +305,10 @@ void SND_ExChannelMain(BOOL doPeriodicProc)
+             }
+         }
+     }
++
++#ifdef SDK_PORT
++    SIM_SndUpdateChannelStatus();
++#endif
+ }
+ 
+ BOOL SND_StartExChannelPcm(SNDExChannel *ch_p,

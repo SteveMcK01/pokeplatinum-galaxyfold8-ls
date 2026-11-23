@@ -1,3 +1,4 @@
+#include "unk_020655F4.h"
 #include "overlay005/fieldmap.h"
 
 #ifdef SDK_PORT
@@ -359,6 +360,7 @@ static BOOL FieldMap_Exit(ApplicationManager *appMan, int *param1)
 
             fieldSystem->unk_04 = NULL;
 
+            MapObject_CancelAllAnimations();
             Heap_Destroy(HEAP_ID_FIELD1);
 
             if (fieldSystem->mapLoadMode->loadExtOverlay) {

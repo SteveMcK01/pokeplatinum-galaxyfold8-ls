@@ -1188,11 +1188,19 @@ void MapObject_SetStatusFlagOff(MapObject *mapObj, u32 flag)
 
 u32 MapObject_CheckStatus(const MapObject *mapObj, u32 flag)
 {
+    if (mapObj == NULL) {
+        return 0;
+    }
+
     return mapObj->status & flag;
 }
 
 BOOL MapObject_CheckStatusFlag(const MapObject *mapObj, u32 flag)
 {
+    if (mapObj == NULL) {
+        return FALSE;
+    }
+
     return mapObj->status & flag
         ? TRUE
         : FALSE;

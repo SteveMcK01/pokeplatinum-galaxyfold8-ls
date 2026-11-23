@@ -39,11 +39,11 @@ typedef struct MoveAnimData {
     int count;
     MapObject *mapObj;
     const MapObjectAnimCmd *animCmd;
+    SysTask *task;
+    BOOL autoFinish;
 } MoveAnimData;
 
-#ifdef SDK_PORT
-// The scripted movements under way, for the stuck report (port/stuck_report.h)
-#define PORT_MAX_MOVE_ANIMS 16
+#define PORT_MAX_MOVE_ANIMS 32
 static MoveAnimData *sPortMoveAnims[PORT_MAX_MOVE_ANIMS];
 
 static void PortTrackMoveAnim(MoveAnimData *data, BOOL add)
@@ -56,12 +56,13 @@ static void PortTrackMoveAnim(MoveAnimData *data, BOOL add)
     }
 }
 
+#ifdef SDK_PORT
 int MapObject_PortDescribeAnimations(char *out, int size)
 {
     int used = 0;
     for (int i = 0; i < PORT_MAX_MOVE_ANIMS && used < size; i++) {
         const MoveAnimData *data = sPortMoveAnims[i];
-        if (data == NULL) {
+        if (data == NULL || data->mapObj == NULL || data->animCmd == NULL) {
             continue;
         }
         used += snprintf(out + used, size - used, "movement of object %d: state %d, action %d (%d of %d), ended %d, its status %#x, action %d step %d; ",
@@ -234,6 +235,10 @@ void sub_020656DC(MapObject *mapObj)
 
 SysTask *MapObject_StartAnimation(MapObject *mapObj, const MapObjectAnimCmd *animCmd)
 {
+    if (mapObj == NULL || animCmd == NULL) {
+        return NULL;
+    }
+
     MoveAnimData *data = Heap_AllocAtEnd(HEAP_ID_FIELD1, sizeof(MoveAnimData));
     GF_ASSERT(data != NULL);
     memset(data, 0, sizeof(MoveAnimData));
@@ -244,29 +249,68 @@ SysTask *MapObject_StartAnimation(MapObject *mapObj, const MapObjectAnimCmd *ani
 
     data->mapObj = mapObj;
     data->animCmd = animCmd;
-#ifdef SDK_PORT
+    data->task = task;
     PortTrackMoveAnim(data, TRUE);
-#endif
 
     return task;
 }
 
+void MapObject_SetAnimationAutoFinish(SysTask *task, BOOL autoFinish)
+{
+    if (task != NULL) {
+        MoveAnimData *data = SysTask_GetParam(task);
+        if (data != NULL) {
+            data->autoFinish = autoFinish;
+        }
+    }
+}
+
+void MapObject_CancelAllAnimations(void)
+{
+    for (int i = 0; i < PORT_MAX_MOVE_ANIMS; i++) {
+        MoveAnimData *data = sPortMoveAnims[i];
+        if (data == NULL) {
+            continue;
+        }
+        sPortMoveAnims[i] = NULL;
+        if (data->mapObj != NULL && MapObject_CheckStatusFlag(data->mapObj, MAP_OBJ_STATUS_0)) {
+            MapObject_SetStatusFlagOff(data->mapObj, MAP_OBJ_STATUS_4 | MAP_OBJ_STATUS_5);
+        }
+        if (data->task != NULL) {
+            SysTask_Done(data->task);
+            data->task = NULL;
+        }
+        Heap_FreeExplicit(HEAP_ID_FIELD1, data);
+    }
+}
+
 BOOL MapObject_HasAnimationEnded(SysTask *task)
 {
+    if (task == NULL) {
+        return TRUE;
+    }
     MoveAnimData *data = SysTask_GetParam(task);
-    return data->ended;
+    return data != NULL ? data->ended : TRUE;
 }
 
 void MapObject_FinishAnimation(SysTask *task)
 {
+    if (task == NULL) {
+        return;
+    }
+
     MoveAnimData *data = SysTask_GetParam(task);
+    if (data == NULL) {
+        SysTask_Done(task);
+        return;
+    }
 
-    GF_ASSERT(LocalMapObj_CheckAnimationFinished(data->mapObj) == TRUE);
-
-    sub_020656AC(data->mapObj);
-#ifdef SDK_PORT
+    if (data->mapObj != NULL) {
+        GF_ASSERT(LocalMapObj_CheckAnimationFinished(data->mapObj) == TRUE);
+        sub_020656AC(data->mapObj);
+    }
     PortTrackMoveAnim(data, FALSE);
-#endif
+    data->task = NULL;
     Heap_FreeExplicit(HEAP_ID_FIELD1, data);
     SysTask_Done(task);
 }
@@ -299,7 +343,19 @@ static BOOL (*const sMovementAnimationFuncs[])(MoveAnimData *) = {
 static void MapObject_DoAnimation(SysTask *task, void *data)
 {
     MoveAnimData *animData = data;
+    if (animData == NULL || animData->mapObj == NULL || animData->animCmd == NULL || (u32)animData->state > MOVEMENT_ANIM_STATE_END) {
+        if (animData != NULL) {
+            PortTrackMoveAnim(animData, FALSE);
+        }
+        SysTask_Done(task);
+        return;
+    }
+
     while (sMovementAnimationFuncs[animData->state](animData) == TRUE) {}
+
+    if (animData->autoFinish && animData->ended) {
+        MapObject_FinishAnimation(task);
+    }
 }
 
 static BOOL MovementAnimation_Init(MoveAnimData *data)

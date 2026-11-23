@@ -16,6 +16,8 @@ BOOL LocalMapObj_CheckAnimationFinished(const MapObject *mapObj);
 BOOL sub_020656AC(MapObject *mapObj);
 void sub_020656DC(MapObject *mapObj);
 SysTask *MapObject_StartAnimation(MapObject *mapObj, const MapObjectAnimCmd *animCmd);
+void MapObject_SetAnimationAutoFinish(SysTask *task, BOOL autoFinish);
+void MapObject_CancelAllAnimations(void);
 BOOL MapObject_HasAnimationEnded(SysTask *task);
 void MapObject_FinishAnimation(SysTask *task);
 enum MovementAction MovementAction_TurnActionTowardsDir(int targetDir, enum MovementAction movementAction);

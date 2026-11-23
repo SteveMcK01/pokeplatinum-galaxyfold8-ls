@@ -1694,6 +1694,8 @@ static BOOL ScrCmd_FirstBattler(ScriptContext *ctx)
     return FALSE;
 }
 
+extern void MapObject_SetAnimationAutoFinish(SysTask *task, BOOL autoFinish);
+
 // 857: the follower's animation (a hop)
 static BOOL ScrCmd_FollowerAnimation(ScriptContext *ctx)
 {
@@ -1713,7 +1715,8 @@ static BOOL ScrCmd_FollowerAnimation(ScriptContext *ctx)
             cmds[12].movementAction = MOVEMENT_ACTION_END;
             cmds[12].count = 0;
         }
-        MapObject_StartAnimation(follower, cmds);
+        SysTask *task = MapObject_StartAnimation(follower, cmds);
+        MapObject_SetAnimationAutoFinish(task, TRUE);
     }
     return FALSE;
 }

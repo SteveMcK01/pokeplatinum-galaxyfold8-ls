@@ -15,6 +15,8 @@
 
 ## Last Worked On
 
+- **Canalave Library 3F TV Post-Fadeout Crash Fix (`src/scrcmd.c`):**
+  - **Yield in `ScrCmd_ReturnToField`:** Changed `ScrCmd_ReturnToField` to return `FALSE` instead of `TRUE` after calling `FieldTransition_StartMap(ctx->fieldSystem->task)`. Previously, returning `TRUE` kept `ScriptContext_Run` in its same-frame loop after `StartLibraryTV` exited, executing `GetPlayerMapPos` (`MapObject_GetX`) before `FieldTask_WaitUntilMapStarted` / `FieldMap_Init` recreated `fieldSystem->playerAvatar` and causing a `NULL` pointer `SIGSEGV` at offset `0x64` on Android.
 - **Overworld Fog Solid White Screen Bug (In Progress — Deferred to Fix a Higher-Priority Bug First):**
   - **Confirmed Symptoms & Isolation:**
     - Entering foggy overworld maps (such as Route 210 North, `OVERWORLD_WEATHER_FOG`) turns the Engine A (top screen) 3D viewport solid white.

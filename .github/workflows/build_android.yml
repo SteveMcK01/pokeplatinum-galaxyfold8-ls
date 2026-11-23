@@ -2,7 +2,7 @@ name: build_android
 
 on:
   push:
-    branches: [ platinum-thor ]
+    branches: [ platinum-thor, main ]
     paths-ignore:
       - '**.md'
   # Pull requests get the APK as a run artifact; only pushes to platinum-thor publish a release

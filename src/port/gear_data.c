@@ -3,6 +3,7 @@
 #ifdef GEN5_BATTLES
 #include "gen5.h"
 #include "port/gen5_battle.h"
+#include "port/gen5_data.h"
 #endif
 
 #include <nitro.h>
@@ -54,6 +55,7 @@
 #include "bag.h"
 #include "item.h"
 #include "charcode_convert.h"
+#include "gen5_moves_table.h"
 #include "location.h"
 #include "map_header.h"
 #include "map_header_data.h"
@@ -226,6 +228,9 @@ static void MonDisplayName(const charcode_t *nickname, BOOL hasNickname, u16 spe
 
 const char *Gear_MoveName(u16 move)
 {
+    if (move >= GEN5_MOVE_FIRST && move <= GEN5_MOVE_LAST) {
+        return sGen5Moves[move - GEN5_MOVE_FIRST].name;
+    }
     return CachedName(&sMoveNames, move);
 }
 
@@ -278,7 +283,7 @@ typedef struct CachedMove {
     u8 category;
 } CachedMove;
 
-static CachedMove sMoves[512];
+static CachedMove sMoves[600];
 
 static const CachedMove *MoveData(u16 move)
 {
@@ -288,10 +293,18 @@ static const CachedMove *MoveData(u16 move)
     }
     CachedMove *entry = &sMoves[move];
     if (!entry->loaded) {
-        entry->type = MoveTable_LoadParam(move, MOVEATTRIBUTE_TYPE);
-        entry->power = MoveTable_LoadParam(move, MOVEATTRIBUTE_POWER);
-        entry->accuracy = MoveTable_LoadParam(move, MOVEATTRIBUTE_ACCURACY);
-        entry->category = MoveTable_LoadParam(move, MOVEATTRIBUTE_CLASS);
+        if (move >= GEN5_MOVE_FIRST && move <= GEN5_MOVE_LAST) {
+            const Gen5MoveEntry *g5 = &sGen5Moves[move - GEN5_MOVE_FIRST];
+            entry->type = g5->type;
+            entry->power = g5->power;
+            entry->accuracy = g5->accuracy;
+            entry->category = g5->category;
+        } else {
+            entry->type = MoveTable_LoadParam(move, MOVEATTRIBUTE_TYPE);
+            entry->power = MoveTable_LoadParam(move, MOVEATTRIBUTE_POWER);
+            entry->accuracy = MoveTable_LoadParam(move, MOVEATTRIBUTE_ACCURACY);
+            entry->category = MoveTable_LoadParam(move, MOVEATTRIBUTE_CLASS);
+        }
         entry->loaded = 1;
     }
     return entry;
@@ -1032,7 +1045,10 @@ BOOL Gear_GetBattleMenu(GearBattleMenu *out)
         if (g5.kind == GEN5_MENU_ACTION) { out->kind = GEAR_MENU_ACTION; out->battler = g5.battler; out->cancel = g5.cancel != 0; }
         else if (g5.kind == GEN5_MENU_MOVES) {
             out->kind = GEAR_MENU_MOVES; out->battler = g5.battler;
-            for (int m = 0; m < 4; m++) FillMove(&out->moves[m], g5.moveIds[m], g5.movePp[m], g5.moveMaxPp[m]);
+            for (int m = 0; m < 4; m++) {
+                u16 moveId = Gen5Data_MoveFromGen5(g5.moveIds[m]);
+                FillMove(&out->moves[m], moveId, g5.movePp[m], g5.moveMaxPp[m]);
+            }
         } else if (g5.kind == GEN5_MENU_TARGETS) {
             out->kind = GEAR_MENU_TARGETS; out->battler = g5.battler;
             for (int t = 0; t < 4; t++) { out->targetOk[t] = g5.targetOk[t] != 0; out->targetBattler[t] = g5.targetBattler[t]; }
@@ -1258,7 +1274,7 @@ BOOL Gear_GetBattle(GearBattle *out)
             move->accuracy = data->accuracy;
             move->category = data->category;
             move->pp = mon->ppCur[m];
-            move->maxPp = MoveTable_CalcMaxPP(move->id, mon->ppUps[m]);
+            move->maxPp = move->id < GEN5_MOVE_FIRST ? MoveTable_CalcMaxPP(move->id, mon->ppUps[m]) : move->pp;
         }
     }
 
@@ -1283,7 +1299,9 @@ BOOL Gear_GetBattle(GearBattle *out)
             if (gb->moves[m].id == 0) {
                 continue;
             }
-            gb->movePriority[m] = (s8)MoveTable_LoadParam(gb->moves[m].id, MOVEATTRIBUTE_PRIORTY);
+            gb->movePriority[m] = gb->moves[m].id < GEN5_MOVE_FIRST
+                ? (s8)MoveTable_LoadParam(gb->moves[m].id, MOVEATTRIBUTE_PRIORTY)
+                : 0;
             for (int t = 0; t < maxBattlers; t++) {
                 const GearBattler *target = &out->battlers[t];
                 if (t == i || !target->present || target->hp == 0 || target->enemy == gb->enemy) {

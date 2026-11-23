@@ -2995,7 +2995,7 @@ BOOL ScriptContext_WaitForApplicationExit(ScriptContext *ctx)
 static BOOL ScrCmd_ReturnToField(ScriptContext *ctx)
 {
     FieldTransition_StartMap(ctx->fieldSystem->task);
-    return FALSE;
+    return TRUE;
 }
 
 static BOOL ScrCmd_WaitForTransition(ScriptContext *ctx)

@@ -226,6 +226,36 @@ static void MonDisplayName(const charcode_t *nickname, BOOL hasNickname, u16 spe
     }
 }
 
+static void Gen5TextToAscii(const unsigned short *src, int maxLen, char *out, int outSize)
+{
+    int pos = 0;
+    for (int i = 0; i < maxLen && src[i] != 0xFFFF && src[i] != 0 && pos < outSize - 1; i++) {
+        u16 ch = src[i];
+        if (ch == 0x2642) {
+            if (pos < outSize - 3) {
+                out[pos++] = ' ';
+                out[pos++] = 'M';
+            }
+            continue;
+        }
+        if (ch == 0x2640) {
+            if (pos < outSize - 3) {
+                out[pos++] = ' ';
+                out[pos++] = 'F';
+            }
+            continue;
+        }
+        if (ch == 0x2018 || ch == 0x2019) {
+            out[pos++] = '\'';
+        } else if (ch >= 0xFF01 && ch <= 0xFF5E) {
+            out[pos++] = (char)(ch - 0xFEE0);
+        } else if (ch >= 0x20 && ch <= 0x7E) {
+            out[pos++] = (char)ch;
+        }
+    }
+    out[pos] = '\0';
+}
+
 const char *Gear_MoveName(u16 move)
 {
     if (move >= GEN5_MOVE_FIRST && move <= GEN5_MOVE_LAST) {
@@ -1003,6 +1033,12 @@ BOOL Gear_BattlePartyOnGear(int listMode)
 
 // The menu kind the last Gear_GetBattleMenu reported, for Gear_PressBattleButton
 static int sReportedMenuKind = GEAR_MENU_NONE;
+static BOOL sBattleTargetIsSpread = FALSE;
+
+BOOL Gear_BattleTargetIsSpread(void)
+{
+    return sBattleTargetIsSpread;
+}
 
 static BOOL GetPartyMenu(GearBattleMenu *out)
 {
@@ -1038,6 +1074,7 @@ BOOL Gear_GetBattleMenu(GearBattleMenu *out)
         out->targetBattler[i] = -1;
     }
     sReportedMenuKind = GEAR_MENU_NONE;
+    sBattleTargetIsSpread = FALSE;
 #ifdef GEN5_BATTLES
     if (Gen5Battle_IsShown()) {
         Gen5BattleMenu g5;
@@ -1051,7 +1088,13 @@ BOOL Gear_GetBattleMenu(GearBattleMenu *out)
             }
         } else if (g5.kind == GEN5_MENU_TARGETS) {
             out->kind = GEAR_MENU_TARGETS; out->battler = g5.battler;
-            for (int t = 0; t < 4; t++) { out->targetOk[t] = g5.targetOk[t] != 0; out->targetBattler[t] = g5.targetBattler[t]; }
+            for (int t = 0; t < 4; t++) {
+                if (g5.targetOk[t] == 2) {
+                    sBattleTargetIsSpread = TRUE;
+                }
+                out->targetOk[t] = g5.targetOk[t] != 0;
+                out->targetBattler[t] = g5.targetBattler[t];
+            }
         } else if (g5.kind == GEN5_MENU_YES_NO) {
             out->kind = GEAR_MENU_YES_NO;
             snprintf(out->yes, sizeof(out->yes), "%s", g5.yes[0] ? g5.yes : "YES");
@@ -1208,9 +1251,10 @@ BOOL Gear_GetBattle(GearBattle *out)
             b->present = TRUE; b->enemy = s->enemy != 0; b->playerControlled = !b->enemy;
             b->species = s->species; b->form = s->form; b->level = s->level;
             b->hp = s->hp; b->maxHp = s->maxHp; b->status = s->status; b->type1 = s->type1; b->type2 = s->type2;
-            charcode_t nick[MON_NAME_LEN + 1]; int n = 0;
-            while (n < MON_NAME_LEN && n < GEN5_NAME_LENGTH && s->nickname[n] != 0xFFFF && s->nickname[n] != 0) { nick[n] = (charcode_t)s->nickname[n]; n++; }
-            nick[n] = CHAR_EOS; MonDisplayName(nick, n > 0, s->species, b->nickname);
+            Gen5TextToAscii(s->nickname, GEN5_NAME_LENGTH, b->nickname, GEAR_NAME_LEN);
+            if (b->nickname[0] == '\0') {
+                snprintf(b->nickname, sizeof(b->nickname), "%s", Gear_SpeciesName(s->species));
+            }
         }
         return TRUE;
     }

@@ -165,7 +165,7 @@
 +                    if (scd->targets.pos[j] == slotPos) {
 +                        BattleMon *tmon = PokeCon_GetPosMonInner(scd->pokeCon, slotPos);
 +                        if (tmon != NULL && GetBattleMonStat(tmon, BATTLEMON_HP) > 0) {
-+                            outTargetOk[t] = 1;
++                            outTargetOk[t] = 2;
 +                            anyOk = 1;
 +                        }
 +                        break;
@@ -174,7 +174,7 @@
 +            }
 +        }
 +        if (!anyOk && scd->targets.selectCount == 0) {
-+            outTargetOk[0] = 1;
++            outTargetOk[0] = 2;
 +        }
 +        return TRUE;
 +    }

@@ -42,6 +42,7 @@ BOOL GearSprites_ItemIcon(u16 item, u32 *rgba);
 int Gear_BattleWeather(void);
 int Gear_GetBattlePokeBalls(BattleOverlayBallEntry *out, int maxOut, BOOL *canThrowOut);
 BOOL Gear_UseBattlePokeBall(u16 item);
+BOOL Gear_BattleTargetIsSpread(void);
 }
 
 namespace {
@@ -1009,6 +1010,46 @@ static void DrawFullScreenBattleOverlay(ImDrawList *dl, const ImVec2 &disp, floa
         const float colW = (panelX1 - gridX0 - gap) * 0.5f;
         const float rowH = (panelY1 - panelY0 - gap) * 0.5f;
 
+        const bool isSpread = Gear_BattleTargetIsSpread() != FALSE;
+        int foeHitCount = 0;
+        int allyHitCount = 0;
+        for (int t = 0; t < 4; ++t) {
+            if (menu.targetOk[t]) {
+                if (t < 2) {
+                    foeHitCount++;
+                } else {
+                    allyHitCount++;
+                }
+            }
+        }
+
+        const char *bannerText = "SELECT TARGET";
+        ImU32 bannerAccent = IM_COL32(210, 220, 236, 255);
+        if (isSpread && foeHitCount > 0 && allyHitCount > 0) {
+            bannerText = "HITS ALL (INCL. ALLY) - TAP TO CONFIRM";
+            bannerAccent = IM_COL32(255, 165, 45, 255);
+        } else if (isSpread && foeHitCount >= 2) {
+            bannerText = "HITS ALL FOES - TAP TO CONFIRM";
+            bannerAccent = IM_COL32(255, 110, 75, 255);
+        } else if (isSpread && allyHitCount > 0 && foeHitCount == 0) {
+            bannerText = "HITS ALLY / SELF - TAP TO CONFIRM";
+            bannerAccent = IM_COL32(90, 215, 130, 255);
+        } else if (isSpread) {
+            bannerText = "AREA MOVE - TAP TO CONFIRM";
+            bannerAccent = IM_COL32(255, 205, 85, 255);
+        }
+
+        const float bannerH = std::max(24.0f, (panelY1 - panelY0) * 0.18f);
+        const float bannerY1 = panelY0 - gap * 0.7f;
+        const float bannerY0 = bannerY1 - bannerH;
+        const float bannerFont = std::max(12.0f, bannerH * 0.56f);
+        const ImVec2 bSz = boldFont->CalcTextSizeA(bannerFont, FLT_MAX, 0.0f, bannerText);
+        dl->AddRectFilled(ImVec2(gridX0, bannerY0), ImVec2(panelX1, bannerY1), IM_COL32(14, 18, 26, 225), 8.0f);
+        dl->AddRect(ImVec2(gridX0, bannerY0), ImVec2(panelX1, bannerY1), bannerAccent, 8.0f, 0, 1.8f);
+        DrawShadowText(dl, boldFont, bannerFont,
+                       ImVec2((gridX0 + panelX1 - bSz.x) * 0.5f, (bannerY0 + bannerY1 - bSz.y) * 0.5f),
+                       bannerAccent, bannerText);
+
         DrawActionCard(dl, boldFont, backX0, panelY0, backX1, panelY1, "BACK",
                        IM_COL32(76, 84, 98, 235), IM_COL32(46, 52, 64, 235), false);
         if (tapJustBegan && PointInRect(tapX, tapY, backX0, panelY0, backX1, panelY1)) {
@@ -1023,6 +1064,7 @@ static void DrawFullScreenBattleOverlay(ImDrawList *dl, const ImVec2 &disp, floa
             const float y0 = panelY0 + row * (rowH + gap);
             const float x1 = x0 + colW;
             const float y1 = y0 + rowH;
+            const float r = std::min(rowH * 0.24f, 14.0f);
             const bool ok = menu.targetOk[t] != 0;
             const int bIdx = menu.targetBattler[t];
             const bool monPresent = hasBattle && bIdx >= 0 && bIdx < GEAR_BATTLERS_MAX && battle.battlers[bIdx].present;
@@ -1030,13 +1072,76 @@ static void DrawFullScreenBattleOverlay(ImDrawList *dl, const ImVec2 &disp, floa
             const char *tName = monPresent
                 ? battle.battlers[bIdx].nickname
                 : (ok ? "TARGET" : "-");
-            const ImU32 topCol = ok
-                ? (isFoe ? IM_COL32(212, 64, 64, 235) : IM_COL32(52, 168, 96, 235))
-                : IM_COL32(42, 46, 54, 175);
-            const ImU32 botCol = ok
-                ? (isFoe ? IM_COL32(150, 32, 32, 235) : IM_COL32(28, 118, 62, 235))
-                : IM_COL32(28, 32, 38, 175);
-            DrawActionCard(dl, boldFont, x0, y0, x1, y1, tName, topCol, botCol, false);
+
+            ImU32 topCol = IM_COL32(42, 46, 54, 175);
+            ImU32 botCol = IM_COL32(28, 32, 38, 175);
+            ImU32 borderCol = IM_COL32(24, 28, 36, 220);
+            float borderW = 1.8f;
+            if (ok) {
+                if (isSpread && !isFoe) {
+                    topCol = IM_COL32(198, 92, 40, 235);
+                    botCol = IM_COL32(138, 52, 22, 235);
+                    borderCol = IM_COL32(255, 165, 65, 255);
+                    borderW = 2.6f;
+                } else if (isFoe) {
+                    topCol = IM_COL32(212, 64, 64, 235);
+                    botCol = IM_COL32(150, 32, 32, 235);
+                    borderCol = isSpread ? IM_COL32(255, 210, 90, 255) : IM_COL32(245, 248, 255, 220);
+                    borderW = isSpread ? 2.6f : 2.2f;
+                } else {
+                    topCol = IM_COL32(52, 168, 96, 235);
+                    botCol = IM_COL32(28, 118, 62, 235);
+                    borderCol = isSpread ? IM_COL32(255, 210, 90, 255) : IM_COL32(245, 248, 255, 220);
+                    borderW = isSpread ? 2.6f : 2.2f;
+                }
+            } else if (monPresent) {
+                topCol = IM_COL32(54, 60, 72, 185);
+                botCol = IM_COL32(36, 40, 48, 185);
+                borderCol = IM_COL32(110, 120, 138, 140);
+            }
+
+            dl->AddRectFilled(ImVec2(x0 + 2.0f, y0 + 3.0f), ImVec2(x1 + 2.0f, y1 + 3.0f), IM_COL32(0, 0, 0, 120), r);
+            dl->AddRectFilledMultiColor(ImVec2(x0, y0), ImVec2(x1, y1), topCol, topCol, botCol, botCol);
+            dl->AddRect(ImVec2(x0 + 1.5f, y0 + 1.5f), ImVec2(x1 - 1.5f, y1 - 1.5f),
+                        IM_COL32(255, 255, 255, ok ? 85 : 35), r, 0, 1.2f);
+            dl->AddRect(ImVec2(x0, y0), ImVec2(x1, y1), borderCol, r, 0, borderW);
+
+            const float nameFont = std::max(14.5f, std::min(rowH * 0.36f, colW * 0.14f));
+            const float subFont = std::max(10.5f, rowH * 0.23f);
+            const ImU32 nameCol = (ok || monPresent)
+                ? IM_COL32(255, 255, 255, ok ? 255 : 175)
+                : IM_COL32(180, 185, 195, 150);
+
+            if (monPresent) {
+                char subBuf[40];
+                ImU32 subCol = IM_COL32(225, 232, 245, ok ? 235 : 155);
+                if (isSpread && ok && !isFoe) {
+                    std::snprintf(subBuf, sizeof(subBuf), "Lv.%u  |  ALLY HIT!", (unsigned)battle.battlers[bIdx].level);
+                    subCol = IM_COL32(255, 225, 135, 255);
+                } else if (isSpread && ok && isFoe) {
+                    std::snprintf(subBuf, sizeof(subBuf), "Lv.%u  |  WILL HIT", (unsigned)battle.battlers[bIdx].level);
+                    subCol = IM_COL32(255, 232, 145, 255);
+                } else if (!isSpread && ok) {
+                    std::snprintf(subBuf, sizeof(subBuf), "Lv.%u  |  %s", (unsigned)battle.battlers[bIdx].level, isFoe ? "FOE" : "ALLY");
+                } else {
+                    std::snprintf(subBuf, sizeof(subBuf), "Lv.%u", (unsigned)battle.battlers[bIdx].level);
+                }
+                const ImVec2 nSz = boldFont->CalcTextSizeA(nameFont, FLT_MAX, 0.0f, tName);
+                const ImVec2 sSz = boldFont->CalcTextSizeA(subFont, FLT_MAX, 0.0f, subBuf);
+                const float textGap = std::max(2.0f, rowH * 0.05f);
+                const float totalH = nSz.y + textGap + sSz.y;
+                const float topY = y0 + (rowH - totalH) * 0.5f;
+                DrawShadowText(dl, boldFont, nameFont,
+                               ImVec2((x0 + x1 - nSz.x) * 0.5f, topY), nameCol, tName);
+                DrawShadowText(dl, boldFont, subFont,
+                               ImVec2((x0 + x1 - sSz.x) * 0.5f, topY + nSz.y + textGap), subCol, subBuf);
+            } else {
+                const ImVec2 nSz = boldFont->CalcTextSizeA(nameFont, FLT_MAX, 0.0f, tName);
+                DrawShadowText(dl, boldFont, nameFont,
+                               ImVec2((x0 + x1 - nSz.x) * 0.5f, (y0 + y1 - nSz.y) * 0.5f),
+                               nameCol, tName);
+            }
+
             if (ok && tapJustBegan && PointInRect(tapX, tapY, x0, y0, x1, y1)) {
                 Gear_PressBattleButton(t + 1);
                 return;

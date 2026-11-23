@@ -245,7 +245,7 @@ static BOOL HandleInputsEventsAndProcesses(FieldSystem *fieldSystem)
 static void HandleFieldInput(FieldSystem *fieldSystem)
 {
     BOOL processInput = FALSE;
-    if (!fieldSystem->processManager->pause && fieldSystem->runningFieldMap && FieldSystem_IsRunningTask(fieldSystem) == FALSE) {
+    if (!fieldSystem->processManager->pause && fieldSystem->runningFieldMap && fieldSystem->playerAvatar != NULL && FieldSystem_IsRunningTask(fieldSystem) == FALSE) {
         processInput = TRUE;
     }
 

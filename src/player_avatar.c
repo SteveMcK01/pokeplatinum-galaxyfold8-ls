@@ -33,11 +33,19 @@ static u32 PlayerData_GetAvatarState(PlayerData *player);
 static void PlayerData_SetAvatarState(PlayerData *player, u32 state);
 static void PlayerAvatar_PlayerData_SetAvatarState(PlayerAvatar *playerAvatar, u32 state);
 
+static const MapObjectManager *sPlayerMapObjMan = NULL;
+
+void PlayerAvatar_ClearMapObjectManager(void)
+{
+    sPlayerMapObjMan = NULL;
+}
+
 /**
  * Creates and initializes a new Player Avatar map object
  */
 PlayerAvatar *PlayerAvatar_New(const MapObjectManager *mapObjMan, int x, int z, int dir, int playerState, int gender, int dpSprite, PlayerData *playerData)
 {
+    sPlayerMapObjMan = mapObjMan;
     PlayerAvatar *playerAvatar = PlayerAvatar_Alloc();
     PlayerAvatar_Init(playerAvatar, playerState, gender, playerData);
 
@@ -69,19 +77,64 @@ PlayerAvatar *PlayerAvatar_NewLoad(const MapObjectManager *mapObjMan, PlayerData
     PlayerAvatar *playerAvatar;
     MapObject *mapObj;
 
+    sPlayerMapObjMan = mapObjMan;
     playerAvatar = PlayerAvatar_Alloc();
     playerState = PlayerData_GetAvatarState(playerData);
 
     PlayerAvatar_Init(playerAvatar, playerState, gender, playerData);
     mapObj = MapObjectMan_GetPlayerMapObjectCheckNull(mapObjMan);
+    if (mapObj == NULL && mapObjMan != NULL) {
+        mapObj = MapObjMan_LocalMapObjByIndex(mapObjMan, LOCALID_PLAYER);
+    }
 
-    MapObject_SetGraphicsID(mapObj, Player_GetSpriteFromStateAndGender(playerState, gender));
-    MapObject_SetStatusFlagOn(mapObj, MAP_OBJ_STATUS_PERSISTENT | MAP_OBJ_STATUS_13);
-    MapObject_SetStatusFlagOff(mapObj, MAP_OBJ_STATUS_LOCK_DIR | MAP_OBJ_STATUS_PAUSE_ANIMATION);
-    MapObject_SetDynamicHeightCalculationEnabled(mapObj, TRUE);
+    if (mapObj != NULL) {
+        MapObject_SetGraphicsID(mapObj, Player_GetSpriteFromStateAndGender(playerState, gender));
+        MapObject_SetStatusFlagOn(mapObj, MAP_OBJ_STATUS_PERSISTENT | MAP_OBJ_STATUS_13);
+        MapObject_SetStatusFlagOff(mapObj, MAP_OBJ_STATUS_LOCK_DIR | MAP_OBJ_STATUS_PAUSE_ANIMATION);
+        MapObject_SetDynamicHeightCalculationEnabled(mapObj, TRUE);
+    }
     PlayerAvatar_SetMapObject(playerAvatar, mapObj);
 
     return playerAvatar;
+}
+
+MapObject *PlayerAvatar_EnsureMapObject(PlayerAvatar *playerAvatar, const MapObjectManager *mapObjMan, int fallbackX, int fallbackZ, int fallbackDir)
+{
+    if (mapObjMan != NULL) {
+        sPlayerMapObjMan = mapObjMan;
+    } else {
+        mapObjMan = sPlayerMapObjMan;
+    }
+
+    if (playerAvatar == NULL) {
+        return mapObjMan != NULL ? MapObjMan_LocalMapObjByIndex(mapObjMan, LOCALID_PLAYER) : NULL;
+    }
+
+    if (playerAvatar->mapObject != NULL) {
+        if (MapObject_CheckStatus(playerAvatar->mapObject, MAP_OBJ_STATUS_0)) {
+            return playerAvatar->mapObject;
+        }
+        playerAvatar->mapObject = NULL;
+    }
+
+    if (mapObjMan != NULL) {
+        MapObject *mapObj = MapObjectMan_GetPlayerMapObject(mapObjMan);
+        if (mapObj == NULL) {
+            mapObj = MapObjMan_LocalMapObjByIndex(mapObjMan, LOCALID_PLAYER);
+        }
+        if (mapObj != NULL) {
+            PlayerAvatar_SetMapObject(playerAvatar, mapObj);
+            return mapObj;
+        }
+
+        if (fallbackX >= 0 && fallbackZ >= 0) {
+            int sprite = Player_GetSpriteFromStateAndGender(playerAvatar->playerAvatarState, playerAvatar->gender);
+            PlayerAvatar_AddMapObject(playerAvatar, mapObjMan, sprite, fallbackDir, fallbackX, fallbackZ);
+            return playerAvatar->mapObject;
+        }
+    }
+
+    return NULL;
 }
 
 /**
@@ -89,9 +142,16 @@ PlayerAvatar *PlayerAvatar_NewLoad(const MapObjectManager *mapObjMan, PlayerData
  */
 void PlayerAvatar_InitMapFeatures(PlayerAvatar *playerAvatar, int dynamicMapFeaturesID)
 {
+    if (playerAvatar == NULL) {
+        return;
+    }
+
     MapObject *mapObj = PlayerAvatar_GetMapObject(playerAvatar);
     GF_ASSERT(mapObj != NULL);
-    MapObject_MapObjectManager(mapObj);
+    if (mapObj == NULL) {
+        return;
+    }
+    sPlayerMapObjMan = MapObject_MapObjectManager(mapObj);
 
     ov5_021F6218(playerAvatar);
 
@@ -112,7 +172,9 @@ void PlayerAvatar_InitMapFeatures(PlayerAvatar *playerAvatar, int dynamicMapFeat
  */
 void PlayerAvatar_Free(PlayerAvatar *playerAvatar)
 {
-    Heap_Free(playerAvatar);
+    if (playerAvatar != NULL) {
+        Heap_Free(playerAvatar);
+    }
 }
 
 /**
@@ -120,9 +182,15 @@ void PlayerAvatar_Free(PlayerAvatar *playerAvatar)
  */
 void PlayerAvatar_Delete(PlayerAvatar *playerAvatar)
 {
-    MapObject *mapObject = PlayerAvatar_GetMapObject(playerAvatar);
+    if (playerAvatar == NULL) {
+        return;
+    }
 
-    MapObject_Delete(mapObject);
+    MapObject *mapObject = PlayerAvatar_GetMapObject(playerAvatar);
+    if (mapObject != NULL) {
+        MapObject_Delete(mapObject);
+    }
+    playerAvatar->mapObject = NULL;
     PlayerAvatar_Free(playerAvatar);
 }
 
@@ -224,7 +292,8 @@ static MapObject *MapObjectMan_GetPlayerMapObjectCheckNull(const MapObjectManage
  */
 int PlayerAvatar_GetFacingDir(PlayerAvatar *const playerAvatar)
 {
-    return MapObject_GetFacingDir(PlayerAvatar_GetMapObject(playerAvatar));
+    MapObject *mapObj = PlayerAvatar_GetMapObject(playerAvatar);
+    return mapObj != NULL ? MapObject_GetFacingDir(mapObj) : 0;
 }
 
 /**
@@ -232,7 +301,10 @@ int PlayerAvatar_GetFacingDir(PlayerAvatar *const playerAvatar)
  */
 void PlayerAvatar_TryFace(PlayerAvatar *playerAvatar, int dir)
 {
-    MapObject_TryFace(PlayerAvatar_GetMapObject(playerAvatar), dir);
+    MapObject *mapObj = PlayerAvatar_GetMapObject(playerAvatar);
+    if (mapObj != NULL) {
+        MapObject_TryFace(mapObj, dir);
+    }
 }
 
 /**
@@ -242,7 +314,8 @@ void PlayerAvatar_TryFace(PlayerAvatar *playerAvatar, int dir)
  */
 int PlayerAvatar_GetMovingDir(PlayerAvatar *const playerAvatar)
 {
-    return MapObject_GetMovingDir(PlayerAvatar_GetMapObject(playerAvatar));
+    MapObject *mapObj = PlayerAvatar_GetMapObject(playerAvatar);
+    return mapObj != NULL ? MapObject_GetMovingDir(mapObj) : 0;
 }
 
 /**
@@ -266,7 +339,8 @@ int PlayerAvatar_GetDistortionDir(PlayerAvatar *const playerAvatar)
  */
 int PlayerAvatar_GetXPos(PlayerAvatar *const playerAvatar)
 {
-    return MapObject_GetX(PlayerAvatar_GetMapObject(playerAvatar));
+    MapObject *mapObj = PlayerAvatar_GetMapObject(playerAvatar);
+    return mapObj != NULL ? MapObject_GetX(mapObj) : 0;
 }
 
 /**
@@ -276,7 +350,8 @@ int PlayerAvatar_GetXPos(PlayerAvatar *const playerAvatar)
  */
 int PlayerAvatar_GetZPos(PlayerAvatar *const playerAvatar)
 {
-    return MapObject_GetZ(PlayerAvatar_GetMapObject(playerAvatar));
+    MapObject *mapObj = PlayerAvatar_GetMapObject(playerAvatar);
+    return mapObj != NULL ? MapObject_GetZ(mapObj) : 0;
 }
 
 /**
@@ -286,7 +361,8 @@ int PlayerAvatar_GetZPos(PlayerAvatar *const playerAvatar)
  */
 int PlayerAvatar_XPosPrev(PlayerAvatar *const playerAvatar)
 {
-    return MapObject_GetXPrev(PlayerAvatar_GetMapObject(playerAvatar));
+    MapObject *mapObj = PlayerAvatar_GetMapObject(playerAvatar);
+    return mapObj != NULL ? MapObject_GetXPrev(mapObj) : 0;
 }
 
 /**
@@ -296,7 +372,8 @@ int PlayerAvatar_XPosPrev(PlayerAvatar *const playerAvatar)
  */
 int PlayerAvatar_ZPosPrev(PlayerAvatar *const playerAvatar)
 {
-    return MapObject_GetZPrev(PlayerAvatar_GetMapObject(playerAvatar));
+    MapObject *mapObj = PlayerAvatar_GetMapObject(playerAvatar);
+    return mapObj != NULL ? MapObject_GetZPrev(mapObj) : 0;
 }
 
 /**
@@ -304,7 +381,14 @@ int PlayerAvatar_ZPosPrev(PlayerAvatar *const playerAvatar)
  */
 void PlayerAvatar_GetPosPtr(PlayerAvatar *const playerAvatar, VecFx32 *pos)
 {
-    MapObject_GetPosPtr(PlayerAvatar_GetMapObject(playerAvatar), pos);
+    MapObject *mapObj = PlayerAvatar_GetMapObject(playerAvatar);
+    if (mapObj != NULL) {
+        MapObject_GetPosPtr(mapObj, pos);
+    } else if (pos != NULL) {
+        pos->x = 0;
+        pos->y = 0;
+        pos->z = 0;
+    }
 }
 
 /**
@@ -314,7 +398,9 @@ void PlayerAvatar_GetPosPtr(PlayerAvatar *const playerAvatar, VecFx32 *pos)
  */
 const VecFx32 *PlayerAvatar_GetPos(PlayerAvatar *const playerAvatar)
 {
-    return MapObject_GetPos(PlayerAvatar_GetConstMapObject(playerAvatar));
+    static const VecFx32 sZeroPos = { 0, 0, 0 };
+    const MapObject *mapObj = PlayerAvatar_GetConstMapObject(playerAvatar);
+    return mapObj != NULL ? MapObject_GetPos(mapObj) : &sZeroPos;
 }
 
 /**
@@ -359,6 +445,9 @@ int PlayerAvatar_GetPlayerMoveState(const PlayerAvatar *playerAvatar)
 void PlayerAvatar_SetVisible(PlayerAvatar *playerAvatar, BOOL visible)
 {
     MapObject *mapObj = PlayerAvatar_GetMapObject(playerAvatar);
+    if (mapObj == NULL) {
+        return;
+    }
 
     if (visible == TRUE) {
         MapObject_SetStatusFlagOff(mapObj, MAP_OBJ_STATUS_HIDE);
@@ -372,7 +461,9 @@ void PlayerAvatar_SetVisible(PlayerAvatar *playerAvatar, BOOL visible)
  */
 void PlayerAvatar_SetMapObject(PlayerAvatar *playerAvatar, MapObject *mapObject)
 {
-    playerAvatar->mapObject = mapObject;
+    if (playerAvatar != NULL) {
+        playerAvatar->mapObject = mapObject;
+    }
 }
 
 /**
@@ -382,9 +473,15 @@ void PlayerAvatar_SetMapObject(PlayerAvatar *playerAvatar, MapObject *mapObject)
  */
 MapObject *PlayerAvatar_GetMapObject(PlayerAvatar *playerAvatar)
 {
-    GF_ASSERT(playerAvatar != NULL);
-    GF_ASSERT(playerAvatar->mapObject != NULL);
+    if (playerAvatar == NULL) {
+        return NULL;
+    }
 
+    if (playerAvatar->mapObject == NULL && sPlayerMapObjMan != NULL) {
+        PlayerAvatar_EnsureMapObject(playerAvatar, sPlayerMapObjMan, -1, -1, 0);
+    }
+
+    GF_ASSERT(playerAvatar->mapObject != NULL);
     return playerAvatar->mapObject;
 }
 
@@ -395,7 +492,23 @@ MapObject *PlayerAvatar_GetMapObject(PlayerAvatar *playerAvatar)
  */
 const MapObject *PlayerAvatar_GetConstMapObject(const PlayerAvatar *playerAvatar)
 {
-    return playerAvatar->mapObject;
+    if (playerAvatar == NULL) {
+        return NULL;
+    }
+
+    if (playerAvatar->mapObject != NULL) {
+        return playerAvatar->mapObject;
+    }
+
+    if (sPlayerMapObjMan != NULL) {
+        const MapObject *mapObj = MapObjectMan_GetPlayerMapObject(sPlayerMapObjMan);
+        if (mapObj == NULL) {
+            mapObj = MapObjMan_LocalMapObjByIndex(sPlayerMapObjMan, LOCALID_PLAYER);
+        }
+        return mapObj;
+    }
+
+    return NULL;
 }
 
 /**

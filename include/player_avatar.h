@@ -54,6 +54,8 @@ PlayerAvatar *PlayerAvatar_NewLoad(const MapObjectManager *param0, PlayerData *p
 void PlayerAvatar_InitMapFeatures(PlayerAvatar *playerAvatar, int dynamicMapFeaturesID);
 void PlayerAvatar_Free(PlayerAvatar *playerAvatar);
 void PlayerAvatar_Delete(PlayerAvatar *playerAvatar);
+void PlayerAvatar_ClearMapObjectManager(void);
+MapObject *PlayerAvatar_EnsureMapObject(PlayerAvatar *playerAvatar, const MapObjectManager *mapObjMan, int fallbackX, int fallbackZ, int fallbackDir);
 MapObject *MapObjectMan_GetPlayerMapObject(const MapObjectManager *param0);
 int PlayerAvatar_GetFacingDir(PlayerAvatar *const playerAvatar);
 void PlayerAvatar_TryFace(PlayerAvatar *playerAvatar, int param1);

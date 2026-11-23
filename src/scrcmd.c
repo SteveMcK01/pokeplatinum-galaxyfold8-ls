@@ -2461,13 +2461,33 @@ static BOOL ScrCmd_RestoreCamera(ScriptContext *ctx)
 {
     MapObject **freeCameraObject = FieldSystem_GetScriptMemberPtr(ctx->fieldSystem, SCRIPT_MANAGER_CAMERA_OBJECT);
 
-    MapObject_Delete(*freeCameraObject);
+    if (*freeCameraObject != NULL) {
+        MapObject_Delete(*freeCameraObject);
+        *freeCameraObject = NULL;
+    }
 
-    MapObject *playerObject = MapObjMan_LocalMapObjByIndex(ctx->fieldSystem->mapObjMan, LOCALID_PLAYER);
-    const VecFx32 *playerPos = MapObject_GetPos(playerObject);
+    MapObject *playerObject = NULL;
+    if (ctx->fieldSystem->playerAvatar != NULL && ctx->fieldSystem->location != NULL) {
+        playerObject = PlayerAvatar_EnsureMapObject(
+            ctx->fieldSystem->playerAvatar,
+            ctx->fieldSystem->mapObjMan,
+            ctx->fieldSystem->location->x,
+            ctx->fieldSystem->location->z,
+            ctx->fieldSystem->location->faceDirection);
+    } else if (ctx->fieldSystem->mapObjMan != NULL) {
+        playerObject = MapObjMan_LocalMapObjByIndex(ctx->fieldSystem->mapObjMan, LOCALID_PLAYER);
+    }
 
-    LandDataManager_TrackTarget(playerPos, ctx->fieldSystem->landDataMan);
-    Camera_TrackTarget(playerPos, ctx->fieldSystem->camera);
+    if (playerObject != NULL) {
+        const VecFx32 *playerPos = MapObject_GetPos(playerObject);
+
+        if (ctx->fieldSystem->landDataMan != NULL) {
+            LandDataManager_TrackTarget(playerPos, ctx->fieldSystem->landDataMan);
+        }
+        if (ctx->fieldSystem->camera != NULL) {
+            Camera_TrackTarget(playerPos, ctx->fieldSystem->camera);
+        }
+    }
 
     return FALSE;
 }
@@ -2518,8 +2538,28 @@ static BOOL ScrCmd_GetPlayerMapPos(ScriptContext *ctx)
     u16 *destVarX = ScriptContext_GetVarPointer(ctx);
     u16 *destVarZ = ScriptContext_GetVarPointer(ctx);
 
-    *destVarX = PlayerAvatar_GetXPos(fieldSystem->playerAvatar);
-    *destVarZ = PlayerAvatar_GetZPos(fieldSystem->playerAvatar);
+    MapObject *playerObj = NULL;
+    if (fieldSystem->playerAvatar != NULL && fieldSystem->location != NULL) {
+        playerObj = PlayerAvatar_EnsureMapObject(
+            fieldSystem->playerAvatar,
+            fieldSystem->mapObjMan,
+            fieldSystem->location->x,
+            fieldSystem->location->z,
+            fieldSystem->location->faceDirection);
+    } else if (fieldSystem->mapObjMan != NULL) {
+        playerObj = MapObjMan_LocalMapObjByIndex(fieldSystem->mapObjMan, LOCALID_PLAYER);
+    }
+
+    if (playerObj != NULL) {
+        *destVarX = MapObject_GetX(playerObj);
+        *destVarZ = MapObject_GetZ(playerObj);
+    } else if (fieldSystem->location != NULL) {
+        *destVarX = fieldSystem->location->x;
+        *destVarZ = fieldSystem->location->z;
+    } else {
+        *destVarX = 0;
+        *destVarZ = 0;
+    }
 
     return FALSE;
 }
@@ -4871,9 +4911,15 @@ static BOOL ScrCmd_GetPlayer3DPos(ScriptContext *ctx)
 
     MapObject *player = PlayerAvatar_GetMapObject(fieldSystem->playerAvatar);
 
-    *destVarX = MapObject_GetX(player);
-    *destVarY = MapObject_GetY(player) / 2;
-    *destVarZ = MapObject_GetZ(player);
+    if (player != NULL) {
+        *destVarX = MapObject_GetX(player);
+        *destVarY = MapObject_GetY(player) / 2;
+        *destVarZ = MapObject_GetZ(player);
+    } else {
+        *destVarX = fieldSystem->location != NULL ? fieldSystem->location->x : 0;
+        *destVarY = 0;
+        *destVarZ = fieldSystem->location != NULL ? fieldSystem->location->z : 0;
+    }
 
     return FALSE;
 }

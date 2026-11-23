@@ -369,7 +369,9 @@ static void FieldMapChange_CreateObjects(FieldSystem *fieldSystem)
 
 static void FieldMapChange_DeleteObjects(FieldSystem *fieldSystem)
 {
+    PlayerAvatar_ClearMapObjectManager();
     PlayerAvatar_Free(fieldSystem->playerAvatar);
+    fieldSystem->playerAvatar = NULL;
     MapObjectMan_DeleteAll(fieldSystem->mapObjMan);
     MapObjectMan_Delete(fieldSystem->mapObjMan);
 }

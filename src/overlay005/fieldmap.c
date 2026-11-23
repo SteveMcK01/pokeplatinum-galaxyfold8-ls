@@ -241,6 +241,14 @@ static BOOL FieldMap_Init(ApplicationManager *appMan, int *state)
         break;
     case FIELD_MAP_INIT_STATE_DONE:
         if (FieldSystem_IsBottomScreenRunningDummy(fieldSystem)) {
+            if (fieldSystem->playerAvatar != NULL && fieldSystem->location != NULL) {
+                PlayerAvatar_EnsureMapObject(
+                    fieldSystem->playerAvatar,
+                    fieldSystem->mapObjMan,
+                    fieldSystem->location->x,
+                    fieldSystem->location->z,
+                    fieldSystem->location->faceDirection);
+            }
             fieldSystem->runningFieldMap = TRUE;
             ret = TRUE;
         }
@@ -875,6 +883,14 @@ static void ov5_021D1878(FieldSystem *fieldSystem)
         PersistedMapFeatures *v3 = MiscSaveBlock_GetPersistedMapFeatures(FieldSystem_GetSaveData(fieldSystem));
         int v4 = PersistedMapFeatures_GetID(v3);
 
+        if (fieldSystem->playerAvatar != NULL && fieldSystem->location != NULL) {
+            PlayerAvatar_EnsureMapObject(
+                fieldSystem->playerAvatar,
+                fieldSystem->mapObjMan,
+                fieldSystem->location->x,
+                fieldSystem->location->z,
+                fieldSystem->location->faceDirection);
+        }
         PlayerAvatar_InitMapFeatures(fieldSystem->playerAvatar, v4);
     }
 

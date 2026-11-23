@@ -80,24 +80,16 @@
 ### D. Foldable Companion UI Scaling & CI Stability (`3c70423e5`..`c8dac3d72`)
 - **Fixes Shipped:** Enlarged Gear companion screens and Party move-pill cards via clean incremental `port_common_large_ui.patch`; fixed Ubuntu 24.04 `apt` IPv6/mirror timeouts in `.github/workflows/build_android.yml`.
 
+### E. Overworld Fog Solid White Screen (`OVERWORLD_WEATHER_FOG`, `b6624b3f4`, `5ca070e7d`)
+- **Symptom:** Walking into foggy overworld maps (e.g., Route 210 North) rendered Engine A solid white while Engine B was unaffected; HM Defog cleared it immediately.
+- **Root Cause:** The 2D `BG2` fog sheet (`weather_sys.narc` `0x33`/`0x2D`/`0x2F`, 100% pure white) rendered opaquely over 3D `BG0` on Android GLES 3.20 due to out-of-bounds `G2x_SetBlend*` register writes under `SDK_PORT`, `glUniform1iv` uploads for `bgPriorities`/`bgOrder` in `DrawEngine` without re-binding `g2shaderProgramID`, and dynamic `bgc[]`/`bgPriorities[]` indexing in `g2_fragment.glsl`.
+- **Fix Shipped:** Wired `libntr_g2_blend_regs.patch` and `libntr_g2_fog_blend.patch` into `subprojects/libntr.wrap` (direct `SDK_PORT` blend register writes, `glProgramUniform1iv` + `glUseProgram(g2shaderProgramID)` in `sim_main.cpp`, constant-index BG selection + `color.rgb` alpha blending in `g2_fragment.glsl`) alongside `#ifndef SDK_BUILD_ARM` 3D fog suppression in `src/overlay005/fog_manager.c`. Verified fixed on-device.
+
 ---
 
 ## 4. Active Bugs & Investigation Queue
 
-### Priority 1 (Active): Overworld Fog Solid White Screen (`OVERWORLD_WEATHER_FOG`)
-- **Where It Happens:** Foggy overworld maps such as **Route 210 North**.
-- **Confirmed Behavior:**
-  - Engine A (top main 3D screen) renders **solid white**; Engine B (floating PiP bottom screen) renders normally.
-  - Using HM **Defog** immediately clears the white screen (`ov5_021D69B8` disables `BG2`, resets BG priorities, calls `G2_BlendNone()`, and calls `FogManager_ApplyParameters(..., FOG_PARAMETER_ENABLED, FALSE, ...)`).
-- **Already Landed (`515c25503`..`b6624b3f4` — Did NOT Fully Resolve):**
-  - Patched `G2x_SetBlendAlpha_`, `G2x_SetBlendBrightness_`, `G2x_SetBlendBrightnessExt_`, and `G2x_ChangeBlendBrightness_` in `subprojects/libntr/libraries/gx/src/g2.c` (`subprojects/packagefiles/libntr_g2_blend_regs.patch` wired into `subprojects/libntr.wrap`) under `#ifdef SDK_PORT` to write directly to `reg_G2_BLDALPHA` / `reg_G2_BLDY` instead of writing past `s_reg_G2_BLDCNT`.
-  - Disabled hardware `G3X_SetFog` bit under `#ifndef SDK_BUILD_ARM` in `src/overlay005/fog_manager.c` while keeping `fogMan->enabled` set for Defog.
-- **Exact Next Steps to Investigate:**
-  1. **Verify `-DSDK_PORT` in `libntr`:** Inspect `subprojects/libntr/meson.build` (lines 110–165) to confirm whether `-DSDK_PORT` is actually defined when compiling `libntr` for `build_target=android`. If not, the `#ifdef SDK_PORT` blend-register fix in `g2.c` was never compiled in!
-  2. **Audit G3 Fog Registers & Simulator Reads:** Check `src/overlay005/fog_manager.c` and `ov5_021D7308`–`ov5_021D7500` in `src/overlay005/ov5_021D5EB8.c` (lines 1880–2060), and verify `REG_FOG_TABLE_0_ADDR` in `subprojects/libntr/libraries/sim/src/g3_draw.cpp:414` on Android.
-  3. **Audit `BG2` Alpha Blending Over `bg0as3d` in GLSL:** Inspect `subprojects/libntr/libraries/sim/src/shaders/g2_fragment.glsl` (lines 127–156). On Route 210 North (`ov5_021DAEC0`), fog `BG2` has priority `1` (drawn *above* 3D `BG0` at priority `2`), and `ov5_021D64E4` configures `BLDCNT` Target 1 = `BG2`, Target 2 = `BG0 | BD`. Trace how `bgc[2]` and `currentBgDrawn` blend when `BG0` is the 3D framebuffer (`bg0as3d != 0`).
-
-### Priority 2 (Verify Status): Older Device Crash Signatures Seen in Mid-November Logs
+### Priority 1 (Verify Status): Older Device Crash Signatures Seen in Mid-November Logs
 If reported again during playtesting, check these earlier stack traces from historical tombstones:
 - **`VeilstoneGymObjectRenderer_InitPunchingBagRenderer+180`** (`VeilstoneGym_DynamicMapFeaturesInit+312`): Null pointer write (`0x0`) when initializing Veilstone Gym punching bags.
 - **`OverworldWild_Update+188` -> `OverworldWild_ClearAll` -> `MapObject_Delete+20`**: Null pointer read (`0x0`) when clearing visible overworld wild spawns.

@@ -15,6 +15,10 @@
 
 ## Last Worked On
 
+- **Start Menu HM/TM Shortcut (`include/field_move_tasks.h`, `src/field_move_tasks.c`, `include/start_menu.h`, `src/start_menu.c`):**
+  - Added an `HM/TM` option (`START_MENU_OPTION_HMTM` / `HIDE_OPTION_HMTM`, expanding `MAX_START_MENU_OPTIONS` to `9` with 9-row cursor/sprite spacing) to the in-game Start Menu under `#ifdef SDK_PORT`.
+  - `StartMenu_HasAnyEligibleHMTM` / `StartMenu_FindHMTMSlot` scans all 10 field-usable HM/TMs (`ITEM_HM01`–`ITEM_HM08`, `ITEM_TM70` Flash, `ITEM_TM28` Dig) and shows the option whenever at least one is in the Bag, badge requirements are met (or `HmFree_NoBadges()` is active), and a non-Egg party Pokémon knows or can learn the move (`Pokemon_CanLearnTM`, including *Universal TM/HM Compatibility*).
+  - Selecting `HM/TM` opens a compact on-screen submenu sorted with currently usable moves (`* `) first and contextually unusable moves (`  `) below, closing the Start Menu and launching overworld moves directly via `FieldMoves_SetTaskFromField` (avoiding redundant `FieldSystem_StartFieldMap` restarts) or opening Town Map for `Fly` (`StartMenu_HMTMFlyDestinationSelected`, returning cleanly to Start Menu if cancelled).
 - **Gen V Battle Trainer Sprite Fix (`gen5/include/gen5/player_back.h`, `gen5/src/player_back.c`, `gen5/src/runtime.c`, `gen5/patches/src/ov168/btlv_mcss.c.patch`, `gen5/patches/src/system/mcss.c.patch`, `src/port/gen5_battle.c`):**
   - **Root Causes:**
     1. Partner trainers (Riley, Cheryl, Marley, Buck, Mira, Barry) passed `artSlot = -1` in `gen5/src/runtime.c` and hit BW2's opposite-gender player back-sprite fallback (`TRAINER_BACK_SPRITE_PKMN_TRAINER_ROSA` for Riley/Buck) because `TRAINER_CLASS_BACK_SPRITES[]` lacked Ace Trainer/Preschooler entries and `btlv_mcss.c.patch` only overrode `BTLV_MCSS_POS_TRAINER`.
@@ -64,6 +68,6 @@
 
 ### Gameplay & Quality-of-Life Upgrades
 - **Portable PC Box Access:** Open the PC Box from the Start Menu (with restricted-map guardrails) or swap party/box Pokémon anywhere via the Gear panel.
-- **HM & TM Freedom:** Use field moves (Cut, Fly, Surf, Strength, Rock Smash, Waterfall, Rock Climb, Defog) directly from compatible party Pokémon without teaching them (with optional badge bypass), *Universal TM/HM Compatibility*, and *Infinite TMs*.
+- **HM & TM Freedom & Start Menu Shortcut:** Use field moves (Cut, Fly, Surf, Strength, Rock Smash, Waterfall, Rock Climb, Defog) directly from compatible party Pokémon without teaching them (with optional badge bypass), *Universal TM/HM Compatibility*, *Infinite TMs*, and an in-game Start Menu `HM/TM` submenu for one-tap field use of eligible HMs plus Flash and Dig.
 - **Evolution, EXP & Timers:** *Trade Evolutions Without Trading* (Lv. 36+ for Kadabra/Haunter/Machoke/Graveler; level-up while holding required item for item-trade evolutions), *Modern EXP Share* (party-wide in both Platinum and Gen 5 battles), *Hard Level Cap* (next Gym Leader cap), *Instant Honey Trees*, reduced Berry growth timers, and *Game Clock Adjustment*.
 - **Built-In Legendary Mystery Gift Events:** Triggers Darkrai (Member Card), Shaymin (Oak's Letter), Arceus (Azure Flute), and Rotom Forms (Secret Key) with prerequisite checks.

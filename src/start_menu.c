@@ -89,7 +89,11 @@
 #include "vars_flags.h"
 #include "constants/field/dynamic_map_features.h"
 #ifdef SDK_PORT
+#include "constants/items.h"
+#include "constants/moves.h"
+#include "generated/badges.h"
 #include "port/charcode_convert.h"
+#include "port/hm_free.h"
 #include "port/sim_config_prj.h"
 #endif
 
@@ -109,6 +113,9 @@ enum StartMenuOption {
     START_MENU_OPTION_CHAT,
     START_MENU_OPTION_RETIRE,
     START_MENU_OPTION_PC,
+#ifdef SDK_PORT
+    START_MENU_OPTION_HMTM,
+#endif
 };
 
 typedef struct MenuMailData {
@@ -187,6 +194,13 @@ static BOOL StartMenu_ExitBag(FieldTask *fieldTask);
 static BOOL StartMenu_SelectPC(FieldTask *fieldTask);
 static BOOL StartMenu_OpenPC(FieldTask *fieldTask);
 static BOOL StartMenu_ExitPC(FieldTask *fieldTask);
+#ifdef SDK_PORT
+static BOOL StartMenu_HasAnyEligibleHMTM(FieldSystem *fieldSystem);
+static BOOL StartMenu_SelectHMTM(FieldTask *fieldTask);
+static void StartMenu_HMTMSelect(FieldTask *fieldTask);
+static void StartMenu_CloseHMTMSubMenu(FieldSystem *fieldSystem, StartMenu *menu);
+static BOOL StartMenu_HMTMFlyDestinationSelected(FieldTask *fieldTask);
+#endif
 static BOOL StartMenu_SelectSave(FieldTask *fieldTask);
 static void StartMenu_SaveWait(FieldTask *fieldTask);
 static void StartMenu_Save(FieldTask *fieldTask);
@@ -217,6 +231,9 @@ static const StartMenuAction sStartMenuActions[] = {
     [START_MENU_OPTION_CHAT]         = { .bankEntry = StartMenu_Text_Chat,           .callback = StartMenu_SelectChat        },
     [START_MENU_OPTION_RETIRE]       = { .bankEntry = StartMenu_Text_Retire,         .callback = StartMenu_SelectRetire      },
     [START_MENU_OPTION_PC]           = { .bankEntry = 0,                             .callback = StartMenu_SelectPC          },
+#ifdef SDK_PORT
+    [START_MENU_OPTION_HMTM]         = { .bankEntry = 0,                             .callback = StartMenu_SelectHMTM        },
+#endif
 };
 // clang-format on
 
@@ -292,6 +309,7 @@ BOOL FieldSystem_IsInValidLocation(FieldSystem *fieldSystem)
 #define HIDE_OPTION_CHAT         (1 << 7)
 #define HIDE_OPTION_RETIRE       (1 << 8)
 #define HIDE_OPTION_PC           (1 << 9)
+#define HIDE_OPTION_HMTM         (1 << 10)
 
 void StartMenu_Open(FieldSystem *fieldSystem)
 {
@@ -414,8 +432,14 @@ static u32 StartMenu_GetNormalHiddenOptions(FieldSystem *fieldSystem)
         || CommServerClient_IsInitialized()) {
         hideFlags |= HIDE_OPTION_PC;
     }
+    if ((hideFlags & (HIDE_OPTION_POKEMON | HIDE_OPTION_BAG))
+        || CommServerClient_IsInitialized()
+        || !StartMenu_HasAnyEligibleHMTM(fieldSystem)) {
+        hideFlags |= HIDE_OPTION_HMTM;
+    }
 #else
     hideFlags |= HIDE_OPTION_PC;
+    hideFlags |= HIDE_OPTION_HMTM;
 #endif
 
     return hideFlags;
@@ -423,27 +447,27 @@ static u32 StartMenu_GetNormalHiddenOptions(FieldSystem *fieldSystem)
 
 static u32 StartMenu_GetSafariHiddenOptions(FieldSystem *fieldSystem)
 {
-    return HIDE_OPTION_SAVE | HIDE_OPTION_CHAT | HIDE_OPTION_PC;
+    return HIDE_OPTION_SAVE | HIDE_OPTION_CHAT | HIDE_OPTION_PC | HIDE_OPTION_HMTM;
 }
 
 static u32 StartMenu_GetPalParkHiddenOptions(FieldSystem *fieldSystem)
 {
-    return HIDE_OPTION_SAVE | HIDE_OPTION_CHAT | HIDE_OPTION_BAG | HIDE_OPTION_PC;
+    return HIDE_OPTION_SAVE | HIDE_OPTION_CHAT | HIDE_OPTION_BAG | HIDE_OPTION_PC | HIDE_OPTION_HMTM;
 }
 
 static u32 StartMenu_GetBattleTowerSalonHiddenOptions(FieldSystem *fieldSystem)
 {
-    return HIDE_OPTION_POKEDEX | HIDE_OPTION_BAG | HIDE_OPTION_SAVE | HIDE_OPTION_CHAT | HIDE_OPTION_RETIRE | HIDE_OPTION_PC;
+    return HIDE_OPTION_POKEDEX | HIDE_OPTION_BAG | HIDE_OPTION_SAVE | HIDE_OPTION_CHAT | HIDE_OPTION_RETIRE | HIDE_OPTION_PC | HIDE_OPTION_HMTM;
 }
 
 static u32 StartMenu_GetUnionRoomHiddenOptions(FieldSystem *fieldSystem)
 {
-    return HIDE_OPTION_SAVE | HIDE_OPTION_RETIRE | HIDE_OPTION_PC;
+    return HIDE_OPTION_SAVE | HIDE_OPTION_RETIRE | HIDE_OPTION_PC | HIDE_OPTION_HMTM;
 }
 
 static u32 StartMenu_GetColosseumHiddenOptions(FieldSystem *fieldSystem)
 {
-    return HIDE_OPTION_SAVE | HIDE_OPTION_POKEDEX | HIDE_OPTION_CHAT | HIDE_OPTION_RETIRE | HIDE_OPTION_PC;
+    return HIDE_OPTION_SAVE | HIDE_OPTION_POKEDEX | HIDE_OPTION_CHAT | HIDE_OPTION_RETIRE | HIDE_OPTION_PC | HIDE_OPTION_HMTM;
 }
 
 static BOOL StartMenu_Main(FieldTask *fieldTask)
@@ -538,6 +562,19 @@ static BOOL StartMenu_Main(FieldTask *fieldTask)
             menu->state = START_MENU_STATE_SELECT;
         }
         break;
+#ifdef SDK_PORT
+    case START_MENU_STATE_HMTM_SELECT:
+        StartMenu_HMTMSelect(fieldTask);
+        break;
+    case START_MENU_STATE_HMTM_FLY_WAIT_FADE:
+        if (IsScreenFadeDone()) {
+            menu->taskData = Heap_Alloc(HEAP_ID_FIELD2, sizeof(TownMapContext));
+            TownMapContext_Init(fieldSystem, menu->taskData, TOWN_MAP_MODE_FLY);
+            FieldSystem_OpenTownMap(fieldSystem, menu->taskData);
+            StartMenu_SetCallback(menu, StartMenu_HMTMFlyDestinationSelected);
+        }
+        break;
+#endif
     }
 
     if (menu->menu != NULL) {
@@ -589,6 +626,13 @@ static void StartMenu_InitMenu(FieldTask *fieldTask)
             String_CopyChars(string, chars);
             StringList_AddFromString(menu->menuOptions, string, menu->options[i]);
             String_Free(string);
+        } else if (menu->options[i] == START_MENU_OPTION_HMTM) {
+            String *string = String_Init(8, HEAP_ID_FIELD2);
+            charcode_t chars[8];
+            CharCode_FromAscii("HM/TM", chars, NELEMS(chars));
+            String_CopyChars(string, chars);
+            StringList_AddFromString(menu->menuOptions, string, menu->options[i]);
+            String_Free(string);
 #endif
         } else {
             StringList_AddFromMessageBank(menu->menuOptions, loader, sStartMenuActions[menu->options[i]].bankEntry, menu->options[i]);
@@ -608,7 +652,7 @@ static void StartMenu_InitMenu(FieldTask *fieldTask)
     template.fontID = FONT_MESSAGE;
     template.xSize = 1;
     template.ySize = optionCount;
-    template.lineSpacing = (optionCount >= 8) ? 6 : 8;
+    template.lineSpacing = (optionCount >= 9) ? 3 : ((optionCount >= 8) ? 6 : 8);
     template.suppressCursor = TRUE;
 
     if (optionCount >= 4) {
@@ -617,7 +661,8 @@ static void StartMenu_InitMenu(FieldTask *fieldTask)
         template.loopAround = FALSE;
     }
 
-    menu->menu = Menu_New(&template, 28, 4, menu->cursorPos, HEAP_ID_FIELD2, PAD_BUTTON_B | PAD_BUTTON_X);
+    u8 yOffset = (optionCount >= 9) ? 2 : 4;
+    menu->menu = Menu_New(&template, 28, yOffset, menu->cursorPos, HEAP_ID_FIELD2, PAD_BUTTON_B | PAD_BUTTON_X);
 
     Window_ScheduleCopyToVRAM(&menu->primaryWindow);
     StartMenu_InitSprites(menu, menu->options, optionCount, TrainerInfo_Gender(SaveData_GetTrainerInfo(fieldSystem->saveData)));
@@ -640,6 +685,9 @@ static u32 StartMenu_MakeOptionList(StartMenu *menu, u8 *listOut)
     ADD_OPTION_IF_NOT_HIDDEN(START_MENU_OPTION_POKEMON, HIDE_OPTION_POKEMON);
     ADD_OPTION_IF_NOT_HIDDEN(START_MENU_OPTION_BAG, HIDE_OPTION_BAG);
     ADD_OPTION_IF_NOT_HIDDEN(START_MENU_OPTION_PC, HIDE_OPTION_PC);
+#ifdef SDK_PORT
+    ADD_OPTION_IF_NOT_HIDDEN(START_MENU_OPTION_HMTM, HIDE_OPTION_HMTM);
+#endif
     ADD_OPTION_IF_NOT_HIDDEN(START_MENU_OPTION_TRAINER_CASE, HIDE_OPTION_TRAINER_CASE);
     ADD_OPTION_IF_NOT_HIDDEN(START_MENU_OPTION_SAVE, HIDE_OPTION_SAVE);
     ADD_OPTION_IF_NOT_HIDDEN(START_MENU_OPTION_OPTIONS, HIDE_OPTION_OPTIONS);
@@ -803,8 +851,8 @@ static void StartMenu_InitSprites(StartMenu *menu, u8 *options, u32 optionCount,
     SpriteResourceManager_LoadAnimation(&menu->spriteManager, narc, icons_anim_NANR, FALSE, 13529);
     SpriteResourceManager_LoadTiles(&menu->spriteManager, narc, icons_NCGR, FALSE, NNS_G2D_VRAM_TYPE_2DMAIN, 13529);
 
-    s16 iconYBase = (optionCount >= 8) ? 18 : 20;
-    s16 iconYStep = (optionCount >= 8) ? 22 : 24;
+    s16 iconYBase = (optionCount >= 9) ? 17 : ((optionCount >= 8) ? 18 : 20);
+    s16 iconYStep = (optionCount >= 9) ? 19 : ((optionCount >= 8) ? 22 : 24);
 
     for (u32 i = 0; i < optionCount; i++) {
         SpriteTemplate template;
@@ -816,6 +864,10 @@ static void StartMenu_InitSprites(StartMenu *menu, u8 *options, u32 optionCount,
             template.animIdx = 9 * ICON_ANIM_COUNT;
         } else if (options[i] == START_MENU_OPTION_PC) {
             template.animIdx = START_MENU_OPTION_POKEDEX * ICON_ANIM_COUNT;
+#ifdef SDK_PORT
+        } else if (options[i] == START_MENU_OPTION_HMTM) {
+            template.animIdx = START_MENU_OPTION_OPTIONS * ICON_ANIM_COUNT;
+#endif
         } else {
             template.animIdx = options[i] * ICON_ANIM_COUNT;
         }
@@ -852,8 +904,8 @@ static void StartMenu_AnimateSprites(StartMenu *menu)
 static void StartMenu_SetCursorPos(Sprite *sprite, u32 pos, u32 optionCount)
 {
     VecFx32 position = *(Sprite_GetPosition(sprite));
-    s16 yBase = (optionCount >= 8) ? 18 : 20;
-    s16 yStep = (optionCount >= 8) ? 22 : 24;
+    s16 yBase = (optionCount >= 9) ? 17 : ((optionCount >= 8) ? 18 : 20);
+    s16 yStep = (optionCount >= 9) ? 19 : ((optionCount >= 8) ? 22 : 24);
     position.y = (yBase + yStep * pos) * FX32_ONE;
 
     Sprite_SetPosition(sprite, &position);
@@ -1343,6 +1395,285 @@ static BOOL StartMenu_ExitPC(FieldTask *fieldTask)
     menu->state = START_MENU_STATE_REINIT;
     return FALSE;
 }
+
+#ifdef SDK_PORT
+typedef struct FieldHMTMEntry {
+    u8 fieldMove;
+    u16 itemID;
+    u16 moveID;
+    s8 badgeID;
+    const char *label;
+} FieldHMTMEntry;
+
+static const FieldHMTMEntry sFieldHMTMs[] = {
+    { FIELD_MOVE_CUT,        ITEM_HM01, MOVE_CUT,        BADGE_ID_FOREST, "Cut"        },
+    { FIELD_MOVE_FLY,        ITEM_HM02, MOVE_FLY,        BADGE_ID_COBBLE, "Fly"        },
+    { FIELD_MOVE_SURF,       ITEM_HM03, MOVE_SURF,       BADGE_ID_FEN,    "Surf"       },
+    { FIELD_MOVE_STRENGTH,   ITEM_HM04, MOVE_STRENGTH,   BADGE_ID_MINE,   "Strength"   },
+    { FIELD_MOVE_DEFOG,      ITEM_HM05, MOVE_DEFOG,      BADGE_ID_RELIC,  "Defog"      },
+    { FIELD_MOVE_ROCK_SMASH, ITEM_HM06, MOVE_ROCK_SMASH, BADGE_ID_COAL,   "Rock Smash" },
+    { FIELD_MOVE_WATERFALL,  ITEM_HM07, MOVE_WATERFALL,  BADGE_ID_BEACON, "Waterfall"  },
+    { FIELD_MOVE_ROCK_CLIMB, ITEM_HM08, MOVE_ROCK_CLIMB, BADGE_ID_ICICLE, "Rock Climb" },
+    { FIELD_MOVE_FLASH,      ITEM_TM70, MOVE_FLASH,      -1,              "Flash"      },
+    { FIELD_MOVE_DIG,        ITEM_TM28, MOVE_DIG,        -1,              "Dig"        },
+};
+
+typedef struct HMTMSubMenu {
+    Window window;
+    Menu *menu;
+    StringList *choices;
+    u8 fieldMoves[NELEMS(sFieldHMTMs)];
+    u8 partySlots[NELEMS(sFieldHMTMs)];
+    u8 usableNow[NELEMS(sFieldHMTMs)];
+    u8 count;
+} HMTMSubMenu;
+
+static int StartMenu_FindHMTMSlot(FieldSystem *fieldSystem, const FieldHMTMEntry *entry)
+{
+    Bag *bag = SaveData_GetBag(fieldSystem->saveData);
+    if (!Bag_CanRemoveItem(bag, entry->itemID, 1, HEAP_ID_FIELD2)) {
+        return -1;
+    }
+
+    if (entry->badgeID >= 0 && !HmFree_NoBadges()
+        && !TrainerInfo_HasBadge(SaveData_GetTrainerInfo(fieldSystem->saveData), entry->badgeID)) {
+        return -1;
+    }
+
+    Party *party = SaveData_GetParty(fieldSystem->saveData);
+    int partyCount = Party_GetCurrentCount(party);
+    int learnableSlot = -1;
+
+    for (int slot = 0; slot < partyCount; slot++) {
+        Pokemon *mon = Party_GetPokemonBySlotIndex(party, slot);
+        if (Pokemon_GetValue(mon, MON_DATA_IS_EGG, NULL)) {
+            continue;
+        }
+        for (u32 m = 0; m < 4; m++) {
+            if (Pokemon_GetValue(mon, MON_DATA_MOVE1 + m, NULL) == entry->moveID) {
+                return slot;
+            }
+        }
+        if (learnableSlot < 0 && Pokemon_CanLearnTM(mon, Item_TMHMNumber(entry->itemID))) {
+            learnableSlot = slot;
+        }
+    }
+
+    return learnableSlot;
+}
+
+static BOOL StartMenu_HasAnyEligibleHMTM(FieldSystem *fieldSystem)
+{
+    for (u32 i = 0; i < NELEMS(sFieldHMTMs); i++) {
+        if (StartMenu_FindHMTMSlot(fieldSystem, &sFieldHMTMs[i]) >= 0) {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+static void StartMenu_FormatHMTMLabel(char *out, u32 outSize, BOOL usable, const char *label)
+{
+    u32 pos = 0;
+    if (outSize < 4) {
+        if (outSize > 0) {
+            out[0] = '\0';
+        }
+        return;
+    }
+    out[pos++] = usable ? '*' : ' ';
+    out[pos++] = ' ';
+    while (*label != '\0' && pos + 1 < outSize) {
+        out[pos++] = *label++;
+    }
+    out[pos] = '\0';
+}
+
+static BOOL StartMenu_SelectHMTM(FieldTask *fieldTask)
+{
+    FieldSystem *fieldSystem = FieldTask_GetFieldSystem(fieldTask);
+    StartMenu *menu = FieldTask_GetEnv(fieldTask);
+
+    StartMenu_Close(menu);
+    Window_EraseStandardFrame(&menu->primaryWindow, TRUE);
+    Window_Remove(&menu->primaryWindow);
+    Bg_ScheduleTilemapTransfer(fieldSystem->bgConfig, BG_LAYER_MAIN_3);
+
+    HMTMSubMenu *sub = Heap_Alloc(HEAP_ID_FIELD2, sizeof(HMTMSubMenu));
+    memset(sub, 0, sizeof(HMTMSubMenu));
+
+    FieldMoves_SetUsableMoves(fieldSystem, &menu->fieldMoveContext);
+
+    const char *labels[NELEMS(sFieldHMTMs)];
+    for (int pass = 0; pass < 2; pass++) {
+        BOOL wantUsable = (pass == 0);
+        for (u32 i = 0; i < NELEMS(sFieldHMTMs); i++) {
+            int slot = StartMenu_FindHMTMSlot(fieldSystem, &sFieldHMTMs[i]);
+            if (slot < 0) {
+                continue;
+            }
+            FieldMoveErrContext checkFn = (FieldMoveErrContext)FieldMove_GetTaskOrError(FIELD_MOVE_ERROR, sFieldHMTMs[i].fieldMove);
+            BOOL usable = (checkFn != NULL && checkFn(&menu->fieldMoveContext) == FIELD_MOVE_ERROR_NONE);
+            if (usable != wantUsable) {
+                continue;
+            }
+            sub->fieldMoves[sub->count] = sFieldHMTMs[i].fieldMove;
+            sub->partySlots[sub->count] = (u8)slot;
+            sub->usableNow[sub->count] = usable ? TRUE : FALSE;
+            labels[sub->count] = sFieldHMTMs[i].label;
+            sub->count++;
+        }
+    }
+
+    if (sub->count == 0) {
+        Heap_Free(sub);
+        StartMenu_InitMenu(fieldTask);
+        menu->state = START_MENU_STATE_SELECT;
+        return TRUE;
+    }
+
+    u8 lineSpacing = (sub->count >= 8) ? 1 : 4;
+    u8 yOffset = (sub->count >= 8) ? 3 : 4;
+    u8 step = 16 + lineSpacing;
+    u8 winHeight = (u8)((sub->count * step + yOffset * 2 + 7) / 8);
+    if (winHeight > 22) {
+        winHeight = 22;
+    }
+    if (winHeight < 4) {
+        winHeight = 4;
+    }
+
+    Window_Add(fieldSystem->bgConfig, &sub->window, BG_LAYER_MAIN_3, 17, 1, 14, winHeight, 12, BASE_TILE_MESSAGE_WINDOW - 14 * 22);
+    LoadStandardWindowGraphics(fieldSystem->bgConfig, BG_LAYER_MAIN_3, BASE_TILE_STANDARD_WINDOW_FRAME, 11, STANDARD_WINDOW_FIELD, HEAP_ID_FIELD2);
+    Window_DrawStandardFrame(&sub->window, TRUE, BASE_TILE_STANDARD_WINDOW_FRAME, 11);
+
+    sub->choices = StringList_New(sub->count, HEAP_ID_FIELD2);
+    for (u8 i = 0; i < sub->count; i++) {
+        char text[20];
+        charcode_t chars[20];
+        StartMenu_FormatHMTMLabel(text, sizeof(text), sub->usableNow[i], labels[i]);
+        String *string = String_Init(20, HEAP_ID_FIELD2);
+        CharCode_FromAscii(text, chars, NELEMS(chars));
+        String_CopyChars(string, chars);
+        StringList_AddFromString(sub->choices, string, i);
+        String_Free(string);
+    }
+
+    MenuTemplate tmpl;
+    tmpl.choices = sub->choices;
+    tmpl.window = &sub->window;
+    tmpl.fontID = FONT_MESSAGE;
+    tmpl.xSize = 1;
+    tmpl.ySize = sub->count;
+    tmpl.lineSpacing = lineSpacing;
+    tmpl.suppressCursor = FALSE;
+    tmpl.loopAround = (sub->count >= 4) ? TRUE : FALSE;
+
+    sub->menu = Menu_New(&tmpl, 12, yOffset, 0, HEAP_ID_FIELD2, PAD_BUTTON_B | PAD_BUTTON_X);
+    Window_ScheduleCopyToVRAM(&sub->window);
+
+    menu->taskData = sub;
+    menu->state = START_MENU_STATE_HMTM_SELECT;
+    return TRUE;
+}
+
+static void StartMenu_CloseHMTMSubMenu(FieldSystem *fieldSystem, StartMenu *menu)
+{
+    HMTMSubMenu *sub = (HMTMSubMenu *)menu->taskData;
+    if (sub == NULL) {
+        return;
+    }
+
+    Menu_Free(sub->menu, NULL);
+    StringList_Free(sub->choices);
+    Window_EraseStandardFrame(&sub->window, TRUE);
+    Window_Remove(&sub->window);
+    Bg_ScheduleTilemapTransfer(fieldSystem->bgConfig, BG_LAYER_MAIN_3);
+    Heap_Free(sub);
+    menu->taskData = NULL;
+}
+
+static void StartMenu_HMTMSelect(FieldTask *fieldTask)
+{
+    FieldSystem *fieldSystem = FieldTask_GetFieldSystem(fieldTask);
+    StartMenu *menu = FieldTask_GetEnv(fieldTask);
+    HMTMSubMenu *sub = (HMTMSubMenu *)menu->taskData;
+    menu_selection_t input = Menu_ProcessInputWithSound(sub->menu, SEQ_SE_DP_SELECT78_sseq);
+
+    if (input == MENU_NOTHING_CHOSEN) {
+        return;
+    }
+
+    if (input == MENU_CANCEL) {
+        StartMenu_CloseHMTMSubMenu(fieldSystem, menu);
+        StartMenu_InitMenu(fieldTask);
+        menu->state = START_MENU_STATE_SELECT;
+        return;
+    }
+
+    u32 idx = (u32)input;
+    if (idx >= sub->count) {
+        return;
+    }
+
+    if (!sub->usableNow[idx]) {
+        Sound_PlayEffect(SEQ_SE_DP_CUSTOM06_sseq);
+        return;
+    }
+
+    u8 fieldMove = sub->fieldMoves[idx];
+    u8 partySlot = sub->partySlots[idx];
+    StartMenu_CloseHMTMSubMenu(fieldSystem, menu);
+
+    if (fieldMove == FIELD_MOVE_FLY) {
+        u32 *flySlot = Heap_Alloc(HEAP_ID_FIELD2, sizeof(u32));
+        *flySlot = partySlot;
+        menu->additionalTaskContext = flySlot;
+        FieldMap_FadeScreen(FADE_TYPE_BRIGHTNESS_OUT);
+        menu->state = START_MENU_STATE_HMTM_FLY_WAIT_FADE;
+        return;
+    }
+
+    FieldMovePokemon fieldMoveMon;
+    fieldMoveMon.fieldTask = fieldTask;
+    fieldMoveMon.fieldMonId = partySlot;
+    fieldMoveMon.fieldMove = fieldMove;
+    FieldMoves_SetTaskFromField(&fieldMoveMon, &menu->fieldMoveContext);
+}
+
+static BOOL StartMenu_HMTMFlyDestinationSelected(FieldTask *fieldTask)
+{
+    FieldSystem *fieldSystem = FieldTask_GetFieldSystem(fieldTask);
+    StartMenu *menu = FieldTask_GetEnv(fieldTask);
+    u32 slot = *((u32 *)menu->additionalTaskContext);
+
+    Heap_FreeExplicit(HEAP_ID_FIELD2, menu->additionalTaskContext);
+    menu->additionalTaskContext = NULL;
+
+    TownMapContext *mapCtx = (TownMapContext *)menu->taskData;
+
+    if (!mapCtx->flyLocationSelected) {
+        Heap_FreeExplicit(HEAP_ID_FIELD2, menu->taskData);
+        menu->taskData = NULL;
+        FieldSystem_StartFieldMap(fieldSystem);
+        menu->state = START_MENU_STATE_REINIT;
+    } else {
+        Pokemon *mon = Party_GetPokemonBySlotIndex(SaveData_GetParty(fieldSystem->saveData), slot);
+        FlyContext *flyCtx = FlyContext_New(HEAP_ID_FIELD2, fieldSystem, mon, mapCtx->flyLocationMapHeader, mapCtx->flyLocationX * MAP_TILES_COUNT_X + MAP_TILES_COUNT_X / 2, mapCtx->flyLocationZ * MAP_TILES_COUNT_Z + MAP_TILES_COUNT_Z / 2);
+        void *journalEntryLocationEvent = JournalEntry_CreateEventUsedMove(FIELD_MOVE_FLY, mapCtx->flyLocationMapHeader, HEAP_ID_FIELD2);
+
+        JournalEntry_SaveData(fieldSystem->journalEntry, journalEntryLocationEvent, JOURNAL_LOCATION);
+        Heap_FreeExplicit(HEAP_ID_FIELD2, menu->taskData);
+        FieldSystem_StartFieldMap(fieldSystem);
+
+        menu->callback = FieldMoves_FlyTask;
+        menu->taskData = flyCtx;
+        menu->state = START_MENU_STATE_NEW_TASK;
+    }
+
+    return FALSE;
+}
+#endif
 
 static BOOL StartMenu_SelectTrainerCase(FieldTask *fieldTask)
 {

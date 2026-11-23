@@ -11,7 +11,11 @@
 #include "menu.h"
 #include "string_list.h"
 
+#ifdef SDK_PORT
+#define MAX_START_MENU_OPTIONS 9
+#else
 #define MAX_START_MENU_OPTIONS 8
+#endif
 
 typedef struct StartMenu {
     Window primaryWindow;
@@ -51,6 +55,10 @@ enum StartMenuState {
     START_MENU_STATE_END,
     START_MENU_STATE_REINIT_WAIT_FOR_FADE,
     START_MENU_STATE_SAVED,
+#ifdef SDK_PORT
+    START_MENU_STATE_HMTM_SELECT,
+    START_MENU_STATE_HMTM_FLY_WAIT_FADE,
+#endif
 };
 
 enum MailUsageType {

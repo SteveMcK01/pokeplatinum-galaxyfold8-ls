@@ -876,3 +876,54 @@ static BOOL FieldMoves_ChatterTask(FieldTask *taskMan)
 
     return FALSE;
 }
+
+#ifdef SDK_PORT
+void FieldMoves_SetTaskFromField(FieldMovePokemon *fieldMoveMon, const FieldMoveContext *fieldMoveContext)
+{
+    FieldSystem *fieldSystem = FieldTask_GetFieldSystem(fieldMoveMon->fieldTask);
+    StartMenu *menu = FieldTask_GetEnv(fieldMoveMon->fieldTask);
+
+    switch (fieldMoveMon->fieldMove) {
+    case FIELD_MOVE_CUT:
+        menu->callback = FieldMoves_CutTask;
+        menu->taskData = FieldMoves_AllocateTaskData(fieldMoveMon, fieldMoveContext);
+        break;
+    case FIELD_MOVE_SURF:
+        menu->callback = FieldMoves_SurfTask;
+        menu->taskData = FieldMoves_AllocateTaskData(fieldMoveMon, fieldMoveContext);
+        break;
+    case FIELD_MOVE_STRENGTH:
+        menu->callback = FieldMoves_StrengthTask;
+        menu->taskData = FieldMoves_AllocateTaskData(fieldMoveMon, fieldMoveContext);
+        break;
+    case FIELD_MOVE_DEFOG:
+        menu->callback = FieldMoves_DefogTask;
+        menu->taskData = FieldMoves_AllocateTaskData(fieldMoveMon, fieldMoveContext);
+        break;
+    case FIELD_MOVE_ROCK_SMASH:
+        menu->callback = FieldMoves_RockSmashTask;
+        menu->taskData = FieldMoves_AllocateTaskData(fieldMoveMon, fieldMoveContext);
+        break;
+    case FIELD_MOVE_WATERFALL:
+        menu->callback = FieldMoves_WaterfallTask;
+        menu->taskData = FieldMoves_AllocateTaskData(fieldMoveMon, fieldMoveContext);
+        break;
+    case FIELD_MOVE_ROCK_CLIMB:
+        menu->callback = FieldMoves_RockClimbTask;
+        menu->taskData = FieldMoves_AllocateTaskData(fieldMoveMon, fieldMoveContext);
+        break;
+    case FIELD_MOVE_FLASH:
+        menu->callback = FieldMoves_FlashTask;
+        menu->taskData = FieldMoves_AllocateTaskData(fieldMoveMon, fieldMoveContext);
+        break;
+    case FIELD_MOVE_DIG:
+        menu->callback = FieldMoves_DigTask;
+        menu->taskData = sub_020711C8(HEAP_ID_FIELD2, fieldMoveMon->fieldMonId, fieldSystem->saveData);
+        break;
+    default:
+        return;
+    }
+
+    menu->state = START_MENU_STATE_EXIT_WITH_NEW_TASK;
+}
+#endif

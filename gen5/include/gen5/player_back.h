@@ -50,15 +50,17 @@ struct MCSSSystem;
 // The art for the opposing trainer of this BW2 class in the battle that runs (Gen5Trainer's art, which runtime.c sets
 // up for the battle), or NULL for BW2's own sprite. One pose, drawn for each of the sprite's multi-cells
 const Gen5BackSprite *Gen5_TrainerFrontArt(u32 trainerClass);
+// The art for a trainer slot (0 = Enemy 1, 1 = Enemy 2, 2 = Partner back sprite), or NULL for BW2's own sprite
+const Gen5BackSprite *Gen5_TrainerArtForSlot(int slot);
 
 // The art for a BW2 trainer class shown as the player's back (the player's classes: Lucas for the male ones, Dawn for
 // the female), or NULL to leave BW2's sprite
 const Gen5BackSprite *PlayerBack_ForTrainerClass(u32 trainerClass);
 
-// runtime.c: the art for the battle about to start, for each opposing trainer (slot 0 and 1: Gen5Trainer's art fields,
-// or NULL for BW2's own sprite). The first sprite of a trainer that is added plays the art's animation; the later ones
-// hold its last pose. Two trainers of one BW2 class share the first's art
-#define GEN5_ART_SLOTS 2
+// runtime.c: the art for the battle about to start, for each trainer slot (0 = Enemy 1, 1 = Enemy 2, 2 = Partner back:
+// Gen5Trainer's art fields, or NULL for BW2's own sprite). For enemies, the first sprite of a trainer that is added
+// plays the art's animation and later ones hold its last pose; for partner back sprites, BW2's multi-cell drives poses.
+#define GEN5_ART_SLOTS 3
 struct Gen5Trainer;
 void Gen5_SetTrainerArt(int slot, u32 trainerClass, const struct Gen5Trainer *trainer);
 

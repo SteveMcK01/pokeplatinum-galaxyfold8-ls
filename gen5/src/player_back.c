@@ -69,13 +69,27 @@ void Gen5_SetTrainerArt(int slot, u32 trainerClass, const Gen5Trainer *art) {
     front->animated.poseCount = art->artPoseCount;
     front->animated.seqPose = front->seqPose;
     front->animated.seqTicks = front->seqTicks;
-    front->animated.seqCount = art->artSeqCount;
-    front->animated.lastPose = art->artLastPose;
+    front->animated.seqCount = (slot == 2) ? 0 : art->artSeqCount;
+    front->animated.lastPose = (slot == 2) ? 0 : art->artLastPose;
     front->still = front->animated;
     front->still.seqCount = 0;
-    front->still.useFixed = 1;
+    front->still.useFixed = (slot == 2) ? 0 : 1;
     front->trainerClass = trainerClass;
     front->set = 1;
+}
+
+const Gen5BackSprite *Gen5_TrainerArtForSlot(int slot) {
+    if (slot < 0 || slot >= GEN5_ART_SLOTS) {
+        return NULL;
+    }
+    FrontArt *front = &sFront[slot];
+    if (!front->set) {
+        return NULL;
+    }
+    if (slot == 2) {
+        return &front->animated;
+    }
+    return front->adds++ == 0 && front->animated.seqCount > 0 ? &front->animated : &front->still;
 }
 
 const Gen5BackSprite *Gen5_TrainerFrontArt(u32 trainerClass) {

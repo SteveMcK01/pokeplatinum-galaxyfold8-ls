@@ -192,7 +192,7 @@
 +    if (sprite == NULL) {
 +        return;
 +    }
-+    if (load->chars->pixelFmt != GX_TEXFMT_PLTT16 || load->chars->W != 32 || load->chars->H != 16
++    if (load->chars->pixelFmt != GX_TEXFMT_PLTT16 || load->chars->W != 32 || load->chars->H < 16
 +        || load->chars->szByte < GEN5_BACK_TEXTURE_SIZE || load->pltt->szByte < 16 * sizeof(u16)) {
 +        mcss->backSprite = NULL;
 +        return;

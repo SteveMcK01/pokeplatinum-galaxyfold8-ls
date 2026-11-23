@@ -437,52 +437,26 @@ typedef struct ArtRect {
 static const u8 sArtObjWidth[3][4] = { { 8, 16, 32, 64 }, { 16, 32, 32, 64 }, { 8, 8, 16, 32 } };
 static const u8 sArtObjHeight[3][4] = { { 8, 16, 32, 64 }, { 8, 8, 16, 32 }, { 16, 32, 32, 64 } };
 
-static void TrainerArtToGen5(int trainerClass, Gen5Trainer *dest)
+static BOOL PackTrainerCells(const u8 *cells, const u8 *tileData, u32 dataSize,
+                             int cellCount, int singleCell, ArtRect *rects, u8 *pool, Gen5Trainer *dest)
 {
-    const int base = trainerClass * 5; // TRAINER_CLASS_NUM_FILETYPES: tiles, palette, cells, animations, scan
-    const u32 tileSize = NARC_GetMemberSizeByIndexPair(NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base);
-    const u8 *tiles = Heap_Alloc(HEAP_ID_APPLICATION, tileSize);
-    const u8 *palette = Heap_Alloc(HEAP_ID_APPLICATION, NARC_GetMemberSizeByIndexPair(NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base + 1));
-    const u8 *cells = Heap_Alloc(HEAP_ID_APPLICATION, NARC_GetMemberSizeByIndexPair(NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base + 2));
-    const u8 *anims = Heap_Alloc(HEAP_ID_APPLICATION, NARC_GetMemberSizeByIndexPair(NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base + 3));
-    ArtRect *rects = Heap_Alloc(HEAP_ID_APPLICATION, sizeof(ArtRect) * ART_MAX_RECTS);
-    u8 *pool = Heap_Alloc(HEAP_ID_APPLICATION, ART_POOL_SIZE);
     int poolUsed = 0;
     int rectCount = 0;
     BOOL ok = TRUE;
     int left = 0, top = 0, right = 0, bottom = 0;
     BOOL first = TRUE;
-
-    NARC_ReadWholeMemberByIndexPair((void *)tiles, NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base);
-    NARC_ReadWholeMemberByIndexPair((void *)palette, NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base + 1);
-    NARC_ReadWholeMemberByIndexPair((void *)cells, NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base + 2);
-    NARC_ReadWholeMemberByIndexPair((void *)anims, NARC_INDEX_POKETOOL__TRGRA__TRFGRA, base + 3);
-
-    // NCGR: "RGCN" header 16 bytes, "RAHC" section: tiles from 0x30. NCLR: colors from 0x28. NCER: "KBEC" body at 0x18:
-    // cell count (u16), attributes (u16), the cells' offset (u32), mapping, the VRAM transfer table's offset (u32) from
-    // the body; cell entries (16 bytes each) from 0x30, the OBJs (6 bytes each) after them
-    const u8 *tileData = tiles + 0x30;
-    const u32 dataSize = tileSize - 0x30;
-    const int cellCount = *(const u16 *)(cells + 0x18);
     const u32 transferOffset = *(const u32 *)(cells + 0x18 + 12);
     const u8 *transfer = cells + 0x18 + transferOffset + 8; // after the maximum size and the count: (source, size) per cell
     const u8 *objsBase = cells + 0x30 + cellCount * 16;
+    const int packCount = singleCell >= 0 ? 1 : cellCount;
+
     dest->artPoseCount = 0;
     dest->artQuadCount = 0;
-    dest->artSeqCount = 0;
-    dest->artLastPose = 0;
-    if (cellCount <= 0 || cellCount > GEN5_ART_MAX_POSES) {
-        ok = FALSE;
-    }
-
     memset(dest->artTexture, 0, sizeof(dest->artTexture));
-    for (int i = 0; i < 16; i++) {
-        dest->artPalette[i] = *(const u16 *)(palette + 0x28 + i * 2);
-    }
-    dest->artPalette[0] = 0;
 
-    // The picture's box: every OBJ of every pose (they are placed from the cell's centre, -40..40 for 80x80)
-    for (int c = 0; ok && c < cellCount; c++) {
+    // The picture's box: every OBJ of the packed pose(s) (they are placed from the cell's centre, -40..40 for 80x80)
+    for (int outIdx = 0; ok && outIdx < packCount; outIdx++) {
+        const int c = singleCell >= 0 ? singleCell : outIdx;
         const u8 *entry = cells + 0x30 + c * 16;
         const int objCount = *(const u16 *)entry;
         const u8 *objs = objsBase + *(const u32 *)(entry + 4);
@@ -519,13 +493,14 @@ static void TrainerArtToGen5(int trainerClass, Gen5Trainer *dest)
 
     // Each pose's OBJs as quads, each OBJ's pixels taken from its cell's block of tiles and shared with an earlier
     // rectangle of the same pixels
-    for (int c = 0; ok && c < cellCount; c++) {
+    for (int outIdx = 0; ok && outIdx < packCount; outIdx++) {
+        const int c = singleCell >= 0 ? singleCell : outIdx;
         const u8 *entry = cells + 0x30 + c * 16;
         const int objCount = *(const u16 *)entry;
         const u8 *objs = objsBase + *(const u32 *)(entry + 4);
         const u32 source = *(const u32 *)(transfer + c * 8);
-        dest->artPoseFirst[c] = dest->artQuadCount;
-        dest->artPoseQuads[c] = 0;
+        dest->artPoseFirst[outIdx] = dest->artQuadCount;
+        dest->artPoseQuads[outIdx] = 0;
         for (int k = 0; ok && k < objCount; k++) {
             const u16 attr0 = *(const u16 *)(objs + k * 6);
             const u16 attr1 = *(const u16 *)(objs + k * 6 + 2);
@@ -583,7 +558,7 @@ static void TrainerArtToGen5(int trainerClass, Gen5Trainer *dest)
             dest->artQuad[dest->artQuadCount][4] = index; // the rectangle for now
             dest->artQuad[dest->artQuadCount][5] = 0;
             dest->artQuadCount++;
-            dest->artPoseQuads[c]++;
+            dest->artPoseQuads[outIdx]++;
         }
     }
 
@@ -631,12 +606,53 @@ static void TrainerArtToGen5(int trainerClass, Gen5Trainer *dest)
         dest->artQuad[q][4] = rect->x;
         dest->artQuad[q][5] = rect->y;
     }
+    if (ok && dest->artQuadCount > 0) {
+        dest->artPoseCount = packCount;
+        dest->artWidth = width;
+        dest->artHeight = height;
+        return TRUE;
+    }
+    return FALSE;
+}
 
-    // The animation: sequence 1 plays through the poses once, ending on the pose that stays (sequence 0, one pose, if
-    // there is no other). NANR's "KNBA" body at 0x18: sequence count (u16), frame count (u16), the sequences' offset,
-    // the frames' and the frame data's (u32 each); a sequence (16 bytes): frame count (u16), ..., its frames' offset (u32
-    // at 12); a frame (8 bytes): its data's offset (u32), its length in ticks (u16); the data: the cell (u16)
-    if (ok) {
+static void TrainerArtToGen5(enum NarcID narcID, int entryIndex, BOOL isBack, Gen5Trainer *dest)
+{
+    const int base = entryIndex * 5; // TRAINER_CLASS_NUM_FILETYPES: tiles, palette, cells, animations, scan
+    const u32 tileSize = NARC_GetMemberSizeByIndexPair(narcID, base);
+    const u8 *tiles = Heap_Alloc(HEAP_ID_APPLICATION, tileSize);
+    const u8 *palette = Heap_Alloc(HEAP_ID_APPLICATION, NARC_GetMemberSizeByIndexPair(narcID, base + 1));
+    const u8 *cells = Heap_Alloc(HEAP_ID_APPLICATION, NARC_GetMemberSizeByIndexPair(narcID, base + 2));
+    const u8 *anims = Heap_Alloc(HEAP_ID_APPLICATION, NARC_GetMemberSizeByIndexPair(narcID, base + 3));
+    ArtRect *rects = Heap_Alloc(HEAP_ID_APPLICATION, sizeof(ArtRect) * ART_MAX_RECTS);
+    u8 *pool = Heap_Alloc(HEAP_ID_APPLICATION, ART_POOL_SIZE);
+
+    NARC_ReadWholeMemberByIndexPair((void *)tiles, narcID, base);
+    NARC_ReadWholeMemberByIndexPair((void *)palette, narcID, base + 1);
+    NARC_ReadWholeMemberByIndexPair((void *)cells, narcID, base + 2);
+    NARC_ReadWholeMemberByIndexPair((void *)anims, narcID, base + 3);
+
+    // NCGR: "RGCN" header 16 bytes, "RAHC" section: tiles from 0x30. NCLR: colors from 0x28. NCER: "KBEC" body at 0x18:
+    // cell count (u16), attributes (u16), the cells' offset (u32), mapping, the VRAM transfer table's offset (u32) from
+    // the body; cell entries (16 bytes each) from 0x30, the OBJs (6 bytes each) after them
+    const u8 *tileData = tiles + 0x30;
+    const u32 dataSize = tileSize - 0x30;
+    const int cellCount = *(const u16 *)(cells + 0x18);
+    dest->artPoseCount = 0;
+    dest->artQuadCount = 0;
+    dest->artSeqCount = 0;
+    dest->artLastPose = 0;
+    dest->hasArt = 0;
+
+    for (int i = 0; i < 16; i++) {
+        dest->artPalette[i] = *(const u16 *)(palette + 0x28 + i * 2);
+    }
+    dest->artPalette[0] = 0;
+
+    if (!isBack && cellCount > 0 && cellCount <= GEN5_ART_MAX_POSES) {
+        // The animation: sequence 1 plays through the poses once, ending on the pose that stays (sequence 0, one pose, if
+        // there is no other). NANR's "KNBA" body at 0x18: sequence count (u16), frame count (u16), the sequences' offset,
+        // the frames' and the frame data's (u32 each); a sequence (16 bytes): frame count (u16), ..., its frames' offset (u32
+        // at 12); a frame (8 bytes): its data's offset (u32), its length in ticks (u16); the data: the cell (u16)
         const u8 *body = anims + 0x18;
         const int sequenceCount = *(const u16 *)body;
         const u32 sequenceOffset = *(const u32 *)(body + 4);
@@ -660,10 +676,22 @@ static void TrainerArtToGen5(int trainerClass, Gen5Trainer *dest)
             }
         }
     }
-    dest->artPoseCount = ok ? cellCount : 0;
-    dest->artWidth = width;
-    dest->artHeight = height;
-    dest->hasArt = ok && dest->artQuadCount > 0;
+
+    if (cellCount > 0 && cellCount <= GEN5_ART_MAX_POSES) {
+        if (PackTrainerCells(cells, tileData, dataSize, cellCount, -1, rects, pool, dest)) {
+            dest->hasArt = 1;
+        } else if (!isBack && cellCount > 1) {
+            // If all animation cells overflow 256x128 or ART_MAX_RECTS/GEN5_ART_MAX_QUADS, pack the idle pose alone
+            // instead of silently falling back to a wrong BW2 trainer sprite
+            const int idleCell = dest->artLastPose < cellCount ? dest->artLastPose : 0;
+            dest->artSeqCount = 0;
+            dest->artLastPose = 0;
+            if (PackTrainerCells(cells, tileData, dataSize, cellCount, idleCell, rects, pool, dest)) {
+                dest->hasArt = 1;
+            }
+        }
+    }
+
     Heap_Free((void *)tiles);
     Heap_Free((void *)palette);
     Heap_Free((void *)cells);
@@ -682,7 +710,11 @@ static void TrainerToGen5(FieldBattleDTO *dto, int battler, Gen5Trainer *dest)
     dest->id = id;
     dest->platinumClass = trainer->header.trainerType;
     dest->aiFlags = trainer->header.aiMask;
-    if (TrainerClassHasPlatinumArt(dest->platinumClass)) {
+    if (battler == BATTLER_PLAYER_2) {
+        // Partner trainer (Riley, Cheryl, Marley, Buck, Mira, Barry): load Platinum's own back sprite
+        const int backIdx = SpriteSystem_TrainerClassBackSpriteIndex(dest->platinumClass);
+        TrainerArtToGen5(NARC_INDEX_POKETOOL__TRGRA__TRBGRA, backIdx, TRUE, dest);
+    } else if (TrainerClassHasPlatinumArt(dest->platinumClass)) {
         // Lucas and Dawn in their Platinum outfits: Platinum's data gives some of their trainers Diamond and Pearl's
         // classes, whose pictures are the old outfits (the owner's choice: Platinum's everywhere)
         int artClass = dest->platinumClass;
@@ -691,7 +723,7 @@ static void TrainerToGen5(FieldBattleDTO *dto, int battler, Gen5Trainer *dest)
         } else if (artClass == TRAINER_CLASS_DP_PLAYER_FEMALE || artClass == TRAINER_CLASS_DP_PLAYER_FEMALE_2) {
             artClass = TRAINER_CLASS_PLAYER_FEMALE;
         }
-        TrainerArtToGen5(artClass, dest);
+        TrainerArtToGen5(NARC_INDEX_POKETOOL__TRGRA__TRFGRA, artClass, FALSE, dest);
     }
     for (int i = 0; i < MAX_TRAINER_ITEMS && i < 4; i++) {
         dest->items[i] = trainer->header.items[i];

@@ -269,8 +269,10 @@ static void UndergroundMap_FetchPlayerPositions(PlayerAvatar *const playerAvatar
 
     if (CommSys_IsInitialized()) {
         if (!CommSys_IsPlayerConnected(CommSys_CurNetId())) {
-            playerCoords[0].x = PlayerAvatar_GetXPos(playerAvatar);
-            playerCoords[0].z = PlayerAvatar_GetZPos(playerAvatar);
+            if (playerAvatar != NULL) {
+                playerCoords[0].x = PlayerAvatar_GetXPos(playerAvatar);
+                playerCoords[0].z = PlayerAvatar_GetZPos(playerAvatar);
+            }
         } else {
             int xTemp = playerCoords[0].x;
             int zTemp = playerCoords[0].z;

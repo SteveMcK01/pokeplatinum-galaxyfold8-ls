@@ -233,6 +233,10 @@ void CommPlayerMan_Stop(void)
 
 void CommPlayer_InitPersonal(void)
 {
+    if (sCommPlayerManager == NULL || sCommPlayerManager->fieldSystem == NULL || sCommPlayerManager->fieldSystem->playerAvatar == NULL) {
+        return;
+    }
+
     sCommPlayerManager->playerAvatar[CommSys_CurNetId()] = sCommPlayerManager->fieldSystem->playerAvatar;
     sCommPlayerManager->isActive[CommSys_CurNetId()] = TRUE;
     sCommPlayerManager->playerLocation[CommSys_CurNetId()].x = PlayerAvatar_GetXPos(sCommPlayerManager->fieldSystem->playerAvatar);
@@ -268,6 +272,10 @@ void CommPlayer_CopyPersonal(int netJd)
 
 void CommPlayer_SendXZPos(BOOL param0, int x, int z)
 {
+    if (sCommPlayerManager == NULL || sCommPlayerManager->fieldSystem == NULL || sCommPlayerManager->fieldSystem->playerAvatar == NULL) {
+        return;
+    }
+
     u8 data[5 + 1];
     int dir = PlayerAvatar_GetFacingDir(sCommPlayerManager->fieldSystem->playerAvatar);
 
@@ -287,6 +295,10 @@ void CommPlayer_SendXZPos(BOOL param0, int x, int z)
 
 void CommPlayer_SendPos(BOOL param0)
 {
+    if (sCommPlayerManager == NULL || sCommPlayerManager->fieldSystem == NULL || sCommPlayerManager->fieldSystem->playerAvatar == NULL) {
+        return;
+    }
+
     int x = PlayerAvatar_GetXPos(sCommPlayerManager->fieldSystem->playerAvatar);
     int z = PlayerAvatar_GetZPos(sCommPlayerManager->fieldSystem->playerAvatar);
 
@@ -335,6 +347,10 @@ static void CommPlayer_SendPosNetId(int netId, const CommPlayerLocation *playerL
 
 void CommPlayer_SendDataTask(void *data)
 {
+    if (sCommPlayerManager == NULL || sCommPlayerManager->fieldSystem == NULL || sCommPlayerManager->fieldSystem->playerAvatar == NULL) {
+        return;
+    }
+
     int v0 = PlayerAvatar_GetMoveState(sCommPlayerManager->fieldSystem->playerAvatar);
     int moveState = PlayerAvatar_GetPlayerMoveState(sCommPlayerManager->fieldSystem->playerAvatar);
 
@@ -1639,6 +1655,10 @@ int CommPlayer_GetMovementTimerServer(int netId)
 
 void CommPlayer_SetDir(int dir)
 {
+    if (sCommPlayerManager == NULL || sCommPlayerManager->fieldSystem == NULL || sCommPlayerManager->fieldSystem->playerAvatar == NULL) {
+        return;
+    }
+
     PlayerAvatar_TryFace(sCommPlayerManager->fieldSystem->playerAvatar, dir);
     sCommPlayerManager->playerLocation[CommSys_CurNetId()].dir = dir;
     CommPlayer_SendPos(FALSE);
@@ -1647,7 +1667,9 @@ void CommPlayer_SetDir(int dir)
 void CommPlayer_SetDirClient(int netId, int dir)
 {
     sCommPlayerManager->playerLocation[netId].dir = dir;
-    PlayerAvatar_TryFace(sCommPlayerManager->playerAvatar[netId], dir);
+    if (sCommPlayerManager->playerAvatar[netId] != NULL) {
+        PlayerAvatar_TryFace(sCommPlayerManager->playerAvatar[netId], dir);
+    }
 }
 
 int CommPlayer_DirClient(int netId)

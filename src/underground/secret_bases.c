@@ -1744,9 +1744,12 @@ static BOOL SecretBases_MoveToFromSecretBaseTask(FieldTask *task)
 
         sub_02059638(FALSE);
         CommPlayerMan_ResumeFieldSystem();
+
+        int x = ctx->x;
+        int z = ctx->z;
         Heap_Free(ctx);
 
-        if (CommServerClient_IsInClosedSecretBase() && UndergroundMan_AreCoordinatesInSecretBase(ctx->x, ctx->z)) {
+        if (CommServerClient_IsInClosedSecretBase() && UndergroundMan_AreCoordinatesInSecretBase(x, z)) {
             UndergroundMan_DeactivateRadar();
         } else {
             UndergroundMan_SetNormalRadarActive();

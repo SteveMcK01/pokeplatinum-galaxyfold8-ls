@@ -418,6 +418,10 @@ void PlayerAvatar_SetMoveState(PlayerAvatar *playerAvatar, int state)
  */
 int PlayerAvatar_GetMoveState(const PlayerAvatar *playerAvatar)
 {
+    if (playerAvatar == NULL) {
+        return 0;
+    }
+
     return playerAvatar->moveState;
 }
 
@@ -436,6 +440,10 @@ void PlayerAvatar_SetPlayerMoveState(PlayerAvatar *playerAvatar, int moveState)
  */
 int PlayerAvatar_GetPlayerMoveState(const PlayerAvatar *playerAvatar)
 {
+    if (playerAvatar == NULL) {
+        return 0;
+    }
+
     return playerAvatar->playerMoveState;
 }
 

@@ -129,17 +129,20 @@ void CommManUnderground_ReopenSecretBase(void)
 BOOL CommManUnderground_TryEnterBaseTransitionState(void)
 {
     FieldCommunicationManager *fieldCommMan = FieldCommManager_Get();
+    if (fieldCommMan == NULL) {
+        return FALSE;
+    }
 
-    u32 currentTask = (u32)fieldCommMan->task;
-    u32 mainTaskServer = (u32)CommManUnderground_MainTaskServer;
-    u32 mainTaskClient = (u32)CommManUnderground_MainTaskClient;
-    u32 mainTaskAlone = (u32)CommManUnderground_CheckForConnectionsTask;
-    u32 mainTaskClosedBase = (u32)CommManUnderground_ClosedBaseTask;
-    u32 baseTransitionTasks[] = {
-        (u32)CommManUnderground_BaseTransitionStartTaskServer,
-        (u32)CommManUnderground_BaseTransitionStartTaskClient,
-        (u32)CommManUnderground_BaseTransitionStartTaskAlone,
-        (u32)CommManUnderground_ClosedBaseTransitionStartTask
+    FieldCommTask currentTask = fieldCommMan->task;
+    FieldCommTask mainTaskServer = CommManUnderground_MainTaskServer;
+    FieldCommTask mainTaskClient = CommManUnderground_MainTaskClient;
+    FieldCommTask mainTaskAlone = CommManUnderground_CheckForConnectionsTask;
+    FieldCommTask mainTaskClosedBase = CommManUnderground_ClosedBaseTask;
+    FieldCommTask baseTransitionTasks[] = {
+        CommManUnderground_BaseTransitionStartTaskServer,
+        CommManUnderground_BaseTransitionStartTaskClient,
+        CommManUnderground_BaseTransitionStartTaskAlone,
+        CommManUnderground_ClosedBaseTransitionStartTask
     };
 
     if (currentTask == mainTaskServer) {
@@ -168,11 +171,15 @@ BOOL CommManUnderground_TryEnterBaseTransitionState(void)
 BOOL CommManUnderground_TryExitBaseTransitionState(void)
 {
     FieldCommunicationManager *fieldCommMan = FieldCommManager_Get();
-    u32 currentTask = (u32)fieldCommMan->task;
-    u32 moveTaskServer = (u32)CommManUnderground_BaseTransitionTaskServer;
-    u32 moveTaskClient = (u32)CommManUnderground_BaseTransitionTaskClient;
-    u32 moveTaskAlone = (u32)CommManUnderground_BaseTransitionTaskAlone;
-    u32 moveTaskClosedBase = (u32)CommManUnderground_ClosedBaseTransitionTask;
+    if (fieldCommMan == NULL) {
+        return FALSE;
+    }
+
+    FieldCommTask currentTask = fieldCommMan->task;
+    FieldCommTask moveTaskServer = CommManUnderground_BaseTransitionTaskServer;
+    FieldCommTask moveTaskClient = CommManUnderground_BaseTransitionTaskClient;
+    FieldCommTask moveTaskAlone = CommManUnderground_BaseTransitionTaskAlone;
+    FieldCommTask moveTaskClosedBase = CommManUnderground_ClosedBaseTransitionTask;
 
     if (currentTask == moveTaskServer) {
         CommManUnderground_SetFieldCommManTask(CommManUnderground_BaseTransitionEndTaskServer, 0);
@@ -194,29 +201,28 @@ BOOL CommManUnderground_TryExitBaseTransitionState(void)
 BOOL CommManUnderground_IsInputAllowed(void)
 {
     FieldCommunicationManager *fieldCommMan = FieldCommManager_Get();
-
-    u32 inputAllowedTasks[] = {
-        (u32)CommManUnderground_MainTaskClient,
-        (u32)CommManUnderground_MainTaskServer,
-        (u32)CommManUnderground_WaitForDataReadTaskClient,
-        (u32)CommManUnderground_WaitForFlagDataReceiptTaskClient,
-        (u32)CommManUnderground_WaitForTrapDataReceiptTaskClient,
-        (u32)CommManUnderground_WaitForBaseDataReceiptTaskClient,
-        (u32)CommManUnderground_BaseTransitionStartTaskClient,
-        (u32)CommManUnderground_BaseTransitionTaskClient,
-        (u32)CommManUnderground_BaseTransitionEndTaskClient,
-        (u32)CommManUnderground_BaseTransitionStartTaskServer,
-        (u32)CommManUnderground_BaseTransitionTaskServer,
-        (u32)CommManUnderground_BaseTransitionEndTaskServer,
-        0
-    };
-    u32 currentTask = (u32)fieldCommMan->task;
-
     if (fieldCommMan == NULL) {
         return FALSE;
     }
 
-    for (int i = 0; inputAllowedTasks[i] != 0; i++) {
+    FieldCommTask inputAllowedTasks[] = {
+        CommManUnderground_MainTaskClient,
+        CommManUnderground_MainTaskServer,
+        CommManUnderground_WaitForDataReadTaskClient,
+        CommManUnderground_WaitForFlagDataReceiptTaskClient,
+        CommManUnderground_WaitForTrapDataReceiptTaskClient,
+        CommManUnderground_WaitForBaseDataReceiptTaskClient,
+        CommManUnderground_BaseTransitionStartTaskClient,
+        CommManUnderground_BaseTransitionTaskClient,
+        CommManUnderground_BaseTransitionEndTaskClient,
+        CommManUnderground_BaseTransitionStartTaskServer,
+        CommManUnderground_BaseTransitionTaskServer,
+        CommManUnderground_BaseTransitionEndTaskServer,
+        NULL
+    };
+    FieldCommTask currentTask = fieldCommMan->task;
+
+    for (int i = 0; inputAllowedTasks[i] != NULL; i++) {
         if (currentTask == inputAllowedTasks[i]) {
             return TRUE;
         }

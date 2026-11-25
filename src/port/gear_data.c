@@ -14,6 +14,7 @@
 #include "constants/battle.h"
 #include "constants/battle/condition.h"
 #include "constants/charcode.h"
+#include "constants/field/map_load.h"
 #include "constants/map_object.h"
 #include "constants/heap.h"
 #include "constants/narc.h"
@@ -941,6 +942,17 @@ void Gear_SetBattleSystem(struct BattleSystem *battleSys)
 struct BattleSystem *Gear_ActiveBattleSystem(void)
 {
     return sBattleSys;
+}
+
+BOOL Gear_IsInUnderground(void)
+{
+    FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
+    return fieldSystem != NULL && fieldSystem->mapLoadType == MAP_LOAD_TYPE_UNDERGROUND;
+}
+
+BOOL SIM_Prj_AutoSwapScreens(void)
+{
+    return Gear_IsInUnderground();
 }
 
 static void AddBattlePartyMons(GearBattle *out, Party *party)

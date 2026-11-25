@@ -135,7 +135,7 @@ void UndergroundMenu_OpenSellGoodsMenu(UndergroundMenu *menu);
 void UndergroundMenu_OpenGoodsMenu(UndergroundMenu *menu);
 void UndergroundMenu_OpenStoreGoodsMenu(UndergroundMenu *menu);
 void UndergroundMenu_OpenWithdrawGoodsMenu(UndergroundMenu *menu);
-void UndergroundMenu_Exit(void *data, u32 input);
+void UndergroundMenu_Exit(void *data, menu_selection_t input);
 void *UndergroundMenu_StartGiftMenu(ExitCallback exitCallback, FieldSystem *fieldSystem);
 void UndergroundMenu_MoveListCursorPosInBounds(UndergroundMenu *menu, int maxDisplay, int count);
 void UndergroundMenu_ResetBrightnessAndExit(SysTask *sysTask, void *data);

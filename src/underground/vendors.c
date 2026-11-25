@@ -426,7 +426,7 @@ static int UndergroundVendors_GetItemAtInventorySlot(int slot, void *menu)
 {
     UndergroundMenu *ugMenu = menu;
 
-    if (slot >= SHOP_INVENTORY_SIZE) {
+    if (slot < 0 || slot >= SHOP_INVENTORY_SIZE) {
         return 0;
     }
 

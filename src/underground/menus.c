@@ -532,6 +532,9 @@ static void UndergroundMenu_InitStartMenu(UndergroundMenu *menu)
     }
 
     menu->menuCursorPos = menu->fieldSystem->menuCursorPos;
+    if (menu->menuCursorPos >= NELEMS(sUndergroundMenuOptions)) {
+        menu->menuCursorPos = 0;
+    }
 
     template.choices = menu->menuOptions;
     template.window = &menu->primaryWindow;
@@ -616,10 +619,11 @@ static void UndergroundMenu_Main(SysTask *sysTask, void *data)
         }
         break;
     case UNDERGROUND_MENU_STATE_RETURN_TO_SURFACE:
+        FieldSystem *fieldSystem = menu->fieldSystem;
         UndergroundMenu_EraseCurrentMenu(menu);
         UndergroundMenu_Free(sysTask, menu, TRUE);
         UndergroundMan_ClearCurrentSysTaskInfo();
-        FieldTask_SetUndergroundMapChange(menu->fieldSystem);
+        FieldTask_SetUndergroundMapChange(fieldSystem);
         return;
     case UNDERGROUND_MENU_STATE_TRAP_SELECTED:
         UndergroundMenu_HandleTrapSelectedMenu(sysTask, data);
@@ -664,7 +668,7 @@ static BOOL UndergroundMenu_HandleStartMenu(SysTask *sysTask, void *data)
         menu->state = UNDERGROUND_MENU_STATE_CLOSE;
         break;
     default:
-        if (menu->startMenuInput == (u32)UndergroundMenu_OpenTrapsMenu || menu->startMenuInput == (u32)UndergroundMenu_OpenSpheresMenu || menu->startMenuInput == (u32)UndergroundMenu_OpenGoodsMenu || menu->startMenuInput == (u32)UndergroundMenu_OpenTreasuresMenu) {
+        if (menu->startMenuInput == (uPtr)UndergroundMenu_OpenTrapsMenu || menu->startMenuInput == (uPtr)UndergroundMenu_OpenSpheresMenu || menu->startMenuInput == (uPtr)UndergroundMenu_OpenGoodsMenu || menu->startMenuInput == (uPtr)UndergroundMenu_OpenTreasuresMenu) {
             menu->scrollPrompts = ScrollPrompts_New(HEAP_ID_FIELD1);
             ScrollPrompts_SetPosition(menu->scrollPrompts, 200, 20, 122);
             ScrollPrompts_SetDrawFlag(menu->scrollPrompts, SCROLL_PROMPT_TOP_ARROW, FALSE);
@@ -819,11 +823,11 @@ void UndergroundMenu_PrintTrapDescription(ListMenu *listMenu, u64 index, u8 onIn
     UndergroundMenu *menu = (UndergroundMenu *)ListMenu_GetAttribute(listMenu, LIST_MENU_PARENT);
     GetItemFunc getTrap = menu->getItem;
     int bankEntry;
-    enum Trap trapID = getTrap(index, menu);
 
     if (index == MENU_CANCEL) {
         bankEntry = UndergroundTraps_Text_CloseDescription;
     } else {
+        enum Trap trapID = getTrap(index, menu);
         bankEntry = UNDERGROUND_TRAP_DESCRIPTIONS_START + trapID - 1;
     }
 
@@ -894,7 +898,7 @@ static BOOL UndergroundMenu_HandleTrapsMenu(SysTask *sysTask, void *data)
 {
     UndergroundMenu *menu = data;
 
-    u32 input = UndergroundItemListMenu_ProcessInput(menu->itemListMenu);
+    menu_selection_t input = UndergroundItemListMenu_ProcessInput(menu->itemListMenu);
 
     u16 listPos, cursorPos;
     ListMenu_GetListAndCursorPos(menu->itemListMenu->listMenu, &listPos, &cursorPos);
@@ -1007,11 +1011,11 @@ static void UndergroundMenu_PrintSphereDescription(ListMenu *listMenu, u64 index
     UndergroundMenu *menu = (UndergroundMenu *)ListMenu_GetAttribute(listMenu, LIST_MENU_PARENT);
     GetItemFunc getSphereType = menu->getItem;
     int bankEntry;
-    enum SphereType sphereType = getSphereType(index, menu);
 
     if (index == MENU_CANCEL) {
         bankEntry = UndergroundItems_Text_CloseDescription;
     } else {
+        enum SphereType sphereType = getSphereType(index, menu);
         bankEntry = UNDERGROUND_ITEM_DESCRIPTIONS_START - 1 + sphereType;
     }
 
@@ -1087,7 +1091,7 @@ static BOOL UndergroundMenu_HandleSpheresMenu(SysTask *sysTask, void *data)
 {
     UndergroundMenu *menu = data;
 
-    u32 input = UndergroundItemListMenu_ProcessInput(menu->itemListMenu);
+    menu_selection_t input = UndergroundItemListMenu_ProcessInput(menu->itemListMenu);
 
     u16 listPos, cursorPos;
     ListMenu_GetListAndCursorPos(menu->itemListMenu->listMenu, &listPos, &cursorPos);
@@ -1186,12 +1190,12 @@ void UndergroundMenu_PrintTreasureDescription(ListMenu *listMenu, u64 index, u8 
 {
     UndergroundMenu *menu = (UndergroundMenu *)ListMenu_GetAttribute(listMenu, LIST_MENU_PARENT);
     GetItemFunc getTreasure = menu->getItem;
-    int bankEntry = index;
-    int treasureID = getTreasure(index, menu);
+    int bankEntry;
 
     if (index == MENU_CANCEL) {
         bankEntry = UndergroundItems_Text_CloseDescription;
     } else {
+        int treasureID = getTreasure(index, menu);
         bankEntry = UNDERGROUND_ITEM_DESCRIPTIONS_START - 1 + treasureID;
     }
 
@@ -1259,7 +1263,7 @@ static BOOL UndergroundMenu_HandleTreasuresMenu(SysTask *sysTask, void *data)
 {
     UndergroundMenu *menu = data;
 
-    u32 input = UndergroundItemListMenu_ProcessInput(menu->itemListMenu);
+    menu_selection_t input = UndergroundItemListMenu_ProcessInput(menu->itemListMenu);
 
     u16 listPos, cursorPos;
     ListMenu_GetListAndCursorPos(menu->itemListMenu->listMenu, &listPos, &cursorPos);
@@ -1555,11 +1559,11 @@ void UndergroundMenu_PrintGoodDescription(ListMenu *listMenu, u64 index, u8 onIn
     UndergroundMenu *menu = (UndergroundMenu *)ListMenu_GetAttribute(listMenu, LIST_MENU_PARENT);
     GetItemFunc getGood = menu->getItem;
     int bankEntry;
-    enum Good goodID = getGood(index, menu);
 
     if (index == MENU_CANCEL) {
         bankEntry = UndergroundGoods_Text_CloseDescription;
     } else {
+        enum Good goodID = getGood(index, menu);
         bankEntry = UNDERGROUND_GOOD_DESCRIPTIONS_START + goodID - 1;
     }
 
@@ -1575,7 +1579,7 @@ static void UndergroundMenu_ColorPlacedGoods(ListMenu *listMenu, u64 index, u8 y
     UndergroundMenu *menu = (UndergroundMenu *)ListMenu_GetAttribute(listMenu, LIST_MENU_PARENT);
     Underground *underground = SaveData_GetUnderground(FieldSystem_GetSaveData(menu->fieldSystem));
 
-    if (!Underground_IsGoodAtSlotPlacedInBase(underground, index)) {
+    if (index == MENU_CANCEL || !Underground_IsGoodAtSlotPlacedInBase(underground, index)) {
         ListMenu_SetAltTextColors(listMenu, 1, 15, 2);
     } else {
         ListMenu_SetAltTextColors(listMenu, 2, 15, 2);
@@ -1666,7 +1670,7 @@ static BOOL UndergroundMenu_HandleGoodsMenu(SysTask *sysTask, void *data)
 {
     UndergroundMenu *menu = data;
 
-    u32 input = UndergroundItemListMenu_ProcessInput(menu->itemListMenu);
+    menu_selection_t input = UndergroundItemListMenu_ProcessInput(menu->itemListMenu);
 
     u16 listPos, cursorPos;
     ListMenu_GetListAndCursorPos(menu->itemListMenu->listMenu, &listPos, &cursorPos);
@@ -1755,7 +1759,7 @@ static BOOL UndergroundMenu_HandleGoodSelectedMenu(SysTask *sysTask, void *data)
     return TRUE;
 }
 
-void UndergroundMenu_Exit(void *data, u32 input)
+void UndergroundMenu_Exit(void *data, menu_selection_t input)
 {
     UndergroundMenu *menu = data;
 
@@ -1782,7 +1786,7 @@ void UndergroundMenu_Exit(void *data, u32 input)
 
     if (menu->exitCallback != NULL) {
         ctx->selectedSlot = input;
-        ctx->selectedID = UndergroundMenu_GetGoodAtSlotBag(input, menu);
+        ctx->selectedID = (input != MENU_CANCEL) ? UndergroundMenu_GetGoodAtSlotBag(input, menu) : UG_GOOD_NONE;
         menu->exitCallback(0);
         menu->exitCallback = NULL;
     }
@@ -1809,7 +1813,7 @@ void UndergroundMenu_Exit(void *data, u32 input)
 static BOOL UndergroundMenu_HandleGiftMenu(SysTask *sysTask, void *data)
 {
     UndergroundMenu *menu = data;
-    u32 input = UndergroundItemListMenu_ProcessInput(menu->itemListMenu);
+    menu_selection_t input = UndergroundItemListMenu_ProcessInput(menu->itemListMenu);
 
     if (CommSys_CheckError()) {
         input = MENU_CANCEL;
@@ -1905,7 +1909,7 @@ void UndergroundMenu_ResetBrightnessAndExit(SysTask *sysTask, void *data)
 
 void UndergroundMenu_UpdateScrollPrompts(UndergroundMenu *menu, int listPos, int count, int maxDisplay)
 {
-    if (count <= maxDisplay) {
+    if (menu->scrollPrompts == NULL || count <= maxDisplay) {
         return;
     }
 

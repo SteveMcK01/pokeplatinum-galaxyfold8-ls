@@ -512,7 +512,7 @@ static BOOL UndergroundPC_HandleStoreGoodsMenu(SysTask *sysTask, void *data)
 {
     UndergroundMenu *menu = data;
 
-    u32 input = UndergroundItemListMenu_ProcessInput(menu->itemListMenu);
+    menu_selection_t input = UndergroundItemListMenu_ProcessInput(menu->itemListMenu);
 
     u16 listPos, cursorPos;
     ListMenu_GetListAndCursorPos(menu->itemListMenu->listMenu, &listPos, &cursorPos);
@@ -544,6 +544,8 @@ static BOOL UndergroundPC_HandleStoreGoodsMenu(SysTask *sysTask, void *data)
 
         menu->state = UG_PC_MENU_STATE_STORE_GOODS_WAIT_FOR_MESSAGE;
         UndergroundMenu_EraseCurrentMenu(menu);
+        ScrollPrompts_SetDrawFlag(menu->scrollPrompts, SCROLL_PROMPT_TOP_ARROW, FALSE);
+        ScrollPrompts_SetDrawFlag(menu->scrollPrompts, SCROLL_PROMPT_BOTTOM_ARROW, FALSE);
         break;
     }
 
@@ -554,7 +556,7 @@ static BOOL UndergroundPC_HandleWithdrawGoodsMenu(SysTask *sysTask, void *data)
 {
     UndergroundMenu *menu = data;
 
-    u32 input = UndergroundItemListMenu_ProcessInput(menu->itemListMenu);
+    menu_selection_t input = UndergroundItemListMenu_ProcessInput(menu->itemListMenu);
 
     u16 listPos, cursorPos;
     ListMenu_GetListAndCursorPos(menu->itemListMenu->listMenu, &listPos, &cursorPos);

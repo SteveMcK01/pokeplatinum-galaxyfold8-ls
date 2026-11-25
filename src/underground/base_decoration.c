@@ -385,7 +385,7 @@ static BOOL BaseDecoration_DecorateTask(FieldTask *task)
 
         if (optionSelected) {
             Underground *underground = SaveData_GetUnderground(ctx->fieldSystem->saveData);
-            u32 input = DecorationGoodsMenu_GetLastInput(ctx->decorationGoodsMenu);
+            menu_selection_t input = DecorationGoodsMenu_GetLastInput(ctx->decorationGoodsMenu);
 
             if (input == MENU_CANCEL) {
                 BaseDecoration_UpdateState(DECORATION_STATE_MAIN_MENU, ctx);
@@ -473,7 +473,7 @@ static BOOL BaseDecoration_DecorateTask(FieldTask *task)
             if (BaseDecoration_CanPlaceGood(&ctx->heldGood, ctx->goodSlots)) {
                 Underground *underground = SaveData_GetUnderground(ctx->fieldSystem->saveData);
                 int index = BaseDecoration_PlaceGood(&ctx->heldGood, ctx->goodSlots);
-                u32 slot = DecorationGoodsMenu_GetLastInput(ctx->decorationGoodsMenu);
+                menu_selection_t slot = DecorationGoodsMenu_GetLastInput(ctx->decorationGoodsMenu);
 
                 Underground_AddPlacedGood(underground, slot, index);
                 Sound_PlayEffect(SEQ_SE_DP_BOWA_sseq);

@@ -4,6 +4,7 @@
 #include "colored_arrow.h"
 #include "heap.h"
 #include "list_menu.h"
+#include "menu.h"
 #include "string_list.h"
 #include "underground.h"
 
@@ -26,7 +27,7 @@ typedef struct UndergroundItemListMenu {
 } UndergroundItemListMenu;
 
 UndergroundItemListMenu *UndergroundItemListMenu_New(ListMenuTemplate *template, u16 startListPos, u16 startCursorPos, u8 heapID, MoveItemCallback moveItemCallback, Underground *underground, BOOL isDecorationMenu);
-u32 UndergroundItemListMenu_ProcessInput(UndergroundItemListMenu *menu);
+menu_selection_t UndergroundItemListMenu_ProcessInput(UndergroundItemListMenu *menu);
 void UndergroundItemListMenu_Free(UndergroundItemListMenu *menu, u16 *outListPos, u16 *outCursorPos);
 
 #endif // POKEPLATINUM_UNDERGROUND_ITEM_LIST_MENU_H

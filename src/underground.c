@@ -397,6 +397,9 @@ int Underground_GetGoodsCountPC(Underground *underground)
 
 int Underground_GetGoodAtSlotPC(Underground *underground, int slot)
 {
+    if (slot < 0 || slot >= MAX_GOODS_PC_SLOTS) {
+        return UG_GOOD_NONE;
+    }
     return underground->goodsPC[slot];
 }
 
@@ -512,6 +515,9 @@ int Underground_GetGoodsCountBag(Underground *underground)
 
 int Underground_GetGoodAtSlotBag(Underground *underground, int slot)
 {
+    if (slot < 0 || slot >= MAX_GOODS_BAG_SLOTS) {
+        return UG_GOOD_NONE;
+    }
     return underground->goodsBag[slot];
 }
 
@@ -576,11 +582,17 @@ int Underground_GetSphereCount(Underground *underground)
 
 int Underground_GetSphereTypeAtSlot(Underground *underground, int slot)
 {
+    if (slot < 0 || slot >= MAX_SPHERE_SLOTS) {
+        return SPHERE_NONE;
+    }
     return underground->sphereTypes[slot];
 }
 
 int Underground_GetSphereSizeAtSlot(Underground *underground, int slot)
 {
+    if (slot < 0 || slot >= MAX_SPHERE_SLOTS) {
+        return 0;
+    }
     return underground->sphereSizes[slot];
 }
 
@@ -652,6 +664,9 @@ int Underground_GetTreasureCount(Underground *underground)
 
 int Underground_GetTreasureAtSlot(Underground *underground, int slot)
 {
+    if (slot < 0 || slot >= MAX_TREASURE_SLOTS) {
+        return MINING_TREASURE_NONE;
+    }
     return underground->treasure[slot];
 }
 
@@ -717,6 +732,9 @@ int Underground_GetTrapCount(Underground *underground)
 
 int Underground_GetTrapAtSlot(Underground *underground, int slot)
 {
+    if (slot < 0 || slot >= MAX_TRAP_SLOTS) {
+        return TRAP_NONE;
+    }
     return underground->traps[slot];
 }
 

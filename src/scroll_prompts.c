@@ -73,6 +73,9 @@ ScrollPrompts *ScrollPrompts_New(enum HeapID heapID)
 
 void ScrollPrompts_Free(ScrollPrompts *prompts)
 {
+    if (prompts == NULL) {
+        return;
+    }
     for (int i = 0; i < SCROLL_PROMPT_ARROW_COUNT; i++) {
         if (prompts->arrowSprites[i] != NULL) {
             Sprite_DeleteAndFreeResources(prompts->arrowSprites[i]);
@@ -85,6 +88,9 @@ void ScrollPrompts_Free(ScrollPrompts *prompts)
 
 void ScrollPrompts_UpdateAnim(ScrollPrompts *prompts)
 {
+    if (prompts == NULL) {
+        return;
+    }
     for (int i = 0; i < SCROLL_PROMPT_ARROW_COUNT; i++) {
         if (prompts->arrowSprites[i] != NULL) {
             Sprite_UpdateAnim(prompts->arrowSprites[i]->sprite, FX32_ONE);
@@ -96,13 +102,16 @@ void ScrollPrompts_UpdateAnim(ScrollPrompts *prompts)
 
 void ScrollPrompts_SetPosition(ScrollPrompts *prompts, s16 x, s16 topArrowY, s16 bottomArrowY)
 {
+    if (prompts == NULL) {
+        return;
+    }
     ManagedSprite_SetPositionXY(prompts->arrowSprites[SCROLL_PROMPT_TOP_ARROW], x, topArrowY);
     ManagedSprite_SetPositionXY(prompts->arrowSprites[SCROLL_PROMPT_BOTTOM_ARROW], x, bottomArrowY);
 }
 
 void ScrollPrompts_SetDrawFlag(ScrollPrompts *prompts, u16 arrowIndex, BOOL draw)
 {
-    if (arrowIndex >= SCROLL_PROMPT_ARROW_COUNT) {
+    if (prompts == NULL || arrowIndex >= SCROLL_PROMPT_ARROW_COUNT) {
         return;
     }
 

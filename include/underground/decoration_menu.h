@@ -5,6 +5,7 @@
 #include "underground/item_list_menu.h"
 
 #include "list_menu.h"
+#include "menu.h"
 #include "scroll_prompts.h"
 #include "string_list.h"
 
@@ -25,7 +26,7 @@ typedef struct DecorationMenu {
     u16 *startListPos;
     u16 *startCursorPos;
     u8 state;
-    u32 lastInput;
+    menu_selection_t lastInput;
     u16 cursorPos;
 } DecorationMenu;
 
@@ -42,20 +43,20 @@ typedef struct DecorationGoodsMenu {
     u8 currentPlacedGoods;
     u8 maxPlacedGoods;
     u8 state;
-    u32 lastInput;
+    menu_selection_t lastInput;
     int goodsCount;
 } DecorationGoodsMenu;
 
 DecorationMenu *DecorationMenu_New(void);
 void DecorationMenu_Init(DecorationMenu *menu, FieldSystem *fieldSystem, u16 *startListPos, u16 *startCursorPos);
 void DecorationMenu_Free(DecorationMenu *menu);
-const u32 DecorationMenu_GetLastInput(DecorationMenu *menu);
+const menu_selection_t DecorationMenu_GetLastInput(DecorationMenu *menu);
 BOOL DecorationMenu_Main(DecorationMenu *menu);
 DecorationGoodsMenu *DecorationGoodsMenu_New(void);
 void DecorationGoodsMenu_Init(DecorationGoodsMenu *menu, FieldSystem *fieldSystem, u16 *startListPos, u16 *startCursorPos);
 void DecorationGoodsMenu_SetPlacedGoodData(DecorationGoodsMenu *menu, u8 currentPlacedGoods, u8 maxPlacedGoods);
 void DecorationGoodsMenu_Free(DecorationGoodsMenu *menu);
-const u32 DecorationGoodsMenu_GetLastInput(DecorationGoodsMenu *menu);
+const menu_selection_t DecorationGoodsMenu_GetLastInput(DecorationGoodsMenu *menu);
 BOOL DecorationGoodsMenu_Main(DecorationGoodsMenu *menu);
 
 #endif // POKEPLATINUM_UNDERGROUND_DECORATION_MENU_H

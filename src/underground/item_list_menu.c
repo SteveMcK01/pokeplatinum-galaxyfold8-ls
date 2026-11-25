@@ -70,7 +70,7 @@ static void UndergroundItemListMenu_DrawColoredArrow(u16 listPos, u16 cursorPos,
     ColoredArrow_Print(menu->arrow, window, xOffset, yOffset);
 }
 
-u32 UndergroundItemListMenu_ProcessInput(UndergroundItemListMenu *menu)
+menu_selection_t UndergroundItemListMenu_ProcessInput(UndergroundItemListMenu *menu)
 {
     ListMenu *listMenu = menu->listMenu;
     u16 listPos, cursorPos;

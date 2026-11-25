@@ -1176,6 +1176,62 @@ static void DrawFullScreenBattleOverlay(ImDrawList *dl, const ImVec2 &disp, floa
     }
 }
 
+struct MainOverlayBounds {
+    bool active = false;
+    float dispW = 0.0f;
+    float dispH = 0.0f;
+    PillRect pills[7] = {};
+    int pillCount = 0;
+    bool hasDpad = false;
+    float dpadCx = 0.0f;
+    float dpadCy = 0.0f;
+    float dpadR = 0.0f;
+    bool hasFaceButtons = false;
+    float aCx = 0.0f, aCy = 0.0f;
+    float bCx = 0.0f, bCy = 0.0f;
+    float xCx = 0.0f, xCy = 0.0f;
+    float yCx = 0.0f, yCy = 0.0f;
+    float faceBtnR = 0.0f;
+    bool hasBattleA = false;
+    float battleACx = 0.0f, battleACy = 0.0f, battleAR = 0.0f;
+};
+
+static MainOverlayBounds sMainOverlayBounds;
+
+static bool IsPointOnMainTouchOverlay(float fx, float fy) {
+    if (!sMainOverlayBounds.active) {
+        return false;
+    }
+    for (int i = 0; i < sMainOverlayBounds.pillCount; ++i) {
+        const PillRect &r = sMainOverlayBounds.pills[i];
+        if (PointInRect(fx, fy, r.x0, r.y0, r.x1, r.y1)) {
+            return true;
+        }
+    }
+    if (sMainOverlayBounds.hasDpad) {
+        if (PointInCircle(fx, fy, sMainOverlayBounds.dpadCx, sMainOverlayBounds.dpadCy,
+                          sMainOverlayBounds.dpadR * 1.38f)) {
+            return true;
+        }
+    }
+    if (sMainOverlayBounds.hasFaceButtons) {
+        const float hitR = sMainOverlayBounds.faceBtnR * 1.22f;
+        if (PointInCircle(fx, fy, sMainOverlayBounds.aCx, sMainOverlayBounds.aCy, hitR) ||
+            PointInCircle(fx, fy, sMainOverlayBounds.bCx, sMainOverlayBounds.bCy, hitR) ||
+            PointInCircle(fx, fy, sMainOverlayBounds.xCx, sMainOverlayBounds.xCy, hitR) ||
+            PointInCircle(fx, fy, sMainOverlayBounds.yCx, sMainOverlayBounds.yCy, hitR)) {
+            return true;
+        }
+    }
+    if (sMainOverlayBounds.hasBattleA) {
+        if (PointInCircle(fx, fy, sMainOverlayBounds.battleACx, sMainOverlayBounds.battleACy,
+                          sMainOverlayBounds.battleAR * 1.25f)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 extern "C" {
 
 BOOL TouchControls_IsEnabled(void) {
@@ -1208,6 +1264,7 @@ void TouchControls_DrawOverlay(void) {
     SyncAndroidLayoutMode(androidLayoutMode);
 
     if (!cfg->touchOverlay || primaryFull || companionFull) {
+        sMainOverlayBounds.active = false;
         std::lock_guard<std::mutex> lock(sInputMutex);
         if (sTopPadMask != 0 || sTopXYMask != 0) {
             sTopPadMask = 0;
@@ -1381,6 +1438,43 @@ void TouchControls_DrawOverlay(void) {
         FlushCombinedHardwareMasksLocked();
     }
 
+    sMainOverlayBounds.active = true;
+    sMainOverlayBounds.dispW = disp.x;
+    sMainOverlayBounds.dispH = disp.y;
+    sMainOverlayBounds.pillCount = 0;
+    auto addPill = [&](float x0, float y0, float x1, float y1) {
+        if (sMainOverlayBounds.pillCount < 7) {
+            sMainOverlayBounds.pills[sMainOverlayBounds.pillCount++] = {x0, y0, x1, y1};
+        }
+    };
+    addPill(lX0, rowY0, lX1, rowY1);
+    if (pipOverlayMode) {
+        addPill(pipX0, rowY0, pipX1, rowY1);
+    }
+    addPill(swX0, rowY0, swX1, rowY1);
+    addPill(selX0, rowY0, selX1, rowY1);
+    addPill(staX0, rowY0, staX1, rowY1);
+    addPill(ffX0, rowY0, ffX1, rowY1);
+    addPill(rX0, rowY0, rX1, rowY1);
+    sMainOverlayBounds.hasDpad = pipOverlayMode && !battleOverlayActive;
+    sMainOverlayBounds.dpadCx = L.dpadCx;
+    sMainOverlayBounds.dpadCy = L.dpadCy;
+    sMainOverlayBounds.dpadR = L.dpadR;
+    sMainOverlayBounds.hasFaceButtons = pipOverlayMode && !hideFaceButtonsInBattle;
+    sMainOverlayBounds.aCx = L.aCx;
+    sMainOverlayBounds.aCy = L.aCy;
+    sMainOverlayBounds.bCx = L.bCx;
+    sMainOverlayBounds.bCy = L.bCy;
+    sMainOverlayBounds.xCx = L.xCx;
+    sMainOverlayBounds.xCy = L.xCy;
+    sMainOverlayBounds.yCx = L.yCx;
+    sMainOverlayBounds.yCy = L.yCy;
+    sMainOverlayBounds.faceBtnR = L.faceBtnR;
+    sMainOverlayBounds.hasBattleA = pipOverlayMode && hideFaceButtonsInBattle && !battleMenuVisible;
+    sMainOverlayBounds.battleACx = battleACx;
+    sMainOverlayBounds.battleACy = battleACy;
+    sMainOverlayBounds.battleAR = battleAR;
+
     ImDrawList *dl = ImGui::GetForegroundDrawList();
     ImFont *boldFont = SIM::UI::BoldFont();
 
@@ -1423,6 +1517,70 @@ void TouchControls_DrawOverlay(void) {
             DrawCircleButton(dl, font, battleACx, battleACy, battleAR, "A", pressed[VBTN_A], alpha, IM_COL32(235, 75, 85, 255));
         }
     }
+}
+
+BOOL TouchControls_GetMainDsTouch(int winW, int winH, int viewX, int viewY, int viewW, int viewH,
+                                  int mouseX, int mouseY, BOOL mouseDown, int *outX, int *outY) {
+    if (outX == nullptr || outY == nullptr || winW <= 0 || winH <= 0 || viewW <= 0 || viewH <= 0) {
+        return FALSE;
+    }
+    if (SIM::Settings::IsOpen() || SIM_Carts_UIActive()) {
+        return FALSE;
+    }
+
+    const float ovW = (sMainOverlayBounds.active && sMainOverlayBounds.dispW > 0.0f)
+                          ? sMainOverlayBounds.dispW
+                          : (float)winW;
+    const float ovH = (sMainOverlayBounds.active && sMainOverlayBounds.dispH > 0.0f)
+                          ? sMainOverlayBounds.dispH
+                          : (float)winH;
+
+    auto tryMapPoint = [&](float vx, float vy, float ox, float oy) -> bool {
+        if (IsPointOnMainTouchOverlay(ox, oy)) {
+            return false;
+        }
+        if (vx < (float)viewX || vx >= (float)(viewX + viewW) ||
+            vy < (float)viewY || vy >= (float)(viewY + viewH)) {
+            return false;
+        }
+        int tx = (int)(((vx - (float)viewX) * 256.0f) / (float)viewW);
+        int ty = (int)(((vy - (float)viewY) * 192.0f) / (float)viewH);
+        *outX = (tx < 0) ? 0 : (tx > 255 ? 255 : tx);
+        *outY = (ty < 0) ? 0 : (ty > 191 ? 191 : ty);
+        return true;
+    };
+
+    bool anyTouch = false;
+    const int numDevices = SDL_GetNumTouchDevices();
+    for (int d = 0; d < numDevices; ++d) {
+        const SDL_TouchID dev = SDL_GetTouchDevice(d);
+        if (dev == 0) {
+            continue;
+        }
+        const int numFingers = SDL_GetNumTouchFingers(dev);
+        for (int f = 0; f < numFingers; ++f) {
+            const SDL_Finger *finger = SDL_GetTouchFinger(dev, f);
+            if (!finger) {
+                continue;
+            }
+            anyTouch = true;
+            if (tryMapPoint(finger->x * (float)winW, finger->y * (float)winH,
+                            finger->x * ovW, finger->y * ovH)) {
+                return TRUE;
+            }
+        }
+    }
+
+    if (!anyTouch && mouseDown) {
+        const float scaleX = ovW / (float)winW;
+        const float scaleY = ovH / (float)winH;
+        if (tryMapPoint((float)mouseX, (float)mouseY,
+                        (float)mouseX * scaleX, (float)mouseY * scaleY)) {
+            return TRUE;
+        }
+    }
+
+    return FALSE;
 }
 
 void TouchControls_DrawBottomOverlay(float width, float height) {

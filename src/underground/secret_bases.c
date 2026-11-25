@@ -911,7 +911,7 @@ static void SecretBases_ExitBasePromptTask(SysTask *sysTask, void *data)
     BaseTransitionContext *ctx = data;
     FieldSystem *fieldSystem = ctx->fieldSystem;
     #ifdef SDK_BUILD_ARM
-    int input;
+    menu_selection_t input;
     #else
     u64 input;
     #endif
@@ -1113,7 +1113,7 @@ static void SecretBases_EnterBasePromptTask(SysTask *sysTask, void *data)
 {
     BaseTransitionContext *ctx = data;
     FieldSystem *fieldSystem = ctx->fieldSystem;
-    int input;
+    menu_selection_t input;
     BOOL canceled = FALSE;
 
     switch (ctx->state) {

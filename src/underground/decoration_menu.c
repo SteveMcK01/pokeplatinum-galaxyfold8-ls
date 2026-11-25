@@ -93,7 +93,7 @@ void DecorationMenu_Free(DecorationMenu *menu)
     Heap_Free(menu);
 }
 
-const u32 DecorationMenu_GetLastInput(DecorationMenu *menu)
+const menu_selection_t DecorationMenu_GetLastInput(DecorationMenu *menu)
 {
     return menu->lastInput;
 }
@@ -184,7 +184,7 @@ static void DecorationMenu_InitMenu(DecorationMenu *menu)
 
 static void DecorationMenu_HandleInput(DecorationMenu *menu)
 {
-    u32 input = ListMenu_ProcessInput(menu->listMenu);
+    menu_selection_t input = ListMenu_ProcessInput(menu->listMenu);
 
     DecorationMenu_UpdateCursorPos(menu);
 
@@ -266,7 +266,7 @@ void DecorationGoodsMenu_Free(DecorationGoodsMenu *menu)
     Heap_Free(menu);
 }
 
-const u32 DecorationGoodsMenu_GetLastInput(DecorationGoodsMenu *menu)
+const menu_selection_t DecorationGoodsMenu_GetLastInput(DecorationGoodsMenu *menu)
 {
     return menu->lastInput;
 }
@@ -295,8 +295,8 @@ BOOL DecorationGoodsMenu_Main(DecorationGoodsMenu *menu)
 
 static void DecorationGoodsMenu_HandleInput(DecorationGoodsMenu *menu)
 {
-    u32 input = UndergroundItemListMenu_ProcessInput(menu->itemListMenu);
-    u32 trueInput = input >> 1;
+    menu_selection_t input = UndergroundItemListMenu_ProcessInput(menu->itemListMenu);
+    menu_selection_t trueInput = input >> 1;
 
     if (menu->goodsCount == trueInput) {
         trueInput = MENU_CANCEL;
@@ -444,7 +444,7 @@ static void DecorationGoodsMenu_Clear(DecorationGoodsMenu *menu)
 
 static void DecorationGoodsMenu_UpdateScrollPrompts(ScrollPrompts *scrollPrompts, u16 listPos, u16 count, u16 maxDisplay)
 {
-    if (count <= maxDisplay) {
+    if (scrollPrompts == NULL || count <= maxDisplay) {
         return;
     }
 

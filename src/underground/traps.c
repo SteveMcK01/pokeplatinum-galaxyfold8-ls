@@ -1118,8 +1118,7 @@ static int Traps_FindEmptyBuriedTrapIndex(BuriedTrap *trapPtr)
 
 static void Traps_RemoveBuriedTrap(BuriedTrap *trap)
 {
-    u32 start = (u32)&trapsEnv->buriedTraps[0];
-    u32 index = ((u32)trap - start) / sizeof(BuriedTrap);
+    u32 index = (u32)(trap - &trapsEnv->buriedTraps[0]);
     u32 netID = index / MAX_PLACED_TRAPS;
     u32 nextPlayerTrapsStart = (netID + 1) * MAX_PLACED_TRAPS;
 

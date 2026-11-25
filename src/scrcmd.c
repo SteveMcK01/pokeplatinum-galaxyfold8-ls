@@ -5484,7 +5484,25 @@ static BOOL ScrCmd_GetSpiritombCounter(ScriptContext *ctx)
 {
     VarsFlags *varsFlags = SaveData_GetVarsFlags(ctx->fieldSystem->saveData);
     u16 *destVar = ScriptContext_GetVarPointer(ctx);
+#ifdef SDK_PORT
+    u16 ghostCount = SystemVars_GetSpiritombCounter(varsFlags);
+    enum TimeOfDay timeOfDay = FieldSystem_GetTimeOfDay(ctx->fieldSystem);
+    BOOL isNight = (timeOfDay == TIMEOFDAY_NIGHT || timeOfDay == TIMEOFDAY_LATE_NIGHT);
+
+    if (ghostCount >= 15) {
+        *destVar = isNight ? 32 : 29;
+    } else if (ghostCount >= 12) {
+        *destVar = 22;
+    } else if (ghostCount >= 8) {
+        *destVar = 15;
+    } else if (ghostCount >= 4) {
+        *destVar = 8;
+    } else {
+        *destVar = 0;
+    }
+#else
     *destVar = SystemVars_GetSpiritombCounter(varsFlags);
+#endif
     return FALSE;
 }
 

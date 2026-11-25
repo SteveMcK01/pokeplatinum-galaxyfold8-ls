@@ -112,6 +112,67 @@ static void PortNuzlockeModeBattleStart(FieldBattleDTO *dto)
     NuzlockeMode_OnWildBattleStart(PortGame_Field_LocationName(), Pokemon_GetValue(mon, MON_DATA_SPECIES, NULL),
         Pokemon_IsShiny(mon));
 }
+
+static BOOL PortSpiritomb_IsGhostMon(Pokemon *mon)
+{
+    if (mon == NULL) {
+        return FALSE;
+    }
+    if (Pokemon_GetValue(mon, MON_DATA_SPECIES, NULL) == SPECIES_NONE || Pokemon_GetValue(mon, MON_DATA_IS_EGG, NULL)) {
+        return FALSE;
+    }
+    return Pokemon_GetValue(mon, MON_DATA_TYPE_1, NULL) == TYPE_GHOST
+        || Pokemon_GetValue(mon, MON_DATA_TYPE_2, NULL) == TYPE_GHOST;
+}
+
+static void PortSpiritomb_OnBattleEnd(FieldSystem *fieldSystem, const FieldBattleDTO *dto)
+{
+    if (fieldSystem == NULL || dto == NULL) {
+        return;
+    }
+
+    const u32 ignoredTypes = BATTLE_TYPE_LINK | BATTLE_TYPE_FRONTIER | BATTLE_TYPE_PAL_PARK
+        | BATTLE_TYPE_CATCH_TUTORIAL | BATTLE_TYPE_DEBUG;
+    if ((dto->battleType & ignoredTypes) != 0) {
+        return;
+    }
+
+    const int result = dto->resultMask & 0x7;
+    int ghostCount = 0;
+
+    if (result == BATTLE_RESULT_WIN) {
+        const int enemyBattlers[2] = { BATTLER_ENEMY_1, BATTLER_ENEMY_2 };
+        for (int b = 0; b < 2; b++) {
+            Party *enemyParty = dto->parties[enemyBattlers[b]];
+            if (enemyParty == NULL) {
+                continue;
+            }
+            int count = Party_GetCurrentCount(enemyParty);
+            for (int i = 0; i < count; i++) {
+                if (PortSpiritomb_IsGhostMon(Party_GetPokemonBySlotIndex(enemyParty, i))) {
+                    ghostCount++;
+                }
+            }
+        }
+    } else if (result == BATTLE_RESULT_CAPTURED_MON) {
+        int caughtIdx = (dto->caughtBattlerIdx == BATTLER_ENEMY_2) ? BATTLER_ENEMY_2 : BATTLER_ENEMY_1;
+        Party *enemyParty = dto->parties[caughtIdx];
+        if (enemyParty != NULL && Party_GetCurrentCount(enemyParty) > 0) {
+            if (PortSpiritomb_IsGhostMon(Party_GetPokemonBySlotIndex(enemyParty, 0))) {
+                ghostCount = 1;
+            }
+        }
+    }
+
+    if (ghostCount > 0) {
+        VarsFlags *varsFlags = SaveData_GetVarsFlags(fieldSystem->saveData);
+        u32 total = SystemVars_GetSpiritombCounter(varsFlags) + (u32)ghostCount;
+        if (total > 999) {
+            total = 999;
+        }
+        SystemVars_SetSpiritombCounter(varsFlags, (u16)total);
+    }
+}
 #endif
 
 static BOOL FieldTask_RunBattle(FieldTask *task)
@@ -138,6 +199,7 @@ static BOOL FieldTask_RunBattle(FieldTask *task)
 
 #ifdef SDK_PORT
         NuzlockeMode_OnWildBattleEnd((dto->resultMask & 0x7) == BATTLE_RESULT_CAPTURED_MON);
+        PortSpiritomb_OnBattleEnd(fieldSystem, dto);
 #endif
         return TRUE;
     }

@@ -42,13 +42,9 @@ void CatchEmAll_ApplyGrassSlots(int mapHeaderID, CatchEmAllSlot *slots)
     case MAP_HEADER_ROUTE_209_LOST_TOWER_2F:
     case MAP_HEADER_ROUTE_209_LOST_TOWER_3F:
     case MAP_HEADER_ROUTE_209_LOST_TOWER_4F:
-        slots[4].species = SPECIES_MURKROW;
-        slots[5].species = SPECIES_MISDREAVUS;
-        break;
     case MAP_HEADER_ROUTE_209_LOST_TOWER_5F:
         slots[4].species = SPECIES_MURKROW;
         slots[5].species = SPECIES_MISDREAVUS;
-        slots[10].species = SPECIES_SPIRITOMB;
         break;
     case MAP_HEADER_ROUTE_218:
         slots[4].species = SPECIES_GLAMEOW;
@@ -83,7 +79,6 @@ void CatchEmAll_ApplyGrassSlots(int mapHeaderID, CatchEmAllSlot *slots)
         break;
     case MAP_HEADER_OLD_CHATEAU:
         slots[8].species = SPECIES_ROTOM;
-        slots[10].species = SPECIES_SPIRITOMB;
         break;
     case MAP_HEADER_ROUTE_204_SOUTH:
         slots[6].species = SPECIES_LOTAD;

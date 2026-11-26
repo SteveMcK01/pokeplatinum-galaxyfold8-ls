@@ -127,17 +127,62 @@ static const char *const sIconSurf[12] = {
     "    ##    # ",
 };
 
-static const char *const sIconRod[12] = {
-    "       ###  ",
-    "      #   # ",
-    "     #    # ",
-    "    #     # ",
-    "   #      # ",
-    "  #       # ",
-    " #       #  ",
-    "##      ##  ",
-    "##     #  # ",
-    "        ##  ",
+static const char *const sIconOldRod[12] = {
+    "    ##      ",
+    "   #  #     ",
+    "  #   .     ",
+    "  #   . ### ",
+    " #     #   #",
+    " #     #   #",
+    "#      #   #",
+    "##     #   #",
+    "##      ### ",
+    "            ",
+    "            ",
+    "            ",
+};
+
+static const char *const sIconGoodRod[12] = {
+    "    ##      ",
+    "   #  #     ",
+    "  #   .     ",
+    "  #   . ####",
+    " #     #    ",
+    " #     # ###",
+    "#      #   #",
+    "##     #   #",
+    "##      ####",
+    "            ",
+    "            ",
+    "            ",
+};
+
+static const char *const sIconSuperRod[12] = {
+    "    ##      ",
+    "   #  #     ",
+    "  #   .     ",
+    "  #   . ####",
+    " #     #    ",
+    " #      ### ",
+    "#          #",
+    "##         #",
+    "##     #### ",
+    "            ",
+    "            ",
+    "            ",
+};
+
+static const char *const sIconHoney[12] = {
+    "   ######   ",
+    "  #......#  ",
+    "  ########  ",
+    " #........# ",
+    " #.######.# ",
+    " #.#....#.# ",
+    " #.######.# ",
+    " #........# ",
+    " #........# ",
+    "  ########  ",
     "            ",
     "            ",
 };
@@ -158,16 +203,31 @@ static const char *const sIconRadar[12] = {
 };
 
 static const char *const sIconSwarm[12] = {
-    "   #####    ",
-    "  #######   ",
-    " ###...###  ",
-    " ###...###  ",
-    " ###...###  ",
-    " ###...###  ",
-    " #########  ",
-    " ###...###  ",
-    "  #######   ",
-    "   #####    ",
+    "   ......   ",
+    "  .      .  ",
+    " .   ..   . ",
+    ".    ..    .",
+    ".  ......  .",
+    ".    ..    .",
+    ".    ..    .",
+    " .        . ",
+    "  .      .  ",
+    "   ......   ",
+    "            ",
+    "            ",
+};
+
+static const char *const sIconSwarmAct[12] = {
+    "   ######   ",
+    "  ########  ",
+    " ####  #### ",
+    " ####  #### ",
+    " ####  #### ",
+    " ####  #### ",
+    " ########## ",
+    " ####  #### ",
+    "  ########  ",
+    "   ######   ",
     "            ",
     "            ",
 };
@@ -364,7 +424,12 @@ static void RenderAreaRadar(AreaRadarGraphics *graphics)
 
     char areaTitle[24];
     if (view->valid && view->name[0] != '\0') {
-        snprintf(areaTitle, sizeof(areaTitle), "%.*s", maxTitleChars, view->name);
+        if (view->isMunchlaxTree) {
+            const int titleChars = maxTitleChars > 4 ? (maxTitleChars - 4) : 1;
+            snprintf(areaTitle, sizeof(areaTitle), "%.*s [M]", titleChars, view->name);
+        } else {
+            snprintf(areaTitle, sizeof(areaTitle), "%.*s", maxTitleChars, view->name);
+        }
     } else {
         snprintf(areaTitle, sizeof(areaTitle), "AREA RADAR");
     }
@@ -396,6 +461,11 @@ static void RenderAreaRadar(AreaRadarGraphics *graphics)
             Window_FillRectWithColor(&graphics->window, LCD_SHADOW_COLOR, 2, (u16)(y - 1), 188, 1);
         }
 
+        // Bold left-edge highlight bar on active Swarm rows
+        if (entry->iconMask & AREA_RADAR_ICON_SWARM_ACT) {
+            Window_FillRectWithColor(&graphics->window, LCD_FG_COLOR, 0, (u16)y, 2, ROW_HEIGHT - 2);
+        }
+
         // 1. Pokeball caught status indicator
         DrawIcon12x12(&graphics->window, entry->caught ? sIconBallCaught : sIconBallUncaught, 2, (u16)(y + 3));
 
@@ -409,6 +479,8 @@ static void RenderAreaRadar(AreaRadarGraphics *graphics)
             char rateStr[8];
             snprintf(rateStr, sizeof(rateStr), "%d%%", entry->rate);
             DrawAscii(graphics, rateStr, 78, y + 1, COLOR_NORMAL);
+        } else if (entry->iconMask & AREA_RADAR_ICON_SWARM) {
+            DrawAscii(graphics, "OFF", 78, y + 1, COLOR_NORMAL);
         }
 
         // 4. Level range
@@ -421,22 +493,34 @@ static void RenderAreaRadar(AreaRadarGraphics *graphics)
         DrawAscii(graphics, lvlStr, 105, y + 1, COLOR_NORMAL);
 
         // 5. Encounter method symbols (up to 4 icons on the right)
-        const char *const *icons[8];
+        const char *const *icons[12];
         int iconCount = 0;
+        if (entry->iconMask & AREA_RADAR_ICON_SWARM_ACT) {
+            icons[iconCount++] = sIconSwarmAct;
+        }
+        if (entry->iconMask & AREA_RADAR_ICON_GRASS) {
+            icons[iconCount++] = sIconGrass;
+        }
         if (entry->iconMask & AREA_RADAR_ICON_DAY) {
             icons[iconCount++] = sIconSun;
         }
         if (entry->iconMask & AREA_RADAR_ICON_NIGHT) {
             icons[iconCount++] = sIconMoon;
         }
-        if (entry->iconMask & AREA_RADAR_ICON_GRASS) {
-            icons[iconCount++] = sIconGrass;
-        }
         if (entry->iconMask & AREA_RADAR_ICON_SURF) {
             icons[iconCount++] = sIconSurf;
         }
-        if (entry->iconMask & AREA_RADAR_ICON_ROD) {
-            icons[iconCount++] = sIconRod;
+        if (entry->iconMask & AREA_RADAR_ICON_OLD_ROD) {
+            icons[iconCount++] = sIconOldRod;
+        }
+        if (entry->iconMask & AREA_RADAR_ICON_GOOD_ROD) {
+            icons[iconCount++] = sIconGoodRod;
+        }
+        if (entry->iconMask & AREA_RADAR_ICON_SUPER_ROD) {
+            icons[iconCount++] = sIconSuperRod;
+        }
+        if (entry->iconMask & AREA_RADAR_ICON_HONEY) {
+            icons[iconCount++] = sIconHoney;
         }
         if (entry->iconMask & AREA_RADAR_ICON_RADAR) {
             icons[iconCount++] = sIconRadar;

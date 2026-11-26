@@ -1,0 +1,123 @@
+--- a/include/port/gear_data.h
++++ b/include/port/gear_data.h
+@@ -106,6 +106,7 @@
+     GEAR_ENC_OLD_ROD,
+     GEAR_ENC_GOOD_ROD,
+     GEAR_ENC_SUPER_ROD,
++    GEAR_ENC_HONEY_TREE, // slathered Honey Trees
+     GEAR_ENC_RADAR,      // Poke Radar (replaces some grass slots while it is in use)
+     GEAR_ENC_SWARM,      // replaces grass slots while a swarm is reported here
+     GEAR_ENC_GBA,        // replaces grass slots with a GBA game in the DS's GBA slot
+@@ -123,6 +124,8 @@
+ typedef struct GearArea {
+     BOOL valid;          // a game is running on a map
+     BOOL hasEncounters;
++    BOOL swarmActive;    // TRUE if today's daily swarm is active on this map
++    BOOL isMunchlaxTree; // TRUE if this map has one of the player's 4 Munchlax trees
+     int mapHeaderID;
+     char name[GEAR_NAME_LEN];
+     int timeOfDay;       // GEAR_TIMEOFDAY_*
+--- a/src/gear_ui.cpp
++++ b/src/gear_ui.cpp
+@@ -1052,6 +1052,8 @@
+     return "Good Rod";
+   case GEAR_ENC_SUPER_ROD:
+     return "Super Rod";
++  case GEAR_ENC_HONEY_TREE:
++    return "Honey Tree";
+   case GEAR_ENC_RADAR:
+     return "Poke Radar";
+   case GEAR_ENC_SWARM:
+@@ -1239,24 +1241,38 @@
+     return;
+   }
+ 
+-  // Progress for the normal (walking/water) encounters; radar and swarm Pokemon are extras
++  // Progress for catchable area encounters (exclude Poke Radar and inactive Swarms)
++  auto isCounted = [](const GearEncounter &e) {
++    if (e.method == GEAR_ENC_RADAR) {
++      return false;
++    }
++    if (e.method == GEAR_ENC_SWARM && !sArea.swarmActive) {
++      return false;
++    }
++    return true;
++  };
+   int total = 0;
+   int caught = 0;
+   for (int i = 0; i < sArea.count; i++) {
+     const GearEncounter &enc = sArea.entries[i];
+-    if (enc.method == GEAR_ENC_RADAR || enc.method == GEAR_ENC_SWARM) {
++    if (!isCounted(enc)) {
+       continue;
+     }
+     bool repeat = false;
+     for (int j = 0; j < i; j++) {
+-      repeat = repeat || sArea.entries[j].species == enc.species;
++      if (isCounted(sArea.entries[j]) && sArea.entries[j].species == enc.species) {
++        repeat = true;
++        break;
++      }
+     }
+     if (!repeat) {
+       total++;
+       caught += Gear_SpeciesCaught(enc.species) ? 1 : 0;
+     }
+   }
+-  ImGui::TextColored(ImColor(caught == total ? kGood : kTextDim), "Caught %d of %d species here", caught, total);
++  if (total > 0) {
++    ImGui::TextColored(ImColor(caught == total ? kGood : kTextDim), "Caught %d of %d species here", caught, total);
++  }
+ 
+   const float width = ImGui::GetContentRegionAvail().x;
+   int method = -1;
+@@ -1269,6 +1285,18 @@
+       if (method == GEAR_ENC_GBA && Gear_GBASlotGameName() != nullptr) {
+         // Only the slot's game's are listed here (Settings > GBA slot)
+         ImGui::TextColored(ImColor(kAccent), "With %s in the GBA slot", Gear_GBASlotGameName());
++      } else if (method == GEAR_ENC_HONEY_TREE) {
++        if (sArea.isMunchlaxTree) {
++          ImGui::TextColored(ImColor(kGood), "Honey Tree (Munchlax Tree!)");
++        } else {
++          ImGui::TextColored(ImColor(kAccent), "Honey Tree");
++        }
++      } else if (method == GEAR_ENC_SWARM) {
++        if (sArea.swarmActive) {
++          ImGui::TextColored(ImColor(kGood), "Swarm (SWARMING TODAY!)");
++        } else {
++          ImGui::TextColored(ImColor(kTextDim), "Swarm (Not swarming today)");
++        }
+       } else {
+         ImGui::TextColored(ImColor(kAccent), "%s", MethodName(method));
+       }
+@@ -1291,6 +1319,9 @@
+       OpenSpecies(enc.species);
+     }
+     draw->AddRectFilled(pos, ImVec2(pos.x + width, pos.y + rowHeight), held && showName ? kPanelPressed : kPanel, S(8.0f));
++    if (enc.method == GEAR_ENC_SWARM && sArea.swarmActive) {
++      draw->AddRect(pos, ImVec2(pos.x + width, pos.y + rowHeight), kGood, S(8.0f), 0, S(1.5f));
++    }
+ 
+     // Caught: filled ball. Seen: ring. Never seen: dim dot
+     ImVec2 center(pos.x + S(18.0f), pos.y + rowHeight * 0.5f);
+@@ -1331,13 +1362,17 @@
+     } else {
+       snprintf(info, sizeof(info), "Lv %d-%d", enc.minLevel, enc.maxLevel);
+     }
+-    char rate[16] = "";
+     if (enc.rate > 0) {
++      char rate[16] = "";
+       snprintf(rate, sizeof(rate), "%d%%", enc.rate);
++      ImVec2 rateSize = TextSize(sBold, S(16.0f), rate);
++      TextAt(draw, sBold, S(16.0f), ImVec2(pos.x + width - S(10.0f) - rateSize.x, pos.y + S(8.0f)), kText, rate);
++    } else if (enc.method == GEAR_ENC_SWARM && !sArea.swarmActive) {
++      const char *offLabel = "Off-day";
++      ImVec2 rateSize = TextSize(sRegular, S(13.0f), offLabel);
++      TextAt(draw, sRegular, S(13.0f), ImVec2(pos.x + width - S(10.0f) - rateSize.x, pos.y + S(10.0f)), kTextDim, offLabel);
+     }
+-    ImVec2 rateSize = TextSize(sBold, S(16.0f), rate);
+     ImVec2 infoSize = TextSize(sRegular, S(15.0f), info);
+-    TextAt(draw, sBold, S(16.0f), ImVec2(pos.x + width - S(10.0f) - rateSize.x, pos.y + S(8.0f)), kText, rate);
+     TextAt(draw, sRegular, S(15.0f), ImVec2(pos.x + width - S(70.0f) - infoSize.x, pos.y + S(9.0f)), kTextDim, info);
+ 
+     ImGui::Dummy(ImVec2(width, rowHeight + S(4.0f)));

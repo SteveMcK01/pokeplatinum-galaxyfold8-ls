@@ -6,7 +6,7 @@
 #include "string_gf.h"
 
 #define AREA_RADAR_TASK_SLOTS  4
-#define AREA_RADAR_MAX_ENTRIES 32
+#define AREA_RADAR_MAX_ENTRIES 48
 
 enum AreaRadarGraphicsTask {
     AREA_RADAR_GRAPHICS_INIT = 0,
@@ -15,14 +15,18 @@ enum AreaRadarGraphicsTask {
 };
 
 enum AreaRadarIconFlag {
-    AREA_RADAR_ICON_GRASS = (1 << 0),
-    AREA_RADAR_ICON_DAY   = (1 << 1),
-    AREA_RADAR_ICON_NIGHT = (1 << 2),
-    AREA_RADAR_ICON_SURF  = (1 << 3),
-    AREA_RADAR_ICON_ROD   = (1 << 4),
-    AREA_RADAR_ICON_RADAR = (1 << 5),
-    AREA_RADAR_ICON_SWARM = (1 << 6),
-    AREA_RADAR_ICON_GBA   = (1 << 7),
+    AREA_RADAR_ICON_GRASS     = (1 << 0),
+    AREA_RADAR_ICON_SURF      = (1 << 1),
+    AREA_RADAR_ICON_OLD_ROD   = (1 << 2),
+    AREA_RADAR_ICON_GOOD_ROD  = (1 << 3),
+    AREA_RADAR_ICON_SUPER_ROD = (1 << 4),
+    AREA_RADAR_ICON_HONEY     = (1 << 5),
+    AREA_RADAR_ICON_DAY       = (1 << 6),
+    AREA_RADAR_ICON_NIGHT     = (1 << 7),
+    AREA_RADAR_ICON_RADAR     = (1 << 8),
+    AREA_RADAR_ICON_SWARM     = (1 << 9),
+    AREA_RADAR_ICON_SWARM_ACT = (1 << 10),
+    AREA_RADAR_ICON_GBA       = (1 << 11),
 };
 
 typedef struct AreaRadarEntry {
@@ -36,6 +40,8 @@ typedef struct AreaRadarEntry {
 
 typedef struct AreaRadarViewData {
     BOOL valid;
+    BOOL swarmActive;
+    BOOL isMunchlaxTree;
     int mapHeaderID;
     char name[32];
     int timeOfDay;

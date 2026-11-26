@@ -21,6 +21,7 @@
 #include "constants/species.h"
 #include "generated/map_headers.h"
 #include "constants/string.h"
+#include "constants/honey_tree.h"
 #include "constants/versions.h"
 #include "constants/wild_encounters.h"
 #include "generated/abilities.h"
@@ -41,6 +42,7 @@
 #include "battle/battle_system.h"
 #include "battle_sub_menus/battle_party.h"
 #include "field/field_system.h"
+#include "overlay005/honey_tree.h"
 #include "overlay006/great_marsh_daily_encounters.h"
 #include "overlay006/swarm.h"
 #include "overlay006/wild_encounters.h"
@@ -721,14 +723,94 @@ static void AddWater(GearArea *area, u8 method, const WaterEncounters *water, co
     }
 }
 
+static int EncounterSortRank(const GearEncounter *e)
+{
+    if (e->method == GEAR_ENC_SWARM && e->rate > 0) {
+        return -1;
+    }
+    return e->method;
+}
+
 static int CompareEncounters(const void *a, const void *b)
 {
     const GearEncounter *ea = a;
     const GearEncounter *eb = b;
-    if (ea->method != eb->method) {
-        return ea->method - eb->method;
+    const int ra = EncounterSortRank(ea);
+    const int rb = EncounterSortRank(eb);
+    if (ra != rb) {
+        return ra - rb;
     }
-    return eb->rate - ea->rate;
+    if (eb->rate != ea->rate) {
+        return eb->rate - ea->rate;
+    }
+    return ea->species - eb->species;
+}
+
+static void AddHoneyTreeEncounters(FieldSystem *fieldSystem, GearArea *out)
+{
+    const int treeId = HoneyTree_GetTreeIDForMap((enum MapHeaderID)out->mapHeaderID);
+    if (treeId < 0 || fieldSystem->saveData == NULL) {
+        return;
+    }
+
+    const u32 trainerId = TrainerInfo_ID(SaveData_GetTrainerInfo(fieldSystem->saveData));
+    const BOOL isMunchlax = HoneyTree_IsMunchlaxTree(trainerId, (u8)treeId);
+    out->isMunchlaxTree = isMunchlax;
+
+    static const u8 sHoneySlotRates[6] = { 40, 20, 20, 10, 5, 5 };
+    static const int sTableMembers[3] = { 2, 3, 4 }; // Group A, Group B, Group C (DPt)
+    const int groupWeights[3] = {
+        isMunchlax ? 20 : 70,
+        isMunchlax ? 70 : 20,
+        isMunchlax ? 1 : 0,
+    };
+
+    u16 speciesList[18];
+    u32 bpList[18];
+    int count = 0;
+
+    for (int g = 0; g < 3; g++) {
+        if (groupWeights[g] == 0) {
+            continue;
+        }
+        u32 size = 0;
+        int *entries = NARC_PortReadMember(NARC_INDEX_ARC__ENCDATA_EX, sTableMembers[g], &size);
+        if (entries == NULL) {
+            continue;
+        }
+        const int slots = (int)(size / sizeof(int));
+        const int limit = slots < 6 ? slots : 6;
+        for (int s = 0; s < limit; s++) {
+            const int sp = entries[s];
+            if (sp <= 0) {
+                continue;
+            }
+            const u32 bp = (u32)groupWeights[g] * (u32)sHoneySlotRates[s];
+            int idx = -1;
+            for (int k = 0; k < count; k++) {
+                if (speciesList[k] == (u16)sp) {
+                    idx = k;
+                    break;
+                }
+            }
+            if (idx >= 0) {
+                bpList[idx] += bp;
+            } else if (count < 18) {
+                speciesList[count] = (u16)sp;
+                bpList[count] = bp;
+                count++;
+            }
+        }
+        free(entries);
+    }
+
+    for (int k = 0; k < count; k++) {
+        u8 rate = (u8)((bpList[k] + 50) / 100);
+        if (rate == 0) {
+            rate = 1;
+        }
+        AddEncounter(out, GEAR_ENC_HONEY_TREE, speciesList[k], 5, 15, rate);
+    }
 }
 
 void Gear_GetArea(GearArea *out)
@@ -747,173 +829,181 @@ void Gear_GetArea(GearArea *out)
         out->radarChain = GetChainCount(fieldSystem);
     }
 
-    if (!MapHeader_HasWildEncounters(out->mapHeaderID)) {
-        return;
-    }
-    const WildEncounters *data = MapHeaderData_GetWildEncounters(fieldSystem);
+    if (MapHeader_HasWildEncounters(out->mapHeaderID)) {
+        const WildEncounters *data = MapHeaderData_GetWildEncounters(fieldSystem);
 
-    // A GBA game in the slot (port/gba_slot.h) takes the two 4% slots, once the player has
-    // the National Pokedex (WildEncounters_ReplaceDualSlotEncounters)
-    const int *dualSlot = NULL;
-    if (Pokedex_IsNationalDexObtained(SaveData_GetPokedex(fieldSystem->saveData))) {
-        switch (gSystem.gbaCartridgeVersion) {
-        case VERSION_RUBY:
-            dualSlot = data->dualSlotRubyEncounters;
-            break;
-        case VERSION_SAPPHIRE:
-            dualSlot = data->dualSlotSapphireEncounters;
-            break;
-        case VERSION_EMERALD:
-            dualSlot = data->dualSlotEmeraldEncouters;
-            break;
-        case VERSION_FIRERED:
-            dualSlot = data->dualSlotFireredEncounters;
-            break;
-        case VERSION_LEAFGREEN:
-            dualSlot = data->dualSlotLeafgreenEncounters;
-            break;
-        }
-    }
-
-    if (data->grassEncounters.encounterRate != 0) {
-        const BOOL nationalDexObtained = Pokedex_IsNationalDexObtained(SaveData_GetPokedex(fieldSystem->saveData));
-        CatchEmAllSlot grassSlots[MAX_GRASS_ENCOUNTERS];
-        for (int i = 0; i < MAX_GRASS_ENCOUNTERS; i++) {
-            const GrassEncounter *enc = &data->grassEncounters.encounters[i];
-            int species = enc->species;
-            if (i == 2 || i == 3) {
-                if (out->timeOfDay == TIMEOFDAY_DAY || out->timeOfDay == TIMEOFDAY_TWILIGHT) {
-                    species = data->dayEncounters[i - 2];
-                } else if (out->timeOfDay == TIMEOFDAY_NIGHT || out->timeOfDay == TIMEOFDAY_LATE_NIGHT) {
-                    species = data->nightEncounters[i - 2];
-                }
-            }
-            grassSlots[i].species = species;
-            grassSlots[i].minLevel = enc->level;
-            grassSlots[i].maxLevel = enc->level;
-        }
-
-        // Active daily Swarm replaces slots 0 and 1 (20% each)
-        SpecialEncounter *specialEncounter = SaveData_GetSpecialEncounters(fieldSystem->saveData);
-        if (specialEncounter != NULL && SpecialEncounter_IsSwarmEnabled(specialEncounter)) {
-            u32 swarmId = SpecialEncounter_GetDailyMon(specialEncounter, DAILY_SWARM);
-            if ((u32)out->mapHeaderID == Swarm_GetMapId(swarmId)) {
-                grassSlots[0].species = data->swarmEncounters[0];
-                grassSlots[1].species = data->swarmEncounters[1];
-            }
-        }
-
-        // Active daily Trophy Garden encounters replace slots 6 and 7 (5% each)
-        if (nationalDexObtained && MapHeader_IsTrophyGarden(out->mapHeaderID)) {
-            u16 index1 = TROPHY_GARDEN_SLOT_NONE;
-            u16 index2 = TROPHY_GARDEN_SLOT_NONE;
-            SpecialEncounter_GetTrophyGardenMons(fieldSystem->saveData, &index1, &index2);
-            u32 size = 0;
-            int *trophyGardenData = NARC_PortReadMember(NARC_INDEX_ARC__ENCDATA_EX, 8, &size);
-            if (trophyGardenData != NULL) {
-                int count = (int)(size / sizeof(int));
-                if (index1 != TROPHY_GARDEN_SLOT_NONE && index1 < count) {
-                    grassSlots[6].species = trophyGardenData[index1];
-                }
-                if (index2 != TROPHY_GARDEN_SLOT_NONE && index2 < count) {
-                    grassSlots[7].species = trophyGardenData[index2];
-                }
-                free(trophyGardenData);
-            }
-        }
-
-        // GBA dual-slot replaces slots 8 and 9 (4% each) before CatchEmAll overrides
-        if (dualSlot != NULL) {
-            grassSlots[8].species = dualSlot[0];
-            grassSlots[9].species = dualSlot[1];
-        }
-
-        CatchEmAll_ApplyGrassSlots(out->mapHeaderID, grassSlots);
-
-        // Active Safari Game Great Marsh daily encounters replace slots 6 and 7 (5% each)
-        if (specialEncounter != NULL
-            && out->mapHeaderID >= MAP_HEADER_GREAT_MARSH_1
-            && out->mapHeaderID <= MAP_HEADER_GREAT_MARSH_6
-            && SystemFlag_CheckSafariGameActive(SaveData_GetVarsFlags(fieldSystem->saveData))) {
-            int slot6 = grassSlots[6].species;
-            int slot7 = grassSlots[7].species;
-            ReplaceGreatMarshDailyEncounters(
-                SpecialEncounter_GetDailyMon(specialEncounter, DAILY_MARSH),
-                nationalDexObtained,
-                out->mapHeaderID,
-                &slot6,
-                &slot7);
-            grassSlots[6].species = slot6;
-            grassSlots[7].species = slot7;
-        }
-
-        for (int i = 0; i < MAX_GRASS_ENCOUNTERS; i++) {
-            u8 method = GEAR_ENC_GRASS;
-            if (dualSlot != NULL && (i == 8 || i == 9) && grassSlots[i].species == dualSlot[i - 8]) {
-                method = GEAR_ENC_GBA;
-            }
-            AddEncounter(out, method, grassSlots[i].species, grassSlots[i].minLevel, grassSlots[i].maxLevel, sGrassRates[i]);
-        }
-
-        // Poke Radar and swarms replace pairs of 10% / 20% slots; their levels follow
-        // the slots they replace
-        for (int i = 0; i < MAX_RADAR_ENCOUNTERS; i++) {
-            const GrassEncounter *slot = &data->grassEncounters.encounters[4 + (i & 1)];
-            AddEncounter(out, GEAR_ENC_RADAR, data->radarEncounters[i], slot->level, slot->level, 0);
-        }
-        for (int i = 0; i < MAX_SWARM_ENCOUNTERS; i++) {
-            const GrassEncounter *slot = &data->grassEncounters.encounters[i];
-            AddEncounter(out, GEAR_ENC_SWARM, data->swarmEncounters[i], slot->level, slot->level, 0);
-        }
-    }
-
-    if (data->surfEncounters.encounterRate != 0) {
-        CatchEmAllSlot surfSlots[MAX_WATER_ENCOUNTERS];
-        for (int i = 0; i < MAX_WATER_ENCOUNTERS; i++) {
-            surfSlots[i].species = data->surfEncounters.encounters[i].species;
-            surfSlots[i].minLevel = data->surfEncounters.encounters[i].minLevel;
-            surfSlots[i].maxLevel = data->surfEncounters.encounters[i].maxLevel;
-        }
-        CatchEmAll_ApplySurfSlots(out->mapHeaderID, surfSlots);
-        for (int i = 0; i < MAX_WATER_ENCOUNTERS; i++) {
-            AddEncounter(out, GEAR_ENC_SURF, surfSlots[i].species, surfSlots[i].minLevel, surfSlots[i].maxLevel, sWaterRates[i]);
-        }
-    }
-    AddWater(out, GEAR_ENC_OLD_ROD, &data->oldRodEncounters, sWaterRates);
-    AddWater(out, GEAR_ENC_GOOD_ROD, &data->goodRodEncounters, sRodRates);
-    if (data->superRodEncounters.encounterRate != 0) {
-        CatchEmAllSlot superSlots[MAX_WATER_ENCOUNTERS];
-        for (int i = 0; i < MAX_WATER_ENCOUNTERS; i++) {
-            superSlots[i].species = data->superRodEncounters.encounters[i].species;
-            superSlots[i].minLevel = data->superRodEncounters.encounters[i].minLevel;
-            superSlots[i].maxLevel = data->superRodEncounters.encounters[i].maxLevel;
-        }
-        CatchEmAll_ApplySuperRodSlots(out->mapHeaderID, superSlots);
-        for (int i = 0; i < MAX_WATER_ENCOUNTERS; i++) {
-            AddEncounter(out, GEAR_ENC_SUPER_ROD, superSlots[i].species, superSlots[i].minLevel, superSlots[i].maxLevel, sRodRates[i]);
-        }
-    }
-
-    // Radar/swarm species already in the normal table add nothing new
-    for (int i = 0; i < out->count; i++) {
-        GearEncounter *special = &out->entries[i];
-        if (special->method != GEAR_ENC_RADAR && special->method != GEAR_ENC_SWARM) {
-            continue;
-        }
-        for (int j = 0; j < out->count; j++) {
-            if (out->entries[j].method == GEAR_ENC_GRASS && out->entries[j].species == special->species) {
-                special->species = SPECIES_NONE;
+        // A GBA game in the slot (port/gba_slot.h) takes the two 4% slots, once the player has
+        // the National Pokedex (WildEncounters_ReplaceDualSlotEncounters)
+        const int *dualSlot = NULL;
+        if (Pokedex_IsNationalDexObtained(SaveData_GetPokedex(fieldSystem->saveData))) {
+            switch (gSystem.gbaCartridgeVersion) {
+            case VERSION_RUBY:
+                dualSlot = data->dualSlotRubyEncounters;
+                break;
+            case VERSION_SAPPHIRE:
+                dualSlot = data->dualSlotSapphireEncounters;
+                break;
+            case VERSION_EMERALD:
+                dualSlot = data->dualSlotEmeraldEncouters;
+                break;
+            case VERSION_FIRERED:
+                dualSlot = data->dualSlotFireredEncounters;
+                break;
+            case VERSION_LEAFGREEN:
+                dualSlot = data->dualSlotLeafgreenEncounters;
                 break;
             }
         }
-    }
-    int kept = 0;
-    for (int i = 0; i < out->count; i++) {
-        if (out->entries[i].species != SPECIES_NONE) {
-            out->entries[kept++] = out->entries[i];
+
+        if (data->grassEncounters.encounterRate != 0) {
+            const BOOL nationalDexObtained = Pokedex_IsNationalDexObtained(SaveData_GetPokedex(fieldSystem->saveData));
+            CatchEmAllSlot grassSlots[MAX_GRASS_ENCOUNTERS];
+            for (int i = 0; i < MAX_GRASS_ENCOUNTERS; i++) {
+                const GrassEncounter *enc = &data->grassEncounters.encounters[i];
+                int species = enc->species;
+                if (i == 2 || i == 3) {
+                    if (out->timeOfDay == TIMEOFDAY_DAY || out->timeOfDay == TIMEOFDAY_TWILIGHT) {
+                        species = data->dayEncounters[i - 2];
+                    } else if (out->timeOfDay == TIMEOFDAY_NIGHT || out->timeOfDay == TIMEOFDAY_LATE_NIGHT) {
+                        species = data->nightEncounters[i - 2];
+                    }
+                }
+                grassSlots[i].species = species;
+                grassSlots[i].minLevel = enc->level;
+                grassSlots[i].maxLevel = enc->level;
+            }
+
+            // Check whether today's daily Swarm is active on this map
+            SpecialEncounter *specialEncounter = SaveData_GetSpecialEncounters(fieldSystem->saveData);
+            BOOL swarmActive = FALSE;
+            if (specialEncounter != NULL && SpecialEncounter_IsSwarmEnabled(specialEncounter)) {
+                u32 swarmId = SpecialEncounter_GetDailyMon(specialEncounter, DAILY_SWARM);
+                if ((u32)out->mapHeaderID == Swarm_GetMapId(swarmId)) {
+                    swarmActive = TRUE;
+                }
+            }
+            out->swarmActive = swarmActive;
+
+            // Active daily Trophy Garden encounters replace slots 6 and 7 (5% each)
+            if (nationalDexObtained && MapHeader_IsTrophyGarden(out->mapHeaderID)) {
+                u16 index1 = TROPHY_GARDEN_SLOT_NONE;
+                u16 index2 = TROPHY_GARDEN_SLOT_NONE;
+                SpecialEncounter_GetTrophyGardenMons(fieldSystem->saveData, &index1, &index2);
+                u32 size = 0;
+                int *trophyGardenData = NARC_PortReadMember(NARC_INDEX_ARC__ENCDATA_EX, 8, &size);
+                if (trophyGardenData != NULL) {
+                    int count = (int)(size / sizeof(int));
+                    if (index1 != TROPHY_GARDEN_SLOT_NONE && index1 < count) {
+                        grassSlots[6].species = trophyGardenData[index1];
+                    }
+                    if (index2 != TROPHY_GARDEN_SLOT_NONE && index2 < count) {
+                        grassSlots[7].species = trophyGardenData[index2];
+                    }
+                    free(trophyGardenData);
+                }
+            }
+
+            // GBA dual-slot replaces slots 8 and 9 (4% each) before CatchEmAll overrides
+            if (dualSlot != NULL) {
+                grassSlots[8].species = dualSlot[0];
+                grassSlots[9].species = dualSlot[1];
+            }
+
+            CatchEmAll_ApplyGrassSlots(out->mapHeaderID, grassSlots);
+
+            // Active Safari Game Great Marsh daily encounters replace slots 6 and 7 (5% each)
+            if (specialEncounter != NULL
+                && out->mapHeaderID >= MAP_HEADER_GREAT_MARSH_1
+                && out->mapHeaderID <= MAP_HEADER_GREAT_MARSH_6
+                && SystemFlag_CheckSafariGameActive(SaveData_GetVarsFlags(fieldSystem->saveData))) {
+                int slot6 = grassSlots[6].species;
+                int slot7 = grassSlots[7].species;
+                ReplaceGreatMarshDailyEncounters(
+                    SpecialEncounter_GetDailyMon(specialEncounter, DAILY_MARSH),
+                    nationalDexObtained,
+                    out->mapHeaderID,
+                    &slot6,
+                    &slot7);
+                grassSlots[6].species = slot6;
+                grassSlots[7].species = slot7;
+            }
+
+            for (int i = 0; i < MAX_GRASS_ENCOUNTERS; i++) {
+                if (swarmActive && (i == 0 || i == 1)) {
+                    const GrassEncounter *slot = &data->grassEncounters.encounters[i];
+                    AddEncounter(out, GEAR_ENC_SWARM, data->swarmEncounters[i], slot->level, slot->level, sGrassRates[i]);
+                    continue;
+                }
+                u8 method = GEAR_ENC_GRASS;
+                if (dualSlot != NULL && (i == 8 || i == 9) && grassSlots[i].species == dualSlot[i - 8]) {
+                    method = GEAR_ENC_GBA;
+                }
+                AddEncounter(out, method, grassSlots[i].species, grassSlots[i].minLevel, grassSlots[i].maxLevel, sGrassRates[i]);
+            }
+
+            // Poke Radar replaces 10% slots while active; inactive Swarms still appear on Swarm maps at 0%
+            for (int i = 0; i < MAX_RADAR_ENCOUNTERS; i++) {
+                const GrassEncounter *slot = &data->grassEncounters.encounters[4 + (i & 1)];
+                AddEncounter(out, GEAR_ENC_RADAR, data->radarEncounters[i], slot->level, slot->level, 0);
+            }
+            if (!swarmActive && Swarm_IsSwarmMap((u32)out->mapHeaderID)) {
+                for (int i = 0; i < MAX_SWARM_ENCOUNTERS; i++) {
+                    const GrassEncounter *slot = &data->grassEncounters.encounters[i];
+                    AddEncounter(out, GEAR_ENC_SWARM, data->swarmEncounters[i], slot->level, slot->level, 0);
+                }
+            }
         }
+
+        if (data->surfEncounters.encounterRate != 0) {
+            CatchEmAllSlot surfSlots[MAX_WATER_ENCOUNTERS];
+            for (int i = 0; i < MAX_WATER_ENCOUNTERS; i++) {
+                surfSlots[i].species = data->surfEncounters.encounters[i].species;
+                surfSlots[i].minLevel = data->surfEncounters.encounters[i].minLevel;
+                surfSlots[i].maxLevel = data->surfEncounters.encounters[i].maxLevel;
+            }
+            CatchEmAll_ApplySurfSlots(out->mapHeaderID, surfSlots);
+            for (int i = 0; i < MAX_WATER_ENCOUNTERS; i++) {
+                AddEncounter(out, GEAR_ENC_SURF, surfSlots[i].species, surfSlots[i].minLevel, surfSlots[i].maxLevel, sWaterRates[i]);
+            }
+        }
+        AddWater(out, GEAR_ENC_OLD_ROD, &data->oldRodEncounters, sWaterRates);
+        AddWater(out, GEAR_ENC_GOOD_ROD, &data->goodRodEncounters, sRodRates);
+        if (data->superRodEncounters.encounterRate != 0) {
+            CatchEmAllSlot superSlots[MAX_WATER_ENCOUNTERS];
+            for (int i = 0; i < MAX_WATER_ENCOUNTERS; i++) {
+                superSlots[i].species = data->superRodEncounters.encounters[i].species;
+                superSlots[i].minLevel = data->superRodEncounters.encounters[i].minLevel;
+                superSlots[i].maxLevel = data->superRodEncounters.encounters[i].maxLevel;
+            }
+            CatchEmAll_ApplySuperRodSlots(out->mapHeaderID, superSlots);
+            for (int i = 0; i < MAX_WATER_ENCOUNTERS; i++) {
+                AddEncounter(out, GEAR_ENC_SUPER_ROD, superSlots[i].species, superSlots[i].minLevel, superSlots[i].maxLevel, sRodRates[i]);
+            }
+        }
+
+        // Radar species already in the normal grass table add nothing new
+        for (int i = 0; i < out->count; i++) {
+            GearEncounter *special = &out->entries[i];
+            if (special->method != GEAR_ENC_RADAR) {
+                continue;
+            }
+            for (int j = 0; j < out->count; j++) {
+                if (out->entries[j].method == GEAR_ENC_GRASS && out->entries[j].species == special->species) {
+                    special->species = SPECIES_NONE;
+                    break;
+                }
+            }
+        }
+        int kept = 0;
+        for (int i = 0; i < out->count; i++) {
+            if (out->entries[i].species != SPECIES_NONE) {
+                out->entries[kept++] = out->entries[i];
+            }
+        }
+        out->count = kept;
     }
-    out->count = kept;
+
+    AddHoneyTreeEncounters(fieldSystem, out);
 
     out->hasEncounters = out->count > 0;
     qsort(out->entries, out->count, sizeof(GearEncounter), CompareEncounters);

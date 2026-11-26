@@ -475,3 +475,29 @@ void HoneyTree_Unslather(FieldSystem *fieldSystem)
 
     tree->minutesRemaining = 0;
 }
+
+int HoneyTree_GetTreeIDForMap(enum MapHeaderID mapHeaderID)
+{
+    for (int i = 0; i < NUM_HONEY_TREES; i++) {
+        if (sHoneyTreeMapHeaderIDs[i] == (int)mapHeaderID) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+enum MapHeaderID HoneyTree_GetMapForTreeID(int treeId)
+{
+    if (treeId < 0 || treeId >= NUM_HONEY_TREES) {
+        return MAP_HEADER_NOTHING;
+    }
+    return (enum MapHeaderID)sHoneyTreeMapHeaderIDs[treeId];
+}
+
+BOOL HoneyTree_IsMunchlaxTree(u32 trainerId, u8 treeId)
+{
+    if (treeId >= NUM_HONEY_TREES) {
+        return FALSE;
+    }
+    return IsMunchlaxTree(trainerId, treeId);
+}

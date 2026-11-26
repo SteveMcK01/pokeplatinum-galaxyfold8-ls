@@ -6,12 +6,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "constants/honey_tree.h"
 #include "constants/narc.h"
 #include "constants/species.h"
 #include "generated/evolution_methods.h"
 #include "generated/items.h"
 #include "generated/map_headers.h"
 
+#include "overlay005/honey_tree.h"
+#include "overlay006/swarm.h"
 #include "overlay006/wild_encounters.h"
 #include "port/catch_em_all.h"
 #include "port/gear_data.h"
@@ -23,8 +26,10 @@
 #include "map_header_data.h"
 #include "narc.h"
 #include "pokemon.h"
+#include "save_player.h"
 #include "savedata.h"
 #include "system_flags.h"
+#include "trainer_info.h"
 #include "tutor_movesets.h"
 
 #include "res/pokemon/species_egg_moves.h"
@@ -116,18 +121,131 @@ static int ComparePlaceRecords(const void *a, const void *b)
 
 static BOOL sIndexCatchEmAll = FALSE;
 static BOOL sIndexPostGame = FALSE;
+static BOOL sIndexHasSave = FALSE;
+static u32 sIndexTrainerId = 0;
+
+static void AddHoneyTreePlaces(BOOL hasSave, u32 trainerId)
+{
+    static const u8 sHoneySlotRates[6] = { 40, 20, 20, 10, 5, 5 };
+    static const int sTableMembers[3] = { 2, 3, 4 }; // Group A, Group B, Group C (DPt)
+    struct {
+        u16 species;
+        u32 normalBp;
+        u32 munchlaxBp;
+    } honeySpecies[18];
+    int honeyCount = 0;
+
+    for (int g = 0; g < 3; g++) {
+        const u32 normalWeight = (g == 0) ? 70 : (g == 1 ? 20 : 0);
+        const u32 munchlaxWeight = (g == 0) ? 20 : (g == 1 ? 70 : 1);
+        u32 size = 0;
+        int *entries = NARC_PortReadMember(NARC_INDEX_ARC__ENCDATA_EX, sTableMembers[g], &size);
+        if (entries == NULL) {
+            continue;
+        }
+        const int slots = (int)(size / sizeof(int));
+        const int limit = slots < 6 ? slots : 6;
+        for (int s = 0; s < limit; s++) {
+            const int sp = entries[s];
+            if (sp <= 0) {
+                continue;
+            }
+            const u32 nBp = normalWeight * (u32)sHoneySlotRates[s];
+            const u32 mBp = munchlaxWeight * (u32)sHoneySlotRates[s];
+            int idx = -1;
+            for (int k = 0; k < honeyCount; k++) {
+                if (honeySpecies[k].species == (u16)sp) {
+                    idx = k;
+                    break;
+                }
+            }
+            if (idx >= 0) {
+                honeySpecies[idx].normalBp += nBp;
+                honeySpecies[idx].munchlaxBp += mBp;
+            } else if (honeyCount < 18) {
+                honeySpecies[honeyCount].species = (u16)sp;
+                honeySpecies[honeyCount].normalBp = nBp;
+                honeySpecies[honeyCount].munchlaxBp = mBp;
+                honeyCount++;
+            }
+        }
+        free(entries);
+    }
+
+    struct {
+        u16 label;
+        BOOL hasNormal;
+        BOOL hasMunchlax;
+    } labels[NUM_HONEY_TREES];
+    int labelCount = 0;
+
+    for (int t = 0; t < NUM_HONEY_TREES; t++) {
+        const enum MapHeaderID header = HoneyTree_GetMapForTreeID(t);
+        if (header == MAP_HEADER_NOTHING) {
+            continue;
+        }
+        const u16 label = (u16)MapHeader_GetMapLabelTextID((int)header);
+        const BOOL isMunchlax = hasSave && HoneyTree_IsMunchlaxTree(trainerId, (u8)t);
+        int idx = -1;
+        for (int i = 0; i < labelCount; i++) {
+            if (labels[i].label == label) {
+                idx = i;
+                break;
+            }
+        }
+        if (idx < 0 && labelCount < NUM_HONEY_TREES) {
+            idx = labelCount++;
+            labels[idx].label = label;
+            labels[idx].hasNormal = FALSE;
+            labels[idx].hasMunchlax = FALSE;
+        }
+        if (idx >= 0) {
+            if (isMunchlax) {
+                labels[idx].hasMunchlax = TRUE;
+            } else {
+                labels[idx].hasNormal = TRUE;
+            }
+        }
+    }
+
+    for (int i = 0; i < labelCount; i++) {
+        for (int k = 0; k < honeyCount; k++) {
+            u32 bp = 0;
+            if (labels[i].hasNormal && honeySpecies[k].normalBp > bp) {
+                bp = honeySpecies[k].normalBp;
+            }
+            if (labels[i].hasMunchlax && honeySpecies[k].munchlaxBp > bp) {
+                bp = honeySpecies[k].munchlaxBp;
+            }
+            if (bp == 0) {
+                continue;
+            }
+            u8 rate = (u8)((bp + 50) / 100);
+            if (rate == 0) {
+                rate = 1;
+            }
+            const u8 all[GEAR_TIME_COUNT] = { rate, rate, rate };
+            AddPlace(honeySpecies[k].species, labels[i].label, GEAR_ENC_HONEY_TREE, 0, 5, 15, all);
+        }
+    }
+}
 
 static void BuildIndex(void)
 {
     const BOOL catchEmAll = CatchEmAll_IsEnabled();
     SaveData *saveData = SaveData_Ptr();
-    const BOOL postGame = saveData != NULL && SystemFlag_CheckGameCompleted(SaveData_GetVarsFlags(saveData));
-    if (sIndexBuilt && sIndexCatchEmAll == catchEmAll && sIndexPostGame == postGame) {
+    const BOOL hasSave = saveData != NULL;
+    const u32 trainerId = hasSave ? TrainerInfo_ID(SaveData_GetTrainerInfo(saveData)) : 0;
+    const BOOL postGame = hasSave && SystemFlag_CheckGameCompleted(SaveData_GetVarsFlags(saveData));
+    if (sIndexBuilt && sIndexCatchEmAll == catchEmAll && sIndexPostGame == postGame
+        && sIndexHasSave == hasSave && sIndexTrainerId == trainerId) {
         return;
     }
     sIndexBuilt = TRUE;
     sIndexCatchEmAll = catchEmAll;
     sIndexPostGame = postGame;
+    sIndexHasSave = hasSave;
+    sIndexTrainerId = trainerId;
     sPlaceCount = 0;
 
     static WildEncounters data;
@@ -183,9 +301,12 @@ static void BuildIndex(void)
                 const GrassEncounter *slot = &data.grassEncounters.encounters[4 + (i & 1)];
                 AddPlace((u16)data.radarEncounters[i], label, GEAR_ENC_RADAR, 0, slot->level, slot->level, none);
             }
-            for (int i = 0; i < MAX_SWARM_ENCOUNTERS; i++) {
-                const GrassEncounter *slot = &data.grassEncounters.encounters[i];
-                AddPlace((u16)data.swarmEncounters[i], label, GEAR_ENC_SWARM, 0, slot->level, slot->level, none);
+            if (Swarm_IsSwarmMap((u32)header)) {
+                for (int i = 0; i < MAX_SWARM_ENCOUNTERS; i++) {
+                    const GrassEncounter *slot = &data.grassEncounters.encounters[i];
+                    const u8 swarmRates[GEAR_TIME_COUNT] = { sGrassRates[i], sGrassRates[i], sGrassRates[i] };
+                    AddPlace((u16)data.swarmEncounters[i], label, GEAR_ENC_SWARM, 0, slot->level, slot->level, swarmRates);
+                }
             }
             // GBA slot: a game in the DS's GBA slot adds its Pokemon to slots 8 and 9
             const int *gba[5] = { data.dualSlotRubyEncounters, data.dualSlotSapphireEncounters,
@@ -226,6 +347,7 @@ static void BuildIndex(void)
             }
         }
     }
+    AddHoneyTreePlaces(hasSave, trainerId);
     qsort(sPlaces, sPlaceCount, sizeof(PlaceRecord), ComparePlaceRecords);
 
     // Every species' evolutions, to find pre-evolutions

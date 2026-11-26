@@ -5,5 +5,6 @@
 
 u32 Swarm_GetMapId(const u32 swarm);
 void Swarm_GetMapIdAndSpecies(const u32 swarm, u16 *mapIdDest, u16 *speciesDest);
+BOOL Swarm_IsSwarmMap(u32 mapHeaderID);
 
 #endif // POKEPLATINUM_SWARM_H

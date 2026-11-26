@@ -64,7 +64,7 @@ void PoketchAppStaticInit_AreaRadar(void)
 }
 #endif
 
-static u16 MapMethodToIcon(u8 method)
+static u16 MapMethodToIcon(u8 method, BOOL swarmActive)
 {
     switch (method) {
     case GEAR_ENC_GRASS:
@@ -72,13 +72,17 @@ static u16 MapMethodToIcon(u8 method)
     case GEAR_ENC_SURF:
         return AREA_RADAR_ICON_SURF;
     case GEAR_ENC_OLD_ROD:
+        return AREA_RADAR_ICON_OLD_ROD;
     case GEAR_ENC_GOOD_ROD:
+        return AREA_RADAR_ICON_GOOD_ROD;
     case GEAR_ENC_SUPER_ROD:
-        return AREA_RADAR_ICON_ROD;
+        return AREA_RADAR_ICON_SUPER_ROD;
+    case GEAR_ENC_HONEY_TREE:
+        return AREA_RADAR_ICON_HONEY;
     case GEAR_ENC_RADAR:
         return AREA_RADAR_ICON_RADAR;
     case GEAR_ENC_SWARM:
-        return AREA_RADAR_ICON_SWARM;
+        return swarmActive ? AREA_RADAR_ICON_SWARM_ACT : AREA_RADAR_ICON_SWARM;
     case GEAR_ENC_GBA:
         return AREA_RADAR_ICON_GBA;
     default:
@@ -134,6 +138,11 @@ static int CompareRadarEntries(const void *a, const void *b)
 {
     const AreaRadarEntry *ea = (const AreaRadarEntry *)a;
     const AreaRadarEntry *eb = (const AreaRadarEntry *)b;
+    const int aSwarm = (ea->iconMask & AREA_RADAR_ICON_SWARM_ACT) ? 1 : 0;
+    const int bSwarm = (eb->iconMask & AREA_RADAR_ICON_SWARM_ACT) ? 1 : 0;
+    if (aSwarm != bSwarm) {
+        return bSwarm - aSwarm;
+    }
     if (ea->rate != eb->rate) {
         return (int)eb->rate - (int)ea->rate;
     }
@@ -152,6 +161,8 @@ static void BuildViewData(AreaRadarViewData *view)
     memset(view, 0, sizeof(*view));
     memset(offHourFlags, 0, sizeof(offHourFlags));
     view->valid = rawArea.valid;
+    view->swarmActive = rawArea.swarmActive;
+    view->isMunchlaxTree = rawArea.isMunchlaxTree;
     view->mapHeaderID = rawArea.mapHeaderID;
     snprintf(view->name, sizeof(view->name), "%s", rawArea.name);
     view->timeOfDay = rawArea.timeOfDay;
@@ -160,21 +171,14 @@ static void BuildViewData(AreaRadarViewData *view)
     // 1. Add live Gear_GetArea entries first (already summed per method, with exact live rates)
     for (int i = 0; i < rawArea.count; i++) {
         const GearEncounter *enc = &rawArea.entries[i];
-        AddOrMergeEntry(view, enc->species, MapMethodToIcon(enc->method), enc->minLevel, enc->maxLevel, enc->rate, FALSE, offHourFlags);
+        AddOrMergeEntry(view, enc->species, MapMethodToIcon(enc->method, rawArea.swarmActive), enc->minLevel, enc->maxLevel, enc->rate, FALSE, offHourFlags);
     }
 
-    // 2. Merge all grass encounters across all times of day (General, Morning/Day, Night)
+    // 2. Merge off-hour Morning/Day/Night grass slots so non-active times of day remain visible
     FieldSystem *fieldSystem = DEBUG_GetFieldSystem();
     if (view->valid && fieldSystem != NULL && MapHeader_HasWildEncounters(view->mapHeaderID)) {
         const WildEncounters *data = MapHeaderData_GetWildEncounters(fieldSystem);
         if (data != NULL && data->grassEncounters.encounterRate != 0) {
-            for (int i = 0; i < MAX_GRASS_ENCOUNTERS; i++) {
-                if (i == 2 || i == 3) {
-                    continue;
-                }
-                const GrassEncounter *enc = &data->grassEncounters.encounters[i];
-                AddOrMergeEntry(view, (u16)enc->species, AREA_RADAR_ICON_GRASS, enc->level, enc->level, 0, FALSE, offHourFlags);
-            }
             for (int k = 0; k < 2; k++) {
                 u8 lvl = data->grassEncounters.encounters[2 + k].level;
                 AddOrMergeEntry(view, (u16)data->grassEncounters.encounters[2 + k].species, AREA_RADAR_ICON_DAY, lvl, lvl, 10, TRUE, offHourFlags);

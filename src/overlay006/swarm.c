@@ -49,3 +49,13 @@ void Swarm_GetMapIdAndSpecies(const u32 swarm, u16 *mapIdDest, u16 *speciesDest)
     (*speciesDest) = encounterData.swarmEncounters[0];
     (*mapIdDest) = mapId;
 }
+
+BOOL Swarm_IsSwarmMap(u32 mapHeaderID)
+{
+    for (u32 i = 0; i < NUM_SWARMS; i++) {
+        if (sSwarmMapIdTable[i] == mapHeaderID) {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
